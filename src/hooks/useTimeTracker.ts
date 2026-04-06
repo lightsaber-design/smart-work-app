@@ -1,10 +1,31 @@
 import { useState, useEffect, useCallback } from "react";
 
+export interface GeoLocation {
+  lat: number;
+  lng: number;
+}
+
 export interface TimeEntry {
   id: string;
   startTime: Date;
   endTime: Date | null;
   description: string;
+  startLocation: GeoLocation | null;
+  endLocation: GeoLocation | null;
+}
+
+function getCurrentPosition(): Promise<GeoLocation | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
 }
 
 export function useTimeTracker() {
@@ -15,6 +36,8 @@ export function useTimeTracker() {
         ...e,
         startTime: new Date(e.startTime),
         endTime: e.endTime ? new Date(e.endTime) : null,
+        startLocation: e.startLocation || null,
+        endLocation: e.endLocation || null,
       }));
     }
     return [];
@@ -43,21 +66,27 @@ export function useTimeTracker() {
     return () => clearInterval(interval);
   }, [isRunning, activeEntry]);
 
-  const clockIn = useCallback(() => {
+  const clockIn = useCallback(async () => {
+    const location = await getCurrentPosition();
     const entry: TimeEntry = {
       id: crypto.randomUUID(),
       startTime: new Date(),
       endTime: null,
       description: "",
+      startLocation: location,
+      endLocation: null,
     };
     setEntries((prev) => [entry, ...prev]);
     setIsRunning(true);
     setElapsed(0);
   }, []);
 
-  const clockOut = useCallback(() => {
+  const clockOut = useCallback(async () => {
+    const location = await getCurrentPosition();
     setEntries((prev) =>
-      prev.map((e) => (e.endTime === null ? { ...e, endTime: new Date() } : e))
+      prev.map((e) =>
+        e.endTime === null ? { ...e, endTime: new Date(), endLocation: location } : e
+      )
     );
     setIsRunning(false);
     setElapsed(0);

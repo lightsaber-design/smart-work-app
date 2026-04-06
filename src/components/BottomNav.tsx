@@ -1,6 +1,6 @@
-import { Clock, BarChart3, Settings } from "lucide-react";
+import { Clock, BarChart3, Settings, MapPin } from "lucide-react";
 
-type Tab = "timer" | "stats" | "settings";
+type Tab = "timer" | "map" | "stats" | "settings";
 
 interface BottomNavProps {
   activeTab: Tab;
@@ -10,6 +10,7 @@ interface BottomNavProps {
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const tabs: { id: Tab; icon: typeof Clock; label: string }[] = [
     { id: "timer", icon: Clock, label: "Fichaje" },
+    { id: "map", icon: MapPin, label: "Mapa" },
     { id: "stats", icon: BarChart3, label: "Resumen" },
     { id: "settings", icon: Settings, label: "Ajustes" },
   ];
@@ -21,7 +22,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           <button
             key={id}
             onClick={() => onTabChange(id)}
-            className={`flex flex-col items-center gap-1 px-4 py-2 transition-colors ${
+            className={`flex flex-col items-center gap-1 px-3 py-2 transition-colors ${
               activeTab === id
                 ? "text-primary"
                 : "text-muted-foreground"
