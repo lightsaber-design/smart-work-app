@@ -1,16 +1,74 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import { useTimeTracker } from "@/hooks/useTimeTracker";
+import { ClockButton } from "@/components/ClockButton";
+import { DaySummary } from "@/components/DaySummary";
+import { TimeEntryList } from "@/components/TimeEntryList";
+import { BottomNav } from "@/components/BottomNav";
+import { StatsView } from "@/components/StatsView";
+import { SettingsView } from "@/components/SettingsView";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+type Tab = "timer" | "stats" | "settings";
+
+const Index = () => {
+  const [activeTab, setActiveTab] = useState<Tab>("timer");
+  const tracker = useTimeTracker();
+
+  const handleClearAll = () => {
+    localStorage.removeItem("time-entries");
+    window.location.reload();
+  };
+
+  const titles: Record<Tab, string> = {
+    timer: "Fichaje",
+    stats: "Resumen",
+    settings: "Ajustes",
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="min-h-screen bg-background max-w-md mx-auto">
+      {/* Header */}
+      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
+        <h1 className="text-xl font-bold text-foreground">{titles[activeTab]}</h1>
+      </header>
+
+      {/* Content */}
+      <main className="pb-24">
+        {activeTab === "timer" && (
+          <div className="space-y-6">
+            <ClockButton
+              isRunning={tracker.isRunning}
+              elapsed={tracker.elapsed}
+              onClockIn={tracker.clockIn}
+              onClockOut={tracker.clockOut}
+            />
+            <DaySummary
+              todayTotal={tracker.todayTotal}
+              weekTotal={tracker.weekTotal}
+              todayCount={tracker.todayEntries.length}
+            />
+            <TimeEntryList
+              entries={tracker.todayEntries}
+              onDelete={tracker.deleteEntry}
+              onUpdateDescription={tracker.updateDescription}
+            />
+          </div>
+        )}
+
+        {activeTab === "stats" && (
+          <StatsView entries={tracker.entries} weekTotal={tracker.weekTotal} />
+        )}
+
+        {activeTab === "settings" && (
+          <SettingsView
+            entryCount={tracker.entries.length}
+            onClearAll={handleClearAll}
+          />
+        )}
+      </main>
+
+      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
