@@ -85,7 +85,7 @@ export function LocationMap({ entries }: LocationMapProps) {
           />
           <FitBounds entries={entriesWithLocation} />
           {entriesWithLocation.map((entry) => (
-            <span key={entry.id}>
+            <React.Fragment key={entry.id}>
               {entry.startLocation && (
                 <Marker position={[entry.startLocation.lat, entry.startLocation.lng]} icon={startIcon}>
                   <Popup>
@@ -110,7 +110,7 @@ export function LocationMap({ entries }: LocationMapProps) {
                   </Popup>
                 </Marker>
               )}
-            </span>
+            </React.Fragment>
           ))}
         </MapContainer>
       </div>
