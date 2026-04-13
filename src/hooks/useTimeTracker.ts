@@ -116,13 +116,15 @@ export function useTimeTracker() {
     return acc + (end - e.startTime.getTime());
   }, 0);
 
-  const weekEntries = entries.filter((e) => {
+  const monthEntries = entries.filter((e) => {
     const now = new Date();
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    return e.startTime >= weekAgo;
+    return (
+      e.startTime.getMonth() === now.getMonth() &&
+      e.startTime.getFullYear() === now.getFullYear()
+    );
   });
 
-  const weekTotal = weekEntries.reduce((acc, e) => {
+  const monthTotal = monthEntries.reduce((acc, e) => {
     const end = e.endTime ? e.endTime.getTime() : Date.now();
     return acc + (end - e.startTime.getTime());
   }, 0);
@@ -130,6 +132,7 @@ export function useTimeTracker() {
   return {
     entries,
     todayEntries,
+    monthEntries,
     isRunning,
     elapsed,
     clockIn,
@@ -137,7 +140,7 @@ export function useTimeTracker() {
     updateDescription,
     deleteEntry,
     todayTotal,
-    weekTotal,
+    monthTotal,
   };
 }
 
