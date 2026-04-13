@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTimeTracker } from "@/hooks/useTimeTracker";
+import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { ClockButton } from "@/components/ClockButton";
 import { DaySummary } from "@/components/DaySummary";
 import { TimeEntryList } from "@/components/TimeEntryList";
@@ -7,12 +8,14 @@ import { BottomNav } from "@/components/BottomNav";
 import { StatsView } from "@/components/StatsView";
 import { SettingsView } from "@/components/SettingsView";
 import { LocationMap } from "@/components/LocationMap";
+import { CalendarView } from "@/components/CalendarView";
 
-type Tab = "timer" | "map" | "stats" | "settings";
+type Tab = "timer" | "map" | "calendar" | "stats" | "settings";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState<Tab>("timer");
   const tracker = useTimeTracker();
+  const calendar = useCalendarEvents();
 
   const handleClearAll = () => {
     localStorage.removeItem("time-entries");
@@ -22,6 +25,7 @@ const Index = () => {
   const titles: Record<Tab, string> = {
     timer: "Fichaje",
     map: "Mapa",
+    calendar: "Calendario",
     stats: "Resumen",
     settings: "Ajustes",
   };
@@ -58,6 +62,15 @@ const Index = () => {
           <div className="py-4 space-y-4">
             <LocationMap entries={tracker.entries} />
           </div>
+        )}
+
+        {activeTab === "calendar" && (
+          <CalendarView
+            events={calendar.events}
+            onAddEvent={calendar.addEvent}
+            onDeleteEvent={calendar.deleteEvent}
+            getEventsForDate={calendar.getEventsForDate}
+          />
         )}
 
         {activeTab === "stats" && (

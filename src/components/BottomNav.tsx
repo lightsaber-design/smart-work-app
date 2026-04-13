@@ -1,6 +1,6 @@
-import { Clock, BarChart3, Settings, MapPin } from "lucide-react";
+import { Clock, BarChart3, Settings, MapPin, CalendarDays } from "lucide-react";
 
-type Tab = "timer" | "map" | "stats" | "settings";
+type Tab = "timer" | "map" | "calendar" | "stats" | "settings";
 
 interface BottomNavProps {
   activeTab: Tab;
@@ -11,6 +11,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const tabs: { id: Tab; icon: typeof Clock; label: string }[] = [
     { id: "timer", icon: Clock, label: "Fichaje" },
     { id: "map", icon: MapPin, label: "Mapa" },
+    { id: "calendar", icon: CalendarDays, label: "Calendario" },
     { id: "stats", icon: BarChart3, label: "Resumen" },
     { id: "settings", icon: Settings, label: "Ajustes" },
   ];
