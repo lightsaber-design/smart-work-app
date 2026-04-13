@@ -2,10 +2,10 @@ import { TimeEntry, formatDuration } from "@/hooks/useTimeTracker";
 
 interface StatsViewProps {
   entries: TimeEntry[];
-  weekTotal: number;
+  monthTotal: number;
 }
 
-export function StatsView({ entries, weekTotal }: StatsViewProps) {
+export function StatsView({ entries, monthTotal }: StatsViewProps) {
   // Group by day
   const byDay = entries.reduce<Record<string, number>>((acc, e) => {
     const key = e.startTime.toLocaleDateString("es-ES", { weekday: "short", day: "numeric" });
@@ -22,9 +22,9 @@ export function StatsView({ entries, weekTotal }: StatsViewProps) {
     <div className="px-4 space-y-6 pb-24">
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-          Total semanal
+          Total mensual
         </h3>
-        <p className="text-3xl font-bold text-foreground">{formatDuration(weekTotal)}</p>
+        <p className="text-3xl font-bold text-foreground">{formatDuration(monthTotal)}</p>
       </div>
 
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border">

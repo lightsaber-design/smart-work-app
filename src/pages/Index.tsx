@@ -43,7 +43,7 @@ const Index = () => {
             />
             <DaySummary
               todayTotal={tracker.todayTotal}
-              weekTotal={tracker.weekTotal}
+              monthTotal={tracker.monthTotal}
               todayCount={tracker.todayEntries.length}
             />
             <TimeEntryList
@@ -61,7 +61,7 @@ const Index = () => {
         )}
 
         {activeTab === "stats" && (
-          <StatsView entries={tracker.entries} weekTotal={tracker.weekTotal} />
+          <StatsView entries={tracker.monthEntries} monthTotal={tracker.monthTotal} />
         )}
 
         {activeTab === "settings" && (
