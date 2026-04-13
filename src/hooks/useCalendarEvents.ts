@@ -1,11 +1,25 @@
 import { useState, useEffect, useCallback } from "react";
 
+export type EventCategory = "Predi" | "Carrito" | "LDC" | "Visitas" | "Estudio";
+
 export interface CalendarEvent {
   id: string;
   title: string;
   date: Date;
+  endTime?: string; // HH:mm format, optional
+  category: EventCategory;
+  location?: { lat: number; lng: number } | null;
   reminderMinutesBefore: number;
   notified: boolean;
+}
+
+export interface AddEventParams {
+  title: string;
+  date: Date;
+  endTime?: string;
+  category: EventCategory;
+  location?: { lat: number; lng: number } | null;
+  reminderMinutesBefore: number;
 }
 
 export function useCalendarEvents() {
@@ -24,14 +38,12 @@ export function useCalendarEvents() {
     localStorage.setItem("calendar-events", JSON.stringify(events));
   }, [events]);
 
-  // Request notification permission on mount
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
   }, []);
 
-  // Check for upcoming events every 30 seconds
   useEffect(() => {
     const check = () => {
       const now = Date.now();
@@ -40,10 +52,9 @@ export function useCalendarEvents() {
           if (event.notified) return event;
           const triggerAt = event.date.getTime() - event.reminderMinutesBefore * 60 * 1000;
           if (now >= triggerAt && now < event.date.getTime() + 60000) {
-            // Send notification
             if ("Notification" in window && Notification.permission === "granted") {
               new Notification("⏰ Recordatorio de fichaje", {
-                body: `${event.title} — ¡Es hora de empezar a registrar tus horas!`,
+                body: `${event.title} (${event.category}) — ¡Es hora de registrar tus horas!`,
                 icon: "/placeholder.svg",
               });
             }
@@ -59,12 +70,15 @@ export function useCalendarEvents() {
     return () => clearInterval(interval);
   }, []);
 
-  const addEvent = useCallback((title: string, date: Date, reminderMinutesBefore: number) => {
+  const addEvent = useCallback((params: AddEventParams) => {
     const event: CalendarEvent = {
       id: crypto.randomUUID(),
-      title,
-      date,
-      reminderMinutesBefore,
+      title: params.title,
+      date: params.date,
+      endTime: params.endTime || undefined,
+      category: params.category,
+      location: params.location || null,
+      reminderMinutesBefore: params.reminderMinutesBefore,
       notified: false,
     };
     setEvents((prev) => [...prev, event].sort((a, b) => a.date.getTime() - b.date.getTime()));
