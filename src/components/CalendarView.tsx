@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarEvent } from "@/hooks/useCalendarEvents";
-import { Plus, Trash2, Bell, BellOff } from "lucide-react";
+import { CalendarEvent, EventCategory, AddEventParams } from "@/hooks/useCalendarEvents";
+import { Plus, Trash2, Bell, BellOff, MapPin } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,10 +19,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+
+const CATEGORIES: EventCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
 
 interface CalendarViewProps {
   events: CalendarEvent[];
-  onAddEvent: (title: string, date: Date, reminderMinutes: number) => void;
+  onAddEvent: (params: AddEventParams) => void;
   onDeleteEvent: (id: string) => void;
   getEventsForDate: (date: Date) => CalendarEvent[];
 }
@@ -37,7 +40,12 @@ export function CalendarView({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [time, setTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("");
+  const [category, setCategory] = useState<EventCategory>("Predi");
   const [reminder, setReminder] = useState("15");
+  const [useLocation, setUseLocation] = useState(false);
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [loadingLocation, setLoadingLocation] = useState(false);
 
   const selectedEvents = getEventsForDate(selectedDate);
 
@@ -48,18 +56,41 @@ export function CalendarView({
     }
   };
 
-  // Dates that have events (for calendar highlighting)
   const eventDates = events.map((e) => e.date);
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) return;
+    setLoadingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLoadingLocation(false);
+      },
+      () => setLoadingLocation(false),
+      { enableHighAccuracy: true }
+    );
+  };
 
   const handleAdd = () => {
     if (!title.trim()) return;
     const [hours, minutes] = time.split(":").map(Number);
     const date = new Date(selectedDate);
     date.setHours(hours, minutes, 0, 0);
-    onAddEvent(title.trim(), date, parseInt(reminder));
+    onAddEvent({
+      title: title.trim(),
+      date,
+      endTime: endTime || undefined,
+      category,
+      location: useLocation ? location : null,
+      reminderMinutesBefore: parseInt(reminder),
+    });
     setTitle("");
     setTime("09:00");
+    setEndTime("");
+    setCategory("Predi");
     setReminder("15");
+    setUseLocation(false);
+    setLocation(null);
     setDialogOpen(false);
   };
 
@@ -77,7 +108,6 @@ export function CalendarView({
 
   return (
     <div className="px-4 space-y-4 pb-24">
-      {/* Notification status */}
       {notificationStatus !== "granted" && (
         <div className="rounded-xl bg-accent/50 p-3 flex items-center gap-2 text-sm border border-border">
           <BellOff className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -99,7 +129,6 @@ export function CalendarView({
         </div>
       )}
 
-      {/* Calendar */}
       <div className="rounded-xl bg-card p-4 shadow-sm border border-border flex justify-center">
         <Calendar
           mode="single"
@@ -113,7 +142,6 @@ export function CalendarView({
         />
       </div>
 
-      {/* Selected date events */}
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -130,11 +158,24 @@ export function CalendarView({
                 Añadir
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-sm">
+            <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Nuevo evento</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <Label>Categoría</Label>
+                  <Select value={category} onValueChange={(v) => setCategory(v as EventCategory)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map((cat) => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="space-y-2">
                   <Label>Título</Label>
                   <Input
@@ -143,13 +184,23 @@ export function CalendarView({
                     onChange={(e) => setTitle(e.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Hora</Label>
-                  <Input
-                    type="time"
-                    value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Hora inicio</Label>
+                    <Input
+                      type="time"
+                      value={time}
+                      onChange={(e) => setTime(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Hora fin <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                    <Input
+                      type="time"
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Recordatorio</Label>
@@ -166,6 +217,28 @@ export function CalendarView({
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="flex items-center justify-between rounded-lg bg-secondary/50 p-3">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-muted-foreground" />
+                    <Label className="cursor-pointer">Agregar ubicación</Label>
+                  </div>
+                  <Switch
+                    checked={useLocation}
+                    onCheckedChange={(checked) => {
+                      setUseLocation(checked);
+                      if (checked && !location) handleGetLocation();
+                    }}
+                  />
+                </div>
+                {useLocation && (
+                  <div className="text-xs text-muted-foreground pl-1">
+                    {loadingLocation
+                      ? "Obteniendo ubicación..."
+                      : location
+                      ? `📍 ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`
+                      : "No se pudo obtener la ubicación"}
+                  </div>
+                )}
                 <Button onClick={handleAdd} className="w-full" disabled={!title.trim()}>
                   Guardar evento
                 </Button>
@@ -185,11 +258,19 @@ export function CalendarView({
               >
                 <Bell className="w-4 h-4 text-primary flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {event.title}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                      {event.category}
+                    </span>
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {event.title}
+                    </p>
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    {formatEventTime(event.date)} · Aviso {event.reminderMinutesBefore} min antes
+                    {formatEventTime(event.date)}
+                    {event.endTime && ` – ${event.endTime}`}
+                    {event.location && " · 📍"}
+                    {" · "}Aviso {event.reminderMinutesBefore} min antes
                     {event.notified && " · ✓ Notificado"}
                   </p>
                 </div>
