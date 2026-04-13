@@ -104,7 +104,7 @@ export function CalendarView({
         <Calendar
           mode="single"
           selected={selectedDate}
-          onSelect={(d) => d && setSelectedDate(d)}
+          onSelect={handleDaySelect}
           modifiers={{ hasEvent: eventDates }}
           modifiersClassNames={{
             hasEvent: "bg-primary/20 font-bold text-primary",
