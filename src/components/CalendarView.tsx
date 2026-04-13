@@ -41,6 +41,13 @@ export function CalendarView({
 
   const selectedEvents = getEventsForDate(selectedDate);
 
+  const handleDaySelect = (d: Date | undefined) => {
+    if (d) {
+      setSelectedDate(d);
+      setDialogOpen(true);
+    }
+  };
+
   // Dates that have events (for calendar highlighting)
   const eventDates = events.map((e) => e.date);
 
@@ -97,7 +104,7 @@ export function CalendarView({
         <Calendar
           mode="single"
           selected={selectedDate}
-          onSelect={(d) => d && setSelectedDate(d)}
+          onSelect={handleDaySelect}
           modifiers={{ hasEvent: eventDates }}
           modifiersClassNames={{
             hasEvent: "bg-primary/20 font-bold text-primary",
