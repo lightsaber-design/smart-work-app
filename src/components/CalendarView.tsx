@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarEvent, EventCategory, AddEventParams } from "@/hooks/useCalendarEvents";
-import { Plus, Trash2, Bell, BellOff } from "lucide-react";
+import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
+import { Plus, Trash2, Bell, BellOff, MapPin, Repeat } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -41,6 +42,10 @@ export function CalendarView({
   const [endTime, setEndTime] = useState("");
   const [category, setCategory] = useState<EventCategory>("Predi");
   const [reminder, setReminder] = useState("15");
+  const [useLocation, setUseLocation] = useState(false);
+  const [location, setLocation] = useState<{ lat: number; lng: number } | undefined>();
+  const [loadingLocation, setLoadingLocation] = useState(false);
+  const [recurrence, setRecurrence] = useState<RecurrenceType>("none");
 
   const selectedEvents = getEventsForDate(selectedDate);
 
@@ -53,6 +58,25 @@ export function CalendarView({
 
   const eventDates = events.map((e) => e.date);
 
+  const handleLocationToggle = (checked: boolean) => {
+    setUseLocation(checked);
+    if (checked && navigator.geolocation) {
+      setLoadingLocation(true);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          setLoadingLocation(false);
+        },
+        () => {
+          setUseLocation(false);
+          setLoadingLocation(false);
+        }
+      );
+    } else {
+      setLocation(undefined);
+    }
+  };
+
   const handleAdd = () => {
     const [hours, minutes] = time.split(":").map(Number);
     const date = new Date(selectedDate);
@@ -62,16 +86,24 @@ export function CalendarView({
       endTime: endTime || undefined,
       category,
       reminderMinutesBefore: parseInt(reminder),
+      location: useLocation ? location : undefined,
+      recurrence,
     });
     setTime("09:00");
     setEndTime("");
     setCategory("Predi");
     setReminder("15");
+    setUseLocation(false);
+    setLocation(undefined);
+    setRecurrence("none");
     setDialogOpen(false);
   };
 
   const formatEventTime = (date: Date) =>
     date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+
+  const recurrenceLabel = (r: RecurrenceType) =>
+    r === "weekly" ? "Semanal" : r === "monthly" ? "Mensual" : "";
 
   const notificationStatus =
     "Notification" in window
@@ -171,6 +203,19 @@ export function CalendarView({
                   </div>
                 </div>
                 <div className="space-y-2">
+                  <Label>Repetir</Label>
+                  <Select value={recurrence} onValueChange={(v) => setRecurrence(v as RecurrenceType)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No repetir</SelectItem>
+                      <SelectItem value="weekly">Semanal</SelectItem>
+                      <SelectItem value="monthly">Mensual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label>Recordatorio</Label>
                   <Select value={reminder} onValueChange={setReminder}>
                     <SelectTrigger>
@@ -185,6 +230,25 @@ export function CalendarView({
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-muted-foreground" />
+                    <Label className="text-sm">Guardar ubicación</Label>
+                  </div>
+                  <Switch
+                    checked={useLocation}
+                    onCheckedChange={handleLocationToggle}
+                    disabled={loadingLocation}
+                  />
+                </div>
+                {useLocation && location && (
+                  <p className="text-xs text-muted-foreground">
+                    📍 {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
+                  </p>
+                )}
+                {loadingLocation && (
+                  <p className="text-xs text-muted-foreground animate-pulse">Obteniendo ubicación...</p>
+                )}
                 <Button onClick={handleAdd} className="w-full">
                   Guardar evento
                 </Button>
@@ -204,9 +268,20 @@ export function CalendarView({
               >
                 <Bell className="w-4 h-4 text-primary flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <span className="text-xs font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                    {event.category}
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                      {event.category}
+                    </span>
+                    {event.recurrence !== "none" && (
+                      <span className="text-xs font-medium bg-accent text-accent-foreground px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                        <Repeat className="w-3 h-3" />
+                        {recurrenceLabel(event.recurrence)}
+                      </span>
+                    )}
+                    {event.location && (
+                      <MapPin className="w-3 h-3 text-muted-foreground" />
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     {formatEventTime(event.date)}
                     {event.endTime && ` – ${event.endTime}`}
