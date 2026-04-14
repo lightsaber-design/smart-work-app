@@ -4,21 +4,17 @@ export type EventCategory = "Predi" | "Carrito" | "LDC" | "Visitas" | "Estudio";
 
 export interface CalendarEvent {
   id: string;
-  title: string;
   date: Date;
-  endTime?: string; // HH:mm format, optional
+  endTime?: string;
   category: EventCategory;
-  location?: { lat: number; lng: number } | null;
   reminderMinutesBefore: number;
   notified: boolean;
 }
 
 export interface AddEventParams {
-  title: string;
   date: Date;
   endTime?: string;
   category: EventCategory;
-  location?: { lat: number; lng: number } | null;
   reminderMinutesBefore: number;
 }
 
@@ -54,7 +50,7 @@ export function useCalendarEvents() {
           if (now >= triggerAt && now < event.date.getTime() + 60000) {
             if ("Notification" in window && Notification.permission === "granted") {
               new Notification("⏰ Recordatorio de fichaje", {
-                body: `${event.title} (${event.category}) — ¡Es hora de registrar tus horas!`,
+                body: `${event.category} — ¡Es hora de registrar tus horas!`,
                 icon: "/placeholder.svg",
               });
             }
@@ -73,11 +69,9 @@ export function useCalendarEvents() {
   const addEvent = useCallback((params: AddEventParams) => {
     const event: CalendarEvent = {
       id: crypto.randomUUID(),
-      title: params.title,
       date: params.date,
       endTime: params.endTime || undefined,
       category: params.category,
-      location: params.location || null,
       reminderMinutesBefore: params.reminderMinutesBefore,
       notified: false,
     };
