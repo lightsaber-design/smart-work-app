@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { LocationPicker } from "@/components/LocationPicker";
 
 const CATEGORIES: EventCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
 
@@ -42,9 +43,8 @@ export function CalendarView({
   const [endTime, setEndTime] = useState("");
   const [category, setCategory] = useState<EventCategory>("Predi");
   const [reminder, setReminder] = useState("15");
-  const [useLocation, setUseLocation] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lng: number } | undefined>();
-  const [loadingLocation, setLoadingLocation] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurrenceType>("none");
 
   const selectedEvents = getEventsForDate(selectedDate);
@@ -58,25 +58,6 @@ export function CalendarView({
 
   const eventDates = events.map((e) => e.date);
 
-  const handleLocationToggle = (checked: boolean) => {
-    setUseLocation(checked);
-    if (checked && navigator.geolocation) {
-      setLoadingLocation(true);
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-          setLoadingLocation(false);
-        },
-        () => {
-          setUseLocation(false);
-          setLoadingLocation(false);
-        }
-      );
-    } else {
-      setLocation(undefined);
-    }
-  };
-
   const handleAdd = () => {
     const [hours, minutes] = time.split(":").map(Number);
     const date = new Date(selectedDate);
@@ -86,14 +67,14 @@ export function CalendarView({
       endTime: endTime || undefined,
       category,
       reminderMinutesBefore: parseInt(reminder),
-      location: useLocation ? location : undefined,
+      location: showMap ? location : undefined,
       recurrence,
     });
     setTime("09:00");
     setEndTime("");
     setCategory("Predi");
     setReminder("15");
-    setUseLocation(false);
+    setShowMap(false);
     setLocation(undefined);
     setRecurrence("none");
     setDialogOpen(false);
@@ -233,21 +214,12 @@ export function CalendarView({
                 <div className="flex items-center justify-between rounded-lg border border-border p-3">
                   <div className="flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-muted-foreground" />
-                    <Label className="text-sm">Guardar ubicación</Label>
+                    <Label className="text-sm">Añadir ubicación</Label>
                   </div>
-                  <Switch
-                    checked={useLocation}
-                    onCheckedChange={handleLocationToggle}
-                    disabled={loadingLocation}
-                  />
+                  <Switch checked={showMap} onCheckedChange={setShowMap} />
                 </div>
-                {useLocation && location && (
-                  <p className="text-xs text-muted-foreground">
-                    📍 {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
-                  </p>
-                )}
-                {loadingLocation && (
-                  <p className="text-xs text-muted-foreground animate-pulse">Obteniendo ubicación...</p>
+                {showMap && (
+                  <LocationPicker value={location} onChange={setLocation} />
                 )}
                 <Button onClick={handleAdd} className="w-full">
                   Guardar evento
