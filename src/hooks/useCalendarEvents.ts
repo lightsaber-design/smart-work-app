@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 
 export type EventCategory = "Predi" | "Carrito" | "LDC" | "Visitas" | "Estudio";
+export type RecurrenceType = "none" | "weekly" | "monthly";
 
 export interface CalendarEvent {
   id: string;
@@ -9,6 +10,9 @@ export interface CalendarEvent {
   category: EventCategory;
   reminderMinutesBefore: number;
   notified: boolean;
+  location?: { lat: number; lng: number };
+  recurrence: RecurrenceType;
+  parentId?: string;
 }
 
 export interface AddEventParams {
@@ -16,6 +20,36 @@ export interface AddEventParams {
   endTime?: string;
   category: EventCategory;
   reminderMinutesBefore: number;
+  location?: { lat: number; lng: number };
+  recurrence: RecurrenceType;
+}
+
+function generateRecurringEvents(params: AddEventParams, count: number): CalendarEvent[] {
+  const parentId = crypto.randomUUID();
+  const events: CalendarEvent[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const date = new Date(params.date);
+    if (params.recurrence === "weekly") {
+      date.setDate(date.getDate() + i * 7);
+    } else if (params.recurrence === "monthly") {
+      date.setMonth(date.getMonth() + i);
+    }
+
+    events.push({
+      id: i === 0 ? parentId : crypto.randomUUID(),
+      date,
+      endTime: params.endTime,
+      category: params.category,
+      reminderMinutesBefore: params.reminderMinutesBefore,
+      notified: false,
+      location: params.location,
+      recurrence: params.recurrence,
+      parentId: i === 0 ? undefined : parentId,
+    });
+  }
+
+  return events;
 }
 
 export function useCalendarEvents() {
@@ -25,6 +59,7 @@ export function useCalendarEvents() {
       return JSON.parse(saved).map((e: any) => ({
         ...e,
         date: new Date(e.date),
+        recurrence: e.recurrence || "none",
       }));
     }
     return [];
@@ -67,19 +102,33 @@ export function useCalendarEvents() {
   }, []);
 
   const addEvent = useCallback((params: AddEventParams) => {
-    const event: CalendarEvent = {
-      id: crypto.randomUUID(),
-      date: params.date,
-      endTime: params.endTime || undefined,
-      category: params.category,
-      reminderMinutesBefore: params.reminderMinutesBefore,
-      notified: false,
-    };
-    setEvents((prev) => [...prev, event].sort((a, b) => a.date.getTime() - b.date.getTime()));
+    if (params.recurrence !== "none") {
+      const recurring = generateRecurringEvents(params, 12);
+      setEvents((prev) => [...prev, ...recurring].sort((a, b) => a.date.getTime() - b.date.getTime()));
+    } else {
+      const event: CalendarEvent = {
+        id: crypto.randomUUID(),
+        date: params.date,
+        endTime: params.endTime || undefined,
+        category: params.category,
+        reminderMinutesBefore: params.reminderMinutesBefore,
+        notified: false,
+        location: params.location,
+        recurrence: "none",
+      };
+      setEvents((prev) => [...prev, event].sort((a, b) => a.date.getTime() - b.date.getTime()));
+    }
   }, []);
 
   const deleteEvent = useCallback((id: string) => {
-    setEvents((prev) => prev.filter((e) => e.id !== id));
+    setEvents((prev) => {
+      const event = prev.find((e) => e.id === id);
+      if (event?.recurrence !== "none") {
+        const parentId = event.parentId || event.id;
+        return prev.filter((e) => e.id !== parentId && e.parentId !== parentId);
+      }
+      return prev.filter((e) => e.id !== id);
+    });
   }, []);
 
   const getEventsForDate = useCallback(
