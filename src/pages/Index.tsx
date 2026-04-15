@@ -45,8 +45,10 @@ const Index = () => {
               elapsed={tracker.elapsed}
               onClockIn={tracker.clockIn}
               onClockOut={tracker.clockOut}
+              onUpdateCategory={(cat) => activeEntry && tracker.updateCategory(activeEntry.id, cat)}
               calendarEvents={calendar.events}
               activeCategory={activeEntry?.category}
+              activeEntryId={activeEntry?.id}
             />
             <DaySummary
               todayTotal={tracker.todayTotal}

@@ -17,8 +17,10 @@ interface ClockButtonProps {
   elapsed: number;
   onClockIn: (category: WorkCategory) => void;
   onClockOut: () => void;
+  onUpdateCategory: (category: WorkCategory) => void;
   calendarEvents: CalendarEvent[];
   activeCategory?: WorkCategory;
+  activeEntryId?: string;
 }
 
 function detectCategoryFromEvents(events: CalendarEvent[]): WorkCategory | null {
@@ -39,7 +41,7 @@ function detectCategoryFromEvents(events: CalendarEvent[]): WorkCategory | null 
   return null;
 }
 
-export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, calendarEvents, activeCategory }: ClockButtonProps) {
+export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, onUpdateCategory, calendarEvents, activeCategory, activeEntryId }: ClockButtonProps) {
   const detected = detectCategoryFromEvents(calendarEvents);
   const [category, setCategory] = useState<WorkCategory>(detected || "Predi");
 
@@ -57,29 +59,32 @@ export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, calenda
         {isRunning ? formatDuration(elapsedMs) : "00:00:00"}
       </div>
 
-      {isRunning && activeCategory ? (
-        <span className="text-sm font-medium bg-primary/10 text-primary px-3 py-1 rounded-full">
-          {activeCategory}
-        </span>
-      ) : !isRunning ? (
-        <div className="w-48">
-          <Select value={category} onValueChange={(v) => setCategory(v as WorkCategory)}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CATEGORIES.map((cat) => (
-                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {detected && (
-            <p className="text-xs text-muted-foreground text-center mt-1">
-              Detectado del calendario
-            </p>
-          )}
-        </div>
-      ) : null}
+      <div className="w-48">
+        <Select
+          value={isRunning ? (activeCategory || category) : category}
+          onValueChange={(v) => {
+            const cat = v as WorkCategory;
+            setCategory(cat);
+            if (isRunning && activeEntryId) {
+              onUpdateCategory(cat);
+            }
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CATEGORIES.map((cat) => (
+              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {!isRunning && detected && (
+          <p className="text-xs text-muted-foreground text-center mt-1">
+            Detectado del calendario
+          </p>
+        )}
+      </div>
 
       <p className="text-sm text-muted-foreground">
         {isRunning ? "Trabajando..." : "Listo para fichar"}

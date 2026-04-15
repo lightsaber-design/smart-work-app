@@ -102,6 +102,12 @@ export function useTimeTracker() {
     );
   }, []);
 
+  const updateCategory = useCallback((id: string, category: WorkCategory) => {
+    setEntries((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, category } : e))
+    );
+  }, []);
+
   const deleteEntry = useCallback((id: string) => {
     setEntries((prev) => prev.filter((e) => e.id !== id));
   }, []);
@@ -142,6 +148,7 @@ export function useTimeTracker() {
     clockIn,
     clockOut,
     updateDescription,
+    updateCategory,
     deleteEntry,
     todayTotal,
     monthTotal,
