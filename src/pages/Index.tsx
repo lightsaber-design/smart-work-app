@@ -3,7 +3,6 @@ import { useTimeTracker } from "@/hooks/useTimeTracker";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { ClockButton } from "@/components/ClockButton";
 import { DaySummary } from "@/components/DaySummary";
-import { TimeEntryList } from "@/components/TimeEntryList";
 import { BottomNav } from "@/components/BottomNav";
 import { StatsView } from "@/components/StatsView";
 import { SettingsView } from "@/components/SettingsView";
@@ -21,6 +20,8 @@ const Index = () => {
     localStorage.removeItem("time-entries");
     window.location.reload();
   };
+
+  const activeEntry = tracker.entries.find((e) => e.endTime === null);
 
   const titles: Record<Tab, string> = {
     timer: "Fichaje",
@@ -44,16 +45,12 @@ const Index = () => {
               elapsed={tracker.elapsed}
               onClockIn={tracker.clockIn}
               onClockOut={tracker.clockOut}
+              calendarEvents={calendar.events}
+              activeCategory={activeEntry?.category}
             />
             <DaySummary
               todayTotal={tracker.todayTotal}
               monthTotal={tracker.monthTotal}
-              todayCount={tracker.todayEntries.length}
-            />
-            <TimeEntryList
-              entries={tracker.todayEntries}
-              onDelete={tracker.deleteEntry}
-              onUpdateDescription={tracker.updateDescription}
             />
           </div>
         )}
