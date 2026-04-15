@@ -5,11 +5,14 @@ export interface GeoLocation {
   lng: number;
 }
 
+export type WorkCategory = "Predi" | "Carrito" | "LDC" | "Visitas" | "Estudio";
+
 export interface TimeEntry {
   id: string;
   startTime: Date;
   endTime: Date | null;
   description: string;
+  category: WorkCategory;
   startLocation: GeoLocation | null;
   endLocation: GeoLocation | null;
 }
@@ -66,13 +69,14 @@ export function useTimeTracker() {
     return () => clearInterval(interval);
   }, [isRunning, activeEntry]);
 
-  const clockIn = useCallback(async () => {
+  const clockIn = useCallback(async (category: WorkCategory = "Predi") => {
     const location = await getCurrentPosition();
     const entry: TimeEntry = {
       id: crypto.randomUUID(),
       startTime: new Date(),
       endTime: null,
       description: "",
+      category,
       startLocation: location,
       endLocation: null,
     };

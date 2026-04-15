@@ -1,14 +1,54 @@
 import { Play, Square } from "lucide-react";
-import { formatDuration } from "@/hooks/useTimeTracker";
+import { formatDuration, WorkCategory } from "@/hooks/useTimeTracker";
+import { CalendarEvent } from "@/hooks/useCalendarEvents";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useState, useEffect } from "react";
+
+const CATEGORIES: WorkCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
 
 interface ClockButtonProps {
   isRunning: boolean;
   elapsed: number;
-  onClockIn: () => void;
+  onClockIn: (category: WorkCategory) => void;
   onClockOut: () => void;
+  calendarEvents: CalendarEvent[];
+  activeCategory?: WorkCategory;
 }
 
-export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut }: ClockButtonProps) {
+function detectCategoryFromEvents(events: CalendarEvent[]): WorkCategory | null {
+  const now = Date.now();
+  for (const event of events) {
+    const start = event.date.getTime();
+    let end = start + 2 * 60 * 60 * 1000; // default 2h
+    if (event.endTime) {
+      const [h, m] = event.endTime.split(":").map(Number);
+      const endDate = new Date(event.date);
+      endDate.setHours(h, m, 0, 0);
+      end = endDate.getTime();
+    }
+    if (now >= start - 15 * 60 * 1000 && now <= end) {
+      return event.category as WorkCategory;
+    }
+  }
+  return null;
+}
+
+export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, calendarEvents, activeCategory }: ClockButtonProps) {
+  const detected = detectCategoryFromEvents(calendarEvents);
+  const [category, setCategory] = useState<WorkCategory>(detected || "Predi");
+
+  useEffect(() => {
+    if (!isRunning && detected) {
+      setCategory(detected);
+    }
+  }, [detected, isRunning]);
+
   const elapsedMs = elapsed * 1000;
 
   return (
@@ -16,11 +56,36 @@ export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut }: Clock
       <div className="text-4xl font-bold tracking-tight text-foreground tabular-nums">
         {isRunning ? formatDuration(elapsedMs) : "00:00:00"}
       </div>
+
+      {isRunning && activeCategory ? (
+        <span className="text-sm font-medium bg-primary/10 text-primary px-3 py-1 rounded-full">
+          {activeCategory}
+        </span>
+      ) : !isRunning ? (
+        <div className="w-48">
+          <Select value={category} onValueChange={(v) => setCategory(v as WorkCategory)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CATEGORIES.map((cat) => (
+                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {detected && (
+            <p className="text-xs text-muted-foreground text-center mt-1">
+              Detectado del calendario
+            </p>
+          )}
+        </div>
+      ) : null}
+
       <p className="text-sm text-muted-foreground">
         {isRunning ? "Trabajando..." : "Listo para fichar"}
       </p>
       <button
-        onClick={isRunning ? onClockOut : onClockIn}
+        onClick={isRunning ? onClockOut : () => onClockIn(category)}
         className={`relative flex items-center justify-center w-24 h-24 rounded-full transition-all duration-300 active:scale-95 ${
           isRunning
             ? "bg-destructive timer-glow-active"
