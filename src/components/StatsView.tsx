@@ -15,23 +15,32 @@ const categoryColors: Record<EventCategory, string> = {
   Estudio: "bg-pink-500",
 };
 
+const CATEGORY_ORDER: EventCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
+
 export function StatsView({ entries, monthTotal, calendarEvents }: StatsViewProps) {
-  // Filter calendar events for current month
   const now = new Date();
+
+  // Hours per category from time entries
+  const hoursByCategory = entries.reduce<Record<string, number>>((acc, e) => {
+    const cat = e.category || "Predi";
+    const end = e.endTime ? e.endTime.getTime() : Date.now();
+    acc[cat] = (acc[cat] || 0) + (end - e.startTime.getTime());
+    return acc;
+  }, {});
+
+  // Events count per category
   const monthEvents = calendarEvents.filter(
     (e) =>
       e.date.getMonth() === now.getMonth() &&
       e.date.getFullYear() === now.getFullYear()
   );
-
-  // Count events by category
-  const byCategory = monthEvents.reduce<Record<string, number>>((acc, e) => {
+  const eventsByCategory = monthEvents.reduce<Record<string, number>>((acc, e) => {
     acc[e.category] = (acc[e.category] || 0) + 1;
     return acc;
   }, {});
 
-  const maxCount = Math.max(...Object.values(byCategory), 1);
   const totalEvents = monthEvents.length;
+  const maxHours = Math.max(...Object.values(hoursByCategory), 1);
 
   return (
     <div className="px-4 space-y-6 pb-24">
@@ -52,32 +61,30 @@ export function StatsView({ entries, monthTotal, calendarEvents }: StatsViewProp
 
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-          Por categoría
+          Horas por categoría
         </h3>
-        {Object.keys(byCategory).length === 0 ? (
-          <p className="text-sm text-muted-foreground">Sin eventos este mes</p>
-        ) : (
-          <div className="space-y-3">
-            {Object.entries(byCategory)
-              .sort((a, b) => b[1] - a[1])
-              .map(([category, count]) => (
-                <div key={category} className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-foreground font-medium">{category}</span>
-                    <span className="text-muted-foreground tabular-nums">
-                      {count} {count === 1 ? "evento" : "eventos"}
-                    </span>
-                  </div>
-                  <div className="h-2 rounded-full bg-secondary overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${categoryColors[category as EventCategory] || "bg-primary"} transition-all duration-500`}
-                      style={{ width: `${(count / maxCount) * 100}%` }}
-                    />
-                  </div>
+        <div className="space-y-3">
+          {CATEGORY_ORDER.map((category) => {
+            const ms = hoursByCategory[category] || 0;
+            const events = eventsByCategory[category] || 0;
+            return (
+              <div key={category} className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-foreground font-medium">{category}</span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {formatDuration(ms)} · {events} {events === 1 ? "evento" : "eventos"}
+                  </span>
                 </div>
-              ))}
-          </div>
-        )}
+                <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${categoryColors[category]} transition-all duration-500`}
+                    style={{ width: ms > 0 ? `${(ms / maxHours) * 100}%` : "0%" }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
