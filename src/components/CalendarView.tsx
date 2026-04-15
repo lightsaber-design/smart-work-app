@@ -257,6 +257,26 @@ export function CalendarView({
                   <p className="text-xs text-muted-foreground mt-1">
                     {formatEventTime(event.date)}
                     {event.endTime && ` – ${event.endTime}`}
+                    {(() => {
+                      const now = Date.now();
+                      const start = event.date.getTime();
+                      if (now > start) {
+                        let end = now;
+                        if (event.endTime) {
+                          const [h, m] = event.endTime.split(":").map(Number);
+                          const endDate = new Date(event.date);
+                          endDate.setHours(h, m, 0, 0);
+                          end = Math.min(now, endDate.getTime());
+                        }
+                        const diffMs = end - start;
+                        if (diffMs > 0) {
+                          const hrs = Math.floor(diffMs / 3600000);
+                          const mins = Math.floor((diffMs % 3600000) / 60000);
+                          return ` · ${hrs}h ${mins}m`;
+                        }
+                      }
+                      return "";
+                    })()}
                     {" · "}Aviso {event.reminderMinutesBefore} min antes
                     {event.notified && " · ✓ Notificado"}
                   </p>
