@@ -74,7 +74,7 @@ const Index = () => {
         )}
 
         {activeTab === "stats" && (
-          <StatsView entries={tracker.monthEntries} monthTotal={tracker.monthTotal} />
+          <StatsView entries={tracker.monthEntries} monthTotal={tracker.monthTotal} calendarEvents={calendar.events} />
         )}
 
         {activeTab === "settings" && (
