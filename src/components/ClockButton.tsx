@@ -46,8 +46,8 @@ export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, onUpdat
   const [category, setCategory] = useState<WorkCategory>(detected || "Predi");
 
   useEffect(() => {
-    if (!isRunning && detected) {
-      setCategory(detected);
+    if (!isRunning) {
+      setCategory(detected || "Predi");
     }
   }, [detected, isRunning]);
 
