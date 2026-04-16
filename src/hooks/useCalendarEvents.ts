@@ -117,6 +117,7 @@ export function useCalendarEvents() {
         notified: false,
         location: params.location,
         recurrence: "none",
+        completed: false,
       };
       setEvents((prev) => [...prev, event].sort((a, b) => a.date.getTime() - b.date.getTime()));
     }
