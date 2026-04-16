@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
-import { Plus, Trash2, Bell, BellOff, MapPin, Repeat, Clock, X } from "lucide-react";
+import { Plus, Trash2, Bell, BellOff, MapPin, Repeat, Clock, X, CheckCircle2, Circle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
