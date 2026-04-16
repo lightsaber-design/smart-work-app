@@ -36,6 +36,7 @@ interface CalendarViewProps {
   events: CalendarEvent[];
   onAddEvent: (params: AddEventParams) => void;
   onDeleteEvent: (id: string) => void;
+  onToggleCompleted: (id: string) => void;
   getEventsForDate: (date: Date) => CalendarEvent[];
 }
 
@@ -65,6 +66,7 @@ export function CalendarView({
   events,
   onAddEvent,
   onDeleteEvent,
+  onToggleCompleted,
   getEventsForDate,
 }: CalendarViewProps) {
   const [tab, setTab] = useState<CalendarTab>("calendar");
