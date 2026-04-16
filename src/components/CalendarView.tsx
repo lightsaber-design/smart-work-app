@@ -197,8 +197,12 @@ export function CalendarView({
             Por venir
           </span>
           <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-green-500/40" />
+            Realizado
+          </span>
+          <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-muted-foreground/40" />
-            Pasados
+            Pendiente
           </span>
         </div>
         <Button size="sm" variant="outline" className="gap-1" onClick={() => setDialogOpen(true)}>
