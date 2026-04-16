@@ -81,10 +81,8 @@ export function CalendarView({
 
   const selectedEvents = getEventsForDate(selectedDate);
 
-  // Dates that have events for calendar highlighting
   const eventDates = events.map((e) => e.date);
 
-  // Determine past vs future events for different highlight styles
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   const pastEventDates = events.filter((e) => {
@@ -127,7 +125,6 @@ export function CalendarView({
     setDialogOpen(false);
   };
 
-  // Total hours for selected day
   const dayTotalMs = selectedEvents.reduce((acc, event) => {
     if (!event.endTime) return acc;
     const start = event.date.getTime();
@@ -171,230 +168,208 @@ export function CalendarView({
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex rounded-lg bg-secondary p-1 gap-1">
-        <button
-          onClick={() => setTab("calendar")}
-          className={`flex-1 text-sm font-medium py-2 rounded-md transition-colors ${
-            tab === "calendar"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Calendario
-        </button>
-        <button
-          onClick={() => setTab("add")}
-          className={`flex-1 text-sm font-medium py-2 rounded-md transition-colors ${
-            tab === "add"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Añadir evento
-        </button>
+      <div className="rounded-xl bg-card p-4 shadow-sm border border-border flex justify-center">
+        <Calendar
+          mode="single"
+          selected={selectedDate}
+          onSelect={handleDayClick}
+          modifiers={{
+            pastEvent: pastEventDates,
+            futureEvent: futureEventDates,
+          }}
+          modifiersClassNames={{
+            pastEvent: "bg-muted-foreground/20 font-bold text-muted-foreground",
+            futureEvent: "bg-primary/20 font-bold text-primary",
+          }}
+          className="pointer-events-auto"
+        />
       </div>
 
-      {tab === "calendar" && (
-        <>
-          <div className="rounded-xl bg-card p-4 shadow-sm border border-border flex justify-center">
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={handleDayClick}
-              modifiers={{
-                pastEvent: pastEventDates,
-                futureEvent: futureEventDates,
-              }}
-              modifiersClassNames={{
-                pastEvent: "bg-muted-foreground/20 font-bold text-muted-foreground",
-                futureEvent: "bg-primary/20 font-bold text-primary",
-              }}
-              className="pointer-events-auto"
-            />
-          </div>
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-primary/40" />
+            Por venir
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-muted-foreground/40" />
+            Pasados
+          </span>
+        </div>
+        <Button size="sm" variant="outline" className="gap-1" onClick={() => setDialogOpen(true)}>
+          <Plus className="w-4 h-4" />
+          Añadir
+        </Button>
+      </div>
 
-          <div className="flex items-center gap-3 text-xs text-muted-foreground px-1">
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-primary/40" />
-              Por venir
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-muted-foreground/40" />
-              Pasados
-            </span>
-          </div>
+      {/* Day detail dialog */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedDate.toLocaleDateString("es-ES", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+              })}
+            </DialogTitle>
+          </DialogHeader>
 
-          {/* Day detail dialog */}
-          <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-            <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>
-                  {selectedDate.toLocaleDateString("es-ES", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                  })}
-                </DialogTitle>
-              </DialogHeader>
-
-              {selectedEvents.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4">Sin eventos este día</p>
-              ) : (
-                <div className="space-y-4 pt-2">
-                  {/* Total hours */}
-                  {dayTotalMs > 0 && (
-                    <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3">
-                      <Clock className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-semibold text-foreground">
-                        Total: {dayTotalHrs}h {dayTotalMins}m
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Events list */}
-                  <div className="space-y-3">
-                    {selectedEvents.map((event) => {
-                      const duration = computeEventDuration(event);
-                      return (
-                        <div
-                          key={event.id}
-                          className="rounded-lg bg-secondary/50 p-3 space-y-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className={`w-2.5 h-2.5 rounded-full ${categoryColors[event.category]}`} />
-                              <span className="text-sm font-semibold text-foreground">
-                                {event.category}
-                              </span>
-                              {event.recurrence !== "none" && (
-                                <span className="text-xs bg-accent text-accent-foreground px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                                  <Repeat className="w-3 h-3" />
-                                  {recurrenceLabel(event.recurrence)}
-                                </span>
-                              )}
-                              {event.location && (
-                                <MapPin className="w-3 h-3 text-muted-foreground" />
-                              )}
-                            </div>
-                            <button
-                              onClick={() => onDeleteEvent(event.id)}
-                              className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            <span>
-                              {formatEventTime(event.date)}
-                              {event.endTime && ` – ${event.endTime}`}
-                            </span>
-                            {duration && (
-                              <span className="font-medium text-foreground bg-secondary px-1.5 py-0.5 rounded">
-                                {duration}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+          {selectedEvents.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">Sin eventos este día</p>
+          ) : (
+            <div className="space-y-4 pt-2">
+              {dayTotalMs > 0 && (
+                <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3">
+                  <Clock className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-semibold text-foreground">
+                    Total: {dayTotalHrs}h {dayTotalMins}m
+                  </span>
                 </div>
               )}
 
-              <Button
-                variant="outline"
-                className="w-full gap-1 mt-2"
-                onClick={() => {
-                  setDetailOpen(false);
-                  setTab("add");
-                }}
-              >
-                <Plus className="w-4 h-4" />
-                Añadir evento este día
-              </Button>
-            </DialogContent>
-          </Dialog>
-        </>
-      )}
+              <div className="space-y-3">
+                {selectedEvents.map((event) => {
+                  const duration = computeEventDuration(event);
+                  return (
+                    <div
+                      key={event.id}
+                      className="rounded-lg bg-secondary/50 p-3 space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2.5 h-2.5 rounded-full ${categoryColors[event.category]}`} />
+                          <span className="text-sm font-semibold text-foreground">
+                            {event.category}
+                          </span>
+                          {event.recurrence !== "none" && (
+                            <span className="text-xs bg-accent text-accent-foreground px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                              <Repeat className="w-3 h-3" />
+                              {recurrenceLabel(event.recurrence)}
+                            </span>
+                          )}
+                          {event.location && (
+                            <MapPin className="w-3 h-3 text-muted-foreground" />
+                          )}
+                        </div>
+                        <button
+                          onClick={() => onDeleteEvent(event.id)}
+                          className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span>
+                          {formatEventTime(event.date)}
+                          {event.endTime && ` – ${event.endTime}`}
+                        </span>
+                        {duration && (
+                          <span className="font-medium text-foreground bg-secondary px-1.5 py-0.5 rounded">
+                            {duration}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
-      {tab === "add" && (
-        <div className="rounded-xl bg-card p-5 shadow-sm border border-border space-y-4">
-          <div className="space-y-2">
-            <Label>Fecha</Label>
-            <div className="flex justify-center">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(d) => d && setSelectedDate(d)}
-                className="pointer-events-auto"
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Categoría</Label>
-            <Select value={category} onValueChange={(v) => setCategory(v as EventCategory)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Hora inicio</Label>
-              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Hora fin <span className="text-muted-foreground text-xs">(opcional)</span></Label>
-              <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Repetir</Label>
-            <Select value={recurrence} onValueChange={(v) => setRecurrence(v as RecurrenceType)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No repetir</SelectItem>
-                <SelectItem value="weekly">Semanal</SelectItem>
-                <SelectItem value="monthly">Mensual</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Recordatorio</Label>
-            <Select value={reminder} onValueChange={setReminder}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="5">5 minutos antes</SelectItem>
-                <SelectItem value="10">10 minutos antes</SelectItem>
-                <SelectItem value="15">15 minutos antes</SelectItem>
-                <SelectItem value="30">30 minutos antes</SelectItem>
-                <SelectItem value="60">1 hora antes</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center justify-between rounded-lg border border-border p-3">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-muted-foreground" />
-              <Label className="text-sm">Añadir ubicación</Label>
-            </div>
-            <Switch checked={showMap} onCheckedChange={setShowMap} />
-          </div>
-          {showMap && <LocationPicker value={location} onChange={setLocation} />}
-          <Button onClick={handleAdd} className="w-full">
-            Guardar evento
+          <Button
+            variant="outline"
+            className="w-full gap-1 mt-2"
+            onClick={() => {
+              setDetailOpen(false);
+              setDialogOpen(true);
+            }}
+          >
+            <Plus className="w-4 h-4" />
+            Añadir evento este día
           </Button>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add event dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nuevo evento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="text-sm text-muted-foreground">
+              {selectedDate.toLocaleDateString("es-ES", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+              })}
+            </div>
+            <div className="space-y-2">
+              <Label>Categoría</Label>
+              <Select value={category} onValueChange={(v) => setCategory(v as EventCategory)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Hora inicio</Label>
+                <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Hora fin <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Repetir</Label>
+              <Select value={recurrence} onValueChange={(v) => setRecurrence(v as RecurrenceType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No repetir</SelectItem>
+                  <SelectItem value="weekly">Semanal</SelectItem>
+                  <SelectItem value="monthly">Mensual</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Recordatorio</Label>
+              <Select value={reminder} onValueChange={setReminder}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5 minutos antes</SelectItem>
+                  <SelectItem value="10">10 minutos antes</SelectItem>
+                  <SelectItem value="15">15 minutos antes</SelectItem>
+                  <SelectItem value="30">30 minutos antes</SelectItem>
+                  <SelectItem value="60">1 hora antes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-muted-foreground" />
+                <Label className="text-sm">Añadir ubicación</Label>
+              </div>
+              <Switch checked={showMap} onCheckedChange={setShowMap} />
+            </div>
+            {showMap && <LocationPicker value={location} onChange={setLocation} />}
+            <Button onClick={handleAdd} className="w-full">
+              Guardar evento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
