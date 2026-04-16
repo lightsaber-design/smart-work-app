@@ -177,11 +177,13 @@ export function CalendarView({
           selected={selectedDate}
           onSelect={handleDayClick}
           modifiers={{
-            pastEvent: pastEventDates,
+            completedEvent: completedEventDates,
+            pastPending: pastPendingDates,
             futureEvent: futureEventDates,
           }}
           modifiersClassNames={{
-            pastEvent: "bg-muted-foreground/20 font-bold text-muted-foreground",
+            completedEvent: "bg-green-500/20 font-bold text-green-600",
+            pastPending: "bg-muted-foreground/20 font-bold text-muted-foreground",
             futureEvent: "bg-primary/20 font-bold text-primary",
           }}
           className="pointer-events-auto"
