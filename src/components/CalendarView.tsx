@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
-import { Plus, Trash2, Bell, BellOff, MapPin, Repeat, Clock, X } from "lucide-react";
+import { Plus, Trash2, Bell, BellOff, MapPin, Repeat, Clock, X, CheckCircle2, Circle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +36,7 @@ interface CalendarViewProps {
   events: CalendarEvent[];
   onAddEvent: (params: AddEventParams) => void;
   onDeleteEvent: (id: string) => void;
+  onToggleCompleted: (id: string) => void;
   getEventsForDate: (date: Date) => CalendarEvent[];
 }
 
@@ -65,6 +66,7 @@ export function CalendarView({
   events,
   onAddEvent,
   onDeleteEvent,
+  onToggleCompleted,
   getEventsForDate,
 }: CalendarViewProps) {
   const [tab, setTab] = useState<CalendarTab>("calendar");
@@ -85,15 +87,16 @@ export function CalendarView({
 
   const now = new Date();
   now.setHours(0, 0, 0, 0);
-  const pastEventDates = events.filter((e) => {
+  const completedEventDates = events.filter((e) => e.completed).map((e) => e.date);
+  const pastPendingDates = events.filter((e) => {
     const d = new Date(e.date);
     d.setHours(0, 0, 0, 0);
-    return d.getTime() < now.getTime();
+    return d.getTime() < now.getTime() && !e.completed;
   }).map((e) => e.date);
   const futureEventDates = events.filter((e) => {
     const d = new Date(e.date);
     d.setHours(0, 0, 0, 0);
-    return d.getTime() >= now.getTime();
+    return d.getTime() >= now.getTime() && !e.completed;
   }).map((e) => e.date);
 
   const handleDayClick = (d: Date | undefined) => {
@@ -125,7 +128,8 @@ export function CalendarView({
     setDialogOpen(false);
   };
 
-  const dayTotalMs = selectedEvents.reduce((acc, event) => {
+  const completedDayEvents = selectedEvents.filter((e) => e.completed);
+  const dayTotalMs = completedDayEvents.reduce((acc, event) => {
     if (!event.endTime) return acc;
     const start = event.date.getTime();
     const [h, m] = event.endTime.split(":").map(Number);
@@ -174,11 +178,13 @@ export function CalendarView({
           selected={selectedDate}
           onSelect={handleDayClick}
           modifiers={{
-            pastEvent: pastEventDates,
+            completedEvent: completedEventDates,
+            pastPending: pastPendingDates,
             futureEvent: futureEventDates,
           }}
           modifiersClassNames={{
-            pastEvent: "bg-muted-foreground/20 font-bold text-muted-foreground",
+            completedEvent: "bg-green-500/20 font-bold text-green-600",
+            pastPending: "bg-muted-foreground/20 font-bold text-muted-foreground",
             futureEvent: "bg-primary/20 font-bold text-primary",
           }}
           className="pointer-events-auto"
@@ -192,8 +198,12 @@ export function CalendarView({
             Por venir
           </span>
           <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-green-500/40" />
+            Realizado
+          </span>
+          <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-muted-foreground/40" />
-            Pasados
+            Pendiente
           </span>
         </div>
         <Button size="sm" variant="outline" className="gap-1" onClick={() => setDialogOpen(true)}>
@@ -234,10 +244,21 @@ export function CalendarView({
                   return (
                     <div
                       key={event.id}
-                      className="rounded-lg bg-secondary/50 p-3 space-y-2"
+                      className={`rounded-lg p-3 space-y-2 ${event.completed ? "bg-green-500/10 border border-green-500/30" : "bg-secondary/50"}`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => onToggleCompleted(event.id)}
+                            className="flex-shrink-0 transition-colors"
+                            title={event.completed ? "Marcar como pendiente" : "Marcar como realizado"}
+                          >
+                            {event.completed ? (
+                              <CheckCircle2 className="w-5 h-5 text-green-500" />
+                            ) : (
+                              <Circle className="w-5 h-5 text-muted-foreground" />
+                            )}
+                          </button>
                           <span className={`w-2.5 h-2.5 rounded-full ${categoryColors[event.category]}`} />
                           <span className="text-sm font-semibold text-foreground">
                             {event.category}

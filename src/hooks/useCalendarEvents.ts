@@ -13,6 +13,7 @@ export interface CalendarEvent {
   location?: { lat: number; lng: number };
   recurrence: RecurrenceType;
   parentId?: string;
+  completed: boolean;
 }
 
 export interface AddEventParams {
@@ -46,6 +47,7 @@ function generateRecurringEvents(params: AddEventParams, count: number): Calenda
       location: params.location,
       recurrence: params.recurrence,
       parentId: i === 0 ? undefined : parentId,
+      completed: false,
     });
   }
 
@@ -60,6 +62,7 @@ export function useCalendarEvents() {
         ...e,
         date: new Date(e.date),
         recurrence: e.recurrence || "none",
+        completed: e.completed || false,
       }));
     }
     return [];
@@ -115,6 +118,7 @@ export function useCalendarEvents() {
         notified: false,
         location: params.location,
         recurrence: "none",
+        completed: false,
       };
       setEvents((prev) => [...prev, event].sort((a, b) => a.date.getTime() - b.date.getTime()));
     }
@@ -142,5 +146,11 @@ export function useCalendarEvents() {
     [events]
   );
 
-  return { events, addEvent, deleteEvent, getEventsForDate };
+  const toggleEventCompleted = useCallback((id: string) => {
+    setEvents((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, completed: !e.completed } : e))
+    );
+  }, []);
+
+  return { events, addEvent, deleteEvent, getEventsForDate, toggleEventCompleted };
 }
