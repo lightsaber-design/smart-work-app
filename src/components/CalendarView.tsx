@@ -87,15 +87,16 @@ export function CalendarView({
 
   const now = new Date();
   now.setHours(0, 0, 0, 0);
-  const pastEventDates = events.filter((e) => {
+  const completedEventDates = events.filter((e) => e.completed).map((e) => e.date);
+  const pastPendingDates = events.filter((e) => {
     const d = new Date(e.date);
     d.setHours(0, 0, 0, 0);
-    return d.getTime() < now.getTime();
+    return d.getTime() < now.getTime() && !e.completed;
   }).map((e) => e.date);
   const futureEventDates = events.filter((e) => {
     const d = new Date(e.date);
     d.setHours(0, 0, 0, 0);
-    return d.getTime() >= now.getTime();
+    return d.getTime() >= now.getTime() && !e.completed;
   }).map((e) => e.date);
 
   const handleDayClick = (d: Date | undefined) => {
