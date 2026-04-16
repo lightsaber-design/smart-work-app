@@ -46,13 +46,12 @@ export function StatsView({ entries, monthTotal, calendarEvents }: StatsViewProp
         <div className="space-y-3">
           {CATEGORY_ORDER.map((category) => {
             const ms = hoursByCategory[category] || 0;
-            const events = eventsByCategory[category] || 0;
             return (
               <div key={category} className="space-y-1">
                 <div className="flex justify-between text-sm">
                   <span className="text-foreground font-medium">{category}</span>
                   <span className="text-muted-foreground tabular-nums">
-                    {formatDuration(ms)} · {events} {events === 1 ? "evento" : "eventos"}
+                    {formatDuration(ms)}
                   </span>
                 </div>
                 <div className="h-2 rounded-full bg-secondary overflow-hidden">
