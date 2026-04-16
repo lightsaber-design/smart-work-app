@@ -47,6 +47,7 @@ function generateRecurringEvents(params: AddEventParams, count: number): Calenda
       location: params.location,
       recurrence: params.recurrence,
       parentId: i === 0 ? undefined : parentId,
+      completed: false,
     });
   }
 
