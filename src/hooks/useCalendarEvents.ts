@@ -62,6 +62,7 @@ export function useCalendarEvents() {
         ...e,
         date: new Date(e.date),
         recurrence: e.recurrence || "none",
+        completed: e.completed || false,
       }));
     }
     return [];
@@ -145,5 +146,11 @@ export function useCalendarEvents() {
     [events]
   );
 
-  return { events, addEvent, deleteEvent, getEventsForDate };
+  const toggleEventCompleted = useCallback((id: string) => {
+    setEvents((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, completed: !e.completed } : e))
+    );
+  }, []);
+
+  return { events, addEvent, deleteEvent, getEventsForDate, toggleEventCompleted };
 }
