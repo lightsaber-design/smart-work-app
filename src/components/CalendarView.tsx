@@ -243,10 +243,21 @@ export function CalendarView({
                   return (
                     <div
                       key={event.id}
-                      className="rounded-lg bg-secondary/50 p-3 space-y-2"
+                      className={`rounded-lg p-3 space-y-2 ${event.completed ? "bg-green-500/10 border border-green-500/30" : "bg-secondary/50"}`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => onToggleCompleted(event.id)}
+                            className="flex-shrink-0 transition-colors"
+                            title={event.completed ? "Marcar como pendiente" : "Marcar como realizado"}
+                          >
+                            {event.completed ? (
+                              <CheckCircle2 className="w-5 h-5 text-green-500" />
+                            ) : (
+                              <Circle className="w-5 h-5 text-muted-foreground" />
+                            )}
+                          </button>
                           <span className={`w-2.5 h-2.5 rounded-full ${categoryColors[event.category]}`} />
                           <span className="text-sm font-semibold text-foreground">
                             {event.category}
