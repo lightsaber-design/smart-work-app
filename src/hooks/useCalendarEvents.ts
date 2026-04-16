@@ -13,6 +13,7 @@ export interface CalendarEvent {
   location?: { lat: number; lng: number };
   recurrence: RecurrenceType;
   parentId?: string;
+  completed: boolean;
 }
 
 export interface AddEventParams {
