@@ -128,7 +128,8 @@ export function CalendarView({
     setDialogOpen(false);
   };
 
-  const dayTotalMs = selectedEvents.reduce((acc, event) => {
+  const completedDayEvents = selectedEvents.filter((e) => e.completed);
+  const dayTotalMs = completedDayEvents.reduce((acc, event) => {
     if (!event.endTime) return acc;
     const start = event.date.getTime();
     const [h, m] = event.endTime.split(":").map(Number);
