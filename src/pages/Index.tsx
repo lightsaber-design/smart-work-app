@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTimeTracker } from "@/hooks/useTimeTracker";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { ClockButton } from "@/components/ClockButton";
@@ -22,6 +22,34 @@ const Index = () => {
   };
 
   const activeEntry = tracker.entries.find((e) => e.endTime === null);
+
+  // Notify when an event starts and the user is NOT clocked in
+  useEffect(() => {
+    const check = () => {
+      const now = Date.now();
+      calendar.events.forEach((event) => {
+        if (event.notified || event.completed) return;
+        const start = event.date.getTime();
+        // Trigger within the first minute after the event start time
+        if (now >= start && now < start + 60_000) {
+          if (!tracker.isRunning) {
+            if ("Notification" in window && Notification.permission === "granted") {
+              new Notification("⏰ Evento en curso sin fichaje", {
+                body: `${event.category} — No estás fichando. ¡Inicia el fichaje!`,
+                icon: "/placeholder.svg",
+              });
+            }
+          }
+          // Mark as notified either way to avoid spamming
+          calendar.markNotified(event.id);
+        }
+      });
+    };
+
+    check();
+    const interval = setInterval(check, 30_000);
+    return () => clearInterval(interval);
+  }, [calendar.events, tracker.isRunning, calendar.markNotified]);
 
   const titles: Record<Tab, string> = {
     timer: "Fichaje",
