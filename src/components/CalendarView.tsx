@@ -440,6 +440,67 @@ export function CalendarView({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit event dialog */}
+      <Dialog open={!!editEvent} onOpenChange={(o) => !o && setEditEvent(null)}>
+        <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar evento</DialogTitle>
+          </DialogHeader>
+          {editEvent && (
+            <div className="space-y-4 pt-2">
+              <div className="text-sm text-muted-foreground">
+                {editEvent.date.toLocaleDateString("es-ES", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                })}
+              </div>
+              <div className="space-y-2">
+                <Label>Categoría</Label>
+                <Select value={editCategory} onValueChange={(v) => setEditCategory(v as EventCategory)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Hora inicio</Label>
+                  <Input type="time" value={editTime} onChange={(e) => setEditTime(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Hora fin <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                  <Input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Recordatorio</Label>
+                <Select value={editReminder} onValueChange={setEditReminder}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5 minutos antes</SelectItem>
+                    <SelectItem value="10">10 minutos antes</SelectItem>
+                    <SelectItem value="15">15 minutos antes</SelectItem>
+                    <SelectItem value="30">30 minutos antes</SelectItem>
+                    <SelectItem value="60">1 hora antes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={handleSaveEdit} className="w-full">
+                Guardar cambios
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
