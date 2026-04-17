@@ -15,6 +15,7 @@ export interface TimeEntry {
   category: WorkCategory;
   startLocation: GeoLocation | null;
   endLocation: GeoLocation | null;
+  linkedEventId?: string;
 }
 
 function getCurrentPosition(): Promise<GeoLocation | null> {
