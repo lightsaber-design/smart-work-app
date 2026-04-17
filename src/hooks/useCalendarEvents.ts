@@ -124,6 +124,26 @@ export function useCalendarEvents() {
     }
   }, []);
 
+  const addCompletedEventNow = useCallback(
+    (params: { date: Date; category: EventCategory; location?: { lat: number; lng: number } }) => {
+      const id = crypto.randomUUID();
+      const event: CalendarEvent = {
+        id,
+        date: params.date,
+        endTime: undefined,
+        category: params.category,
+        reminderMinutesBefore: 0,
+        notified: true,
+        location: params.location,
+        recurrence: "none",
+        completed: true,
+      };
+      setEvents((prev) => [...prev, event].sort((a, b) => a.date.getTime() - b.date.getTime()));
+      return id;
+    },
+    []
+  );
+
   const deleteEvent = useCallback((id: string) => {
     setEvents((prev) => {
       const event = prev.find((e) => e.id === id);
