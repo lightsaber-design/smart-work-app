@@ -60,48 +60,12 @@ export function StatsView({ entries, monthTotal, calendarEvents }: StatsViewProp
 
   return (
     <div className="px-4 space-y-6 pb-24">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-            Horas realizadas
-          </h3>
-          <p className="text-3xl font-bold text-green-500">{formatDuration(totalCompletedHoursMs)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Total del mes</p>
-        </div>
-        <div className="rounded-xl bg-card p-5 shadow-sm border border-border opacity-80">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-            Fichaje
-          </h3>
-          <p className="text-3xl font-bold text-muted-foreground">{formatDuration(monthTotal)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Solo referencia</p>
-        </div>
-      </div>
-
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-          Fichaje por categoría
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+          Horas realizadas
         </h3>
-        <div className="space-y-3">
-          {CATEGORY_ORDER.map((category) => {
-            const ms = hoursByCategory[category] || 0;
-            return (
-              <div key={category} className="space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span className="text-foreground font-medium">{category}</span>
-                  <span className="text-muted-foreground tabular-nums">
-                    {formatDuration(ms)}
-                  </span>
-                </div>
-                <div className="h-2 rounded-full bg-secondary overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${categoryColors[category]} transition-all duration-500`}
-                    style={{ width: ms > 0 ? `${(ms / maxHours) * 100}%` : "0%" }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <p className="text-3xl font-bold text-green-500">{formatDuration(totalCompletedHoursMs)}</p>
+        <p className="text-xs text-muted-foreground mt-1">Total del mes</p>
       </div>
 
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
