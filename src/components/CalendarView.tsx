@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
-import { Plus, Trash2, Bell, BellOff, MapPin, Repeat, Clock, X, CheckCircle2, Circle } from "lucide-react";
+import { Plus, Trash2, Bell, BellOff, MapPin, Repeat, Clock, X, CheckCircle2, Circle, Pencil } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,10 @@ interface CalendarViewProps {
   onAddEvent: (params: AddEventParams) => void;
   onDeleteEvent: (id: string) => void;
   onToggleCompleted: (id: string) => void;
+  onUpdateEvent: (
+    id: string,
+    updates: { date?: Date; endTime?: string; category?: EventCategory; reminderMinutesBefore?: number }
+  ) => void;
   getEventsForDate: (date: Date) => CalendarEvent[];
 }
 
@@ -67,6 +71,7 @@ export function CalendarView({
   onAddEvent,
   onDeleteEvent,
   onToggleCompleted,
+  onUpdateEvent,
   getEventsForDate,
 }: CalendarViewProps) {
   const [tab, setTab] = useState<CalendarTab>("calendar");
@@ -80,6 +85,37 @@ export function CalendarView({
   const [showMap, setShowMap] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lng: number } | undefined>();
   const [recurrence, setRecurrence] = useState<RecurrenceType>("none");
+
+  // Edit state
+  const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
+  const [editTime, setEditTime] = useState("09:00");
+  const [editEndTime, setEditEndTime] = useState("");
+  const [editCategory, setEditCategory] = useState<EventCategory>("Predi");
+  const [editReminder, setEditReminder] = useState("15");
+
+  const openEdit = (event: CalendarEvent) => {
+    setEditEvent(event);
+    const hh = String(event.date.getHours()).padStart(2, "0");
+    const mm = String(event.date.getMinutes()).padStart(2, "0");
+    setEditTime(`${hh}:${mm}`);
+    setEditEndTime(event.endTime || "");
+    setEditCategory(event.category);
+    setEditReminder(String(event.reminderMinutesBefore));
+  };
+
+  const handleSaveEdit = () => {
+    if (!editEvent) return;
+    const [h, m] = editTime.split(":").map(Number);
+    const newDate = new Date(editEvent.date);
+    newDate.setHours(h, m, 0, 0);
+    onUpdateEvent(editEvent.id, {
+      date: newDate,
+      endTime: editEndTime || undefined,
+      category: editCategory,
+      reminderMinutesBefore: parseInt(editReminder),
+    });
+    setEditEvent(null);
+  };
 
   const selectedEvents = getEventsForDate(selectedDate);
 
@@ -273,12 +309,25 @@ export function CalendarView({
                             <MapPin className="w-3 h-3 text-muted-foreground" />
                           )}
                         </div>
-                        <button
-                          onClick={() => onDeleteEvent(event.id)}
-                          className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setDetailOpen(false);
+                              openEdit(event);
+                            }}
+                            className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                            title="Editar"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => onDeleteEvent(event.id)}
+                            className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
                         <span>
@@ -389,6 +438,67 @@ export function CalendarView({
               Guardar evento
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit event dialog */}
+      <Dialog open={!!editEvent} onOpenChange={(o) => !o && setEditEvent(null)}>
+        <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar evento</DialogTitle>
+          </DialogHeader>
+          {editEvent && (
+            <div className="space-y-4 pt-2">
+              <div className="text-sm text-muted-foreground">
+                {editEvent.date.toLocaleDateString("es-ES", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                })}
+              </div>
+              <div className="space-y-2">
+                <Label>Categoría</Label>
+                <Select value={editCategory} onValueChange={(v) => setEditCategory(v as EventCategory)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Hora inicio</Label>
+                  <Input type="time" value={editTime} onChange={(e) => setEditTime(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Hora fin <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                  <Input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Recordatorio</Label>
+                <Select value={editReminder} onValueChange={setEditReminder}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5 minutos antes</SelectItem>
+                    <SelectItem value="10">10 minutos antes</SelectItem>
+                    <SelectItem value="15">15 minutos antes</SelectItem>
+                    <SelectItem value="30">30 minutos antes</SelectItem>
+                    <SelectItem value="60">1 hora antes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={handleSaveEdit} className="w-full">
+                Guardar cambios
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

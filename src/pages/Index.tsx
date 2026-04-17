@@ -69,6 +69,7 @@ const Index = () => {
             onAddEvent={calendar.addEvent}
             onDeleteEvent={calendar.deleteEvent}
             onToggleCompleted={calendar.toggleEventCompleted}
+            onUpdateEvent={calendar.updateEvent}
             getEventsForDate={calendar.getEventsForDate}
           />
         )}
