@@ -71,6 +71,7 @@ export function CalendarView({
   onAddEvent,
   onDeleteEvent,
   onToggleCompleted,
+  onUpdateEvent,
   getEventsForDate,
 }: CalendarViewProps) {
   const [tab, setTab] = useState<CalendarTab>("calendar");
@@ -84,6 +85,37 @@ export function CalendarView({
   const [showMap, setShowMap] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lng: number } | undefined>();
   const [recurrence, setRecurrence] = useState<RecurrenceType>("none");
+
+  // Edit state
+  const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
+  const [editTime, setEditTime] = useState("09:00");
+  const [editEndTime, setEditEndTime] = useState("");
+  const [editCategory, setEditCategory] = useState<EventCategory>("Predi");
+  const [editReminder, setEditReminder] = useState("15");
+
+  const openEdit = (event: CalendarEvent) => {
+    setEditEvent(event);
+    const hh = String(event.date.getHours()).padStart(2, "0");
+    const mm = String(event.date.getMinutes()).padStart(2, "0");
+    setEditTime(`${hh}:${mm}`);
+    setEditEndTime(event.endTime || "");
+    setEditCategory(event.category);
+    setEditReminder(String(event.reminderMinutesBefore));
+  };
+
+  const handleSaveEdit = () => {
+    if (!editEvent) return;
+    const [h, m] = editTime.split(":").map(Number);
+    const newDate = new Date(editEvent.date);
+    newDate.setHours(h, m, 0, 0);
+    onUpdateEvent(editEvent.id, {
+      date: newDate,
+      endTime: editEndTime || undefined,
+      category: editCategory,
+      reminderMinutesBefore: parseInt(editReminder),
+    });
+    setEditEvent(null);
+  };
 
   const selectedEvents = getEventsForDate(selectedDate);
 
