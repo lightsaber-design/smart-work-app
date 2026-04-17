@@ -186,5 +186,5 @@ export function useCalendarEvents() {
     []
   );
 
-  return { events, addEvent, deleteEvent, getEventsForDate, toggleEventCompleted, updateEvent };
+  return { events, addEvent, addCompletedEventNow, deleteEvent, getEventsForDate, toggleEventCompleted, updateEvent };
 }
