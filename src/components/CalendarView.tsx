@@ -37,6 +37,10 @@ interface CalendarViewProps {
   onAddEvent: (params: AddEventParams) => void;
   onDeleteEvent: (id: string) => void;
   onToggleCompleted: (id: string) => void;
+  onUpdateEvent: (
+    id: string,
+    updates: { date?: Date; endTime?: string; category?: EventCategory; reminderMinutesBefore?: number }
+  ) => void;
   getEventsForDate: (date: Date) => CalendarEvent[];
 }
 
