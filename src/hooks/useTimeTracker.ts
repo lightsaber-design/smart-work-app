@@ -70,32 +70,54 @@ export function useTimeTracker() {
     return () => clearInterval(interval);
   }, [isRunning, activeEntry]);
 
-  const clockIn = useCallback(async (category: WorkCategory = "Predi") => {
-    const location = await getCurrentPosition();
-    const entry: TimeEntry = {
-      id: crypto.randomUUID(),
-      startTime: new Date(),
-      endTime: null,
-      description: "",
-      category,
-      startLocation: location,
-      endLocation: null,
-    };
-    setEntries((prev) => [entry, ...prev]);
-    setIsRunning(true);
-    setElapsed(0);
-  }, []);
+  const clockIn = useCallback(
+    async (
+      category: WorkCategory = "Predi",
+      onCreateEvent?: (params: { date: Date; category: WorkCategory; location?: GeoLocation }) => string
+    ) => {
+      const location = await getCurrentPosition();
+      const startTime = new Date();
+      const linkedEventId = onCreateEvent?.({
+        date: startTime,
+        category,
+        location: location || undefined,
+      });
+      const entry: TimeEntry = {
+        id: crypto.randomUUID(),
+        startTime,
+        endTime: null,
+        description: "",
+        category,
+        startLocation: location,
+        endLocation: null,
+        linkedEventId,
+      };
+      setEntries((prev) => [entry, ...prev]);
+      setIsRunning(true);
+      setElapsed(0);
+    },
+    []
+  );
 
-  const clockOut = useCallback(async () => {
-    const location = await getCurrentPosition();
-    setEntries((prev) =>
-      prev.map((e) =>
-        e.endTime === null ? { ...e, endTime: new Date(), endLocation: location } : e
-      )
-    );
-    setIsRunning(false);
-    setElapsed(0);
-  }, []);
+  const clockOut = useCallback(
+    async (onUpdateEvent?: (id: string, endTime: string) => void) => {
+      const location = await getCurrentPosition();
+      const end = new Date();
+      const endTimeStr = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
+      setEntries((prev) =>
+        prev.map((e) => {
+          if (e.endTime !== null) return e;
+          if (e.linkedEventId) {
+            onUpdateEvent?.(e.linkedEventId, endTimeStr);
+          }
+          return { ...e, endTime: end, endLocation: location };
+        })
+      );
+      setIsRunning(false);
+      setElapsed(0);
+    },
+    []
+  );
 
   const updateDescription = useCallback((id: string, description: string) => {
     setEntries((prev) =>
