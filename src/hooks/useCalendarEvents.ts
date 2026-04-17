@@ -152,5 +152,19 @@ export function useCalendarEvents() {
     );
   }, []);
 
-  return { events, addEvent, deleteEvent, getEventsForDate, toggleEventCompleted };
+  const updateEvent = useCallback(
+    (
+      id: string,
+      updates: { date?: Date; endTime?: string; category?: EventCategory; reminderMinutesBefore?: number }
+    ) => {
+      setEvents((prev) =>
+        prev
+          .map((e) => (e.id === id ? { ...e, ...updates, notified: false } : e))
+          .sort((a, b) => a.date.getTime() - b.date.getTime())
+      );
+    },
+    []
+  );
+
+  return { events, addEvent, deleteEvent, getEventsForDate, toggleEventCompleted, updateEvent };
 }
