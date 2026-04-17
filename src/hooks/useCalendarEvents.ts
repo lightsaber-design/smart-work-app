@@ -78,30 +78,8 @@ export function useCalendarEvents() {
     }
   }, []);
 
-  useEffect(() => {
-    const check = () => {
-      const now = Date.now();
-      setEvents((prev) =>
-        prev.map((event) => {
-          if (event.notified) return event;
-          const triggerAt = event.date.getTime() - event.reminderMinutesBefore * 60 * 1000;
-          if (now >= triggerAt && now < event.date.getTime() + 60000) {
-            if ("Notification" in window && Notification.permission === "granted") {
-              new Notification("⏰ Recordatorio de fichaje", {
-                body: `${event.category} — ¡Es hora de registrar tus horas!`,
-                icon: "/placeholder.svg",
-              });
-            }
-            return { ...event, notified: true };
-          }
-          return event;
-        })
-      );
-    };
-
-    check();
-    const interval = setInterval(check, 30000);
-    return () => clearInterval(interval);
+  const markNotified = useCallback((id: string) => {
+    setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, notified: true } : e)));
   }, []);
 
   const addEvent = useCallback((params: AddEventParams) => {
