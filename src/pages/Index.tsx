@@ -43,9 +43,23 @@ const Index = () => {
             <ClockButton
               isRunning={tracker.isRunning}
               elapsed={tracker.elapsed}
-              onClockIn={tracker.clockIn}
-              onClockOut={tracker.clockOut}
-              onUpdateCategory={(cat) => activeEntry && tracker.updateCategory(activeEntry.id, cat)}
+              onClockIn={(cat) =>
+                tracker.clockIn(cat, ({ date, category, location }) =>
+                  calendar.addCompletedEventNow({ date, category, location })
+                )
+              }
+              onClockOut={() =>
+                tracker.clockOut((eventId, endTime) =>
+                  calendar.updateEvent(eventId, { endTime })
+                )
+              }
+              onUpdateCategory={(cat) => {
+                if (!activeEntry) return;
+                tracker.updateCategory(activeEntry.id, cat);
+                if (activeEntry.linkedEventId) {
+                  calendar.updateEvent(activeEntry.linkedEventId, { category: cat });
+                }
+              }}
               calendarEvents={calendar.events}
               activeCategory={activeEntry?.category}
               activeEntryId={activeEntry?.id}
