@@ -1,4 +1,4 @@
-import { Play, Square } from "lucide-react";
+import { Play, Square, Clock } from "lucide-react";
 import { formatDuration, WorkCategory } from "@/hooks/useTimeTracker";
 import { CalendarEvent } from "@/hooks/useCalendarEvents";
 import {
@@ -9,18 +9,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useState, useEffect } from "react";
+import { useT } from "@/lib/LanguageContext";
+
+function getCurrentTimeStr(): string {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
+
+function timeStrToDate(timeStr: string): Date {
+  const [hours, minutes] = timeStr.split(":").map(Number);
+  const date = new Date();
+  date.setHours(hours, minutes, 0, 0);
+  return date;
+}
 
 const CATEGORIES: WorkCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
 
 interface ClockButtonProps {
   isRunning: boolean;
   elapsed: number;
-  onClockIn: (category: WorkCategory) => void;
-  onClockOut: () => void;
+  onClockIn: (category: WorkCategory, customTime?: Date) => void;
+  onClockOut: (customTime?: Date) => void;
   onUpdateCategory: (category: WorkCategory) => void;
+  onUpdateStartTime: (startTime: Date) => void;
   calendarEvents: CalendarEvent[];
   activeCategory?: WorkCategory;
   activeEntryId?: string;
+  activeEntryStartTime?: Date;
 }
 
 function detectCategoryFromEvents(events: CalendarEvent[]): WorkCategory | null {
@@ -41,15 +56,47 @@ function detectCategoryFromEvents(events: CalendarEvent[]): WorkCategory | null 
   return null;
 }
 
-export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, onUpdateCategory, calendarEvents, activeCategory, activeEntryId }: ClockButtonProps) {
+export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, onUpdateCategory, onUpdateStartTime, calendarEvents, activeCategory, activeEntryId, activeEntryStartTime }: ClockButtonProps) {
+  const t = useT();
   const detected = detectCategoryFromEvents(calendarEvents);
   const [category, setCategory] = useState<WorkCategory>(detected || "Predi");
+  const [editingTime, setEditingTime] = useState(false);
+  const [customTimeStr, setCustomTimeStr] = useState(getCurrentTimeStr());
 
   useEffect(() => {
     if (!isRunning) {
       setCategory(detected || "Predi");
+      setEditingTime(false);
     }
   }, [detected, isRunning]);
+
+  const handleToggleEdit = () => {
+    if (!editingTime) {
+      if (isRunning && activeEntryStartTime) {
+        setCustomTimeStr(
+          `${String(activeEntryStartTime.getHours()).padStart(2, "0")}:${String(activeEntryStartTime.getMinutes()).padStart(2, "0")}`
+        );
+      } else {
+        setCustomTimeStr(getCurrentTimeStr());
+      }
+    }
+    setEditingTime((v) => !v);
+  };
+
+  const handleSaveStartTime = () => {
+    onUpdateStartTime(timeStrToDate(customTimeStr));
+    setEditingTime(false);
+  };
+
+  const handleAction = () => {
+    if (isRunning) {
+      onClockOut();
+    } else {
+      const customTime = editingTime ? timeStrToDate(customTimeStr) : undefined;
+      onClockIn(category, customTime);
+      setEditingTime(false);
+    }
+  };
 
   const elapsedMs = elapsed * 1000;
 
@@ -81,16 +128,44 @@ export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, onUpdat
         </Select>
         {!isRunning && detected && (
           <p className="text-xs text-muted-foreground text-center mt-1">
-            Detectado del calendario
+            {t('timer_detected')}
           </p>
         )}
       </div>
 
+      <div className="flex flex-col items-center gap-2">
+        <button
+          onClick={handleToggleEdit}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Clock className="w-3 h-3" />
+          {editingTime ? t('timer_cancel') : isRunning ? t('timer_edit_start') : t('timer_forgot')}
+        </button>
+        {editingTime && (
+          <>
+            <input
+              type="time"
+              value={customTimeStr}
+              onChange={(e) => setCustomTimeStr(e.target.value)}
+              className="text-center text-sm font-medium bg-muted border border-border rounded-md px-3 py-1.5 text-foreground"
+            />
+            {isRunning && (
+              <button
+                onClick={handleSaveStartTime}
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                {t('timer_save')}
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
       <p className="text-sm text-muted-foreground">
-        {isRunning ? "Trabajando..." : "Listo para fichar"}
+        {isRunning ? t('timer_working') : t('timer_ready')}
       </p>
       <button
-        onClick={isRunning ? onClockOut : () => onClockIn(category)}
+        onClick={handleAction}
         className={`relative flex items-center justify-center w-24 h-24 rounded-full transition-all duration-300 active:scale-95 ${
           isRunning
             ? "bg-destructive timer-glow-active"
@@ -104,7 +179,7 @@ export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, onUpdat
         )}
       </button>
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-        {isRunning ? "Parar" : "Fichar"}
+        {isRunning ? t('timer_stop') : t('timer_clock_in')}
       </p>
     </div>
   );

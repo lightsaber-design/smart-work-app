@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun --version)",
+      "Bash(npm --version)",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

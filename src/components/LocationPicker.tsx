@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import { useT } from "@/lib/LanguageContext";
 
 // Fix default marker icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -14,6 +15,7 @@ L.Icon.Default.mergeOptions({
 interface LocationPickerProps {
   value?: { lat: number; lng: number };
   onChange: (location: { lat: number; lng: number } | undefined) => void;
+  defaultCenter?: { lat: number; lng: number };
 }
 
 function ClickHandler({ onClick }: { onClick: (lat: number, lng: number) => void }) {
@@ -25,7 +27,8 @@ function ClickHandler({ onClick }: { onClick: (lat: number, lng: number) => void
   return null;
 }
 
-export function LocationPicker({ value, onChange }: LocationPickerProps) {
+export function LocationPicker({ value, onChange, defaultCenter }: LocationPickerProps) {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [searching, setSearching] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
@@ -53,7 +56,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
     onChange({ lat, lng });
   };
 
-  const center = value || { lat: 19.4326, lng: -99.1332 };
+  const center = value || defaultCenter || { lat: 53.3498, lng: -6.2603 };
 
   return (
     <div className="space-y-2">
@@ -63,7 +66,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          placeholder="Buscar dirección..."
+          placeholder={t('picker_search_placeholder')}
           className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         />
         <button
@@ -72,7 +75,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
           disabled={searching}
           className="h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
         >
-          {searching ? "..." : "Buscar"}
+          {searching ? "..." : t('picker_search_btn')}
         </button>
       </div>
       <div className="rounded-lg overflow-hidden border border-border h-[200px]">
@@ -98,7 +101,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
             onClick={() => onChange(undefined)}
             className="ml-2 text-destructive hover:underline"
           >
-            Quitar
+            {t('picker_remove')}
           </button>
         </p>
       )}

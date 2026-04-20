@@ -1,5 +1,6 @@
 import { CalendarEvent, EventCategory } from "@/hooks/useCalendarEvents";
 import { TimeEntry, formatDuration } from "@/hooks/useTimeTracker";
+import { useT } from "@/lib/LanguageContext";
 
 interface StatsViewProps {
   entries: TimeEntry[];
@@ -18,6 +19,7 @@ const categoryColors: Record<EventCategory, string> = {
 const CATEGORY_ORDER: EventCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
 
 export function StatsView({ entries, monthTotal, calendarEvents }: StatsViewProps) {
+  const t = useT();
   const now = new Date();
 
   // Hours per category from time entries
@@ -55,22 +57,21 @@ export function StatsView({ entries, monthTotal, calendarEvents }: StatsViewProp
 
   const totalCompletedHoursMs = Object.values(completedHoursByCategory).reduce((a, b) => a + b, 0);
 
-  const maxHours = Math.max(...Object.values(hoursByCategory), 1);
   const maxCompleted = Math.max(...Object.values(completedHoursByCategory), 1);
 
   return (
     <div className="px-4 space-y-6 pb-24">
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-          Horas realizadas
+          {t('stats_completed_hours')}
         </h3>
         <p className="text-3xl font-bold text-green-500">{formatDuration(totalCompletedHoursMs)}</p>
-        <p className="text-xs text-muted-foreground mt-1">Total del mes</p>
+        <p className="text-xs text-muted-foreground mt-1">{t('stats_month_total')}</p>
       </div>
 
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-          Eventos realizados por categoría
+          {t('stats_by_category')}
         </h3>
         <div className="space-y-3">
           {CATEGORY_ORDER.map((category) => {
@@ -81,7 +82,7 @@ export function StatsView({ entries, monthTotal, calendarEvents }: StatsViewProp
                 <div className="flex justify-between text-sm">
                   <span className="text-foreground font-medium">{category}</span>
                   <span className="text-muted-foreground tabular-nums">
-                    {formatDuration(ms)} · {count} {count === 1 ? "evento" : "eventos"}
+                    {formatDuration(ms)} · {count} {count === 1 ? t('stats_event') : t('stats_events')}
                   </span>
                 </div>
                 <div className="h-2 rounded-full bg-secondary overflow-hidden">

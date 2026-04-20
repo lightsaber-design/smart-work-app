@@ -7,7 +7,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LocationPicker } from "@/components/LocationPicker";
+import { FavoritePlace } from "@/hooks/useFavoritePlaces";
+import { useT } from "@/lib/LanguageContext";
 
 const CATEGORIES: EventCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
 
@@ -42,6 +43,8 @@ interface CalendarViewProps {
     updates: { date?: Date; endTime?: string; category?: EventCategory; reminderMinutesBefore?: number }
   ) => void;
   getEventsForDate: (date: Date) => CalendarEvent[];
+  favoritePlaces: FavoritePlace[];
+  defaultCenter?: { lat: number; lng: number };
 }
 
 type CalendarTab = "calendar" | "add";
@@ -63,9 +66,6 @@ function formatEventTime(date: Date) {
   return date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
 }
 
-const recurrenceLabel = (r: RecurrenceType) =>
-  r === "weekly" ? "Semanal" : r === "monthly" ? "Mensual" : "";
-
 export function CalendarView({
   events,
   onAddEvent,
@@ -73,7 +73,10 @@ export function CalendarView({
   onToggleCompleted,
   onUpdateEvent,
   getEventsForDate,
+  favoritePlaces,
+  defaultCenter,
 }: CalendarViewProps) {
+  const t = useT();
   const [tab, setTab] = useState<CalendarTab>("calendar");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [detailOpen, setDetailOpen] = useState(false);
@@ -85,6 +88,8 @@ export function CalendarView({
   const [showMap, setShowMap] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lng: number } | undefined>();
   const [recurrence, setRecurrence] = useState<RecurrenceType>("none");
+  const [locationMode, setLocationMode] = useState<"none" | "custom">("none");
+  const [selectedFavoriteId, setSelectedFavoriteId] = useState<string>("");
 
   // Edit state
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
@@ -146,12 +151,20 @@ export function CalendarView({
     const [hours, minutes] = time.split(":").map(Number);
     const date = new Date(selectedDate);
     date.setHours(hours, minutes, 0, 0);
+
+    const eventLocation =
+      locationMode === "custom"
+        ? location
+        : selectedFavoriteId
+        ? favoritePlaces.find((p) => p.id === selectedFavoriteId)?.location
+        : undefined;
+
     onAddEvent({
       date,
       endTime: endTime || undefined,
       category,
       reminderMinutesBefore: parseInt(reminder),
-      location: showMap ? location : undefined,
+      location: eventLocation,
       recurrence,
     });
     setTime("09:00");
@@ -160,6 +173,8 @@ export function CalendarView({
     setReminder("15");
     setShowMap(false);
     setLocation(undefined);
+    setLocationMode("none");
+    setSelectedFavoriteId("");
     setRecurrence("none");
     setDialogOpen(false);
   };
@@ -185,6 +200,9 @@ export function CalendarView({
         : "default"
       : "unsupported";
 
+  const recurrenceLabel = (r: RecurrenceType) =>
+    r === "weekly" ? t('cal_weekly') : r === "monthly" ? t('cal_monthly') : "";
+
   return (
     <div className="px-4 space-y-4 pb-24">
       {notificationStatus !== "granted" && (
@@ -192,8 +210,8 @@ export function CalendarView({
           <BellOff className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           <span className="text-muted-foreground">
             {notificationStatus === "denied"
-              ? "Notificaciones bloqueadas. Actívalas en ajustes del navegador."
-              : "Permite notificaciones para recibir recordatorios."}
+              ? t('cal_notif_blocked')
+              : t('cal_notif_allow')}
           </span>
           {notificationStatus === "default" && (
             <Button
@@ -202,7 +220,7 @@ export function CalendarView({
               className="ml-auto text-xs"
               onClick={() => Notification.requestPermission()}
             >
-              Activar
+              {t('cal_notif_activate')}
             </Button>
           )}
         </div>
@@ -231,20 +249,20 @@ export function CalendarView({
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-primary/40" />
-            Por venir
+            {t('cal_upcoming')}
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-green-500/40" />
-            Realizado
+            {t('cal_done')}
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-muted-foreground/40" />
-            Pendiente
+            {t('cal_pending')}
           </span>
         </div>
         <Button size="sm" variant="outline" className="gap-1" onClick={() => setDialogOpen(true)}>
           <Plus className="w-4 h-4" />
-          Añadir
+          {t('cal_add')}
         </Button>
       </div>
 
@@ -262,14 +280,14 @@ export function CalendarView({
           </DialogHeader>
 
           {selectedEvents.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">Sin eventos este día</p>
+            <p className="text-sm text-muted-foreground py-4">{t('cal_no_events')}</p>
           ) : (
             <div className="space-y-4 pt-2">
               {dayTotalMs > 0 && (
                 <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3">
                   <Clock className="w-4 h-4 text-primary" />
                   <span className="text-sm font-semibold text-foreground">
-                    Total: {dayTotalHrs}h {dayTotalMins}m
+                    {t('cal_total')} {dayTotalHrs}h {dayTotalMins}m
                   </span>
                 </div>
               )}
@@ -287,7 +305,6 @@ export function CalendarView({
                           <button
                             onClick={() => onToggleCompleted(event.id)}
                             className="flex-shrink-0 transition-colors"
-                            title={event.completed ? "Marcar como pendiente" : "Marcar como realizado"}
                           >
                             {event.completed ? (
                               <CheckCircle2 className="w-5 h-5 text-green-500" />
@@ -316,14 +333,12 @@ export function CalendarView({
                               openEdit(event);
                             }}
                             className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                            title="Editar"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => onDeleteEvent(event.id)}
                             className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                            title="Eliminar"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -356,7 +371,7 @@ export function CalendarView({
             }}
           >
             <Plus className="w-4 h-4" />
-            Añadir evento este día
+            {t('cal_add_event_day')}
           </Button>
         </DialogContent>
       </Dialog>
@@ -365,7 +380,7 @@ export function CalendarView({
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Nuevo evento</DialogTitle>
+            <DialogTitle>{t('cal_new_event')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="text-sm text-muted-foreground">
@@ -376,7 +391,7 @@ export function CalendarView({
               })}
             </div>
             <div className="space-y-2">
-              <Label>Categoría</Label>
+              <Label>{t('cal_category')}</Label>
               <Select value={category} onValueChange={(v) => setCategory(v as EventCategory)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -390,52 +405,75 @@ export function CalendarView({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Hora inicio</Label>
+                <Label>{t('cal_start_time')}</Label>
                 <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Hora fin <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                <Label>{t('cal_end_time')} <span className="text-muted-foreground text-xs">({t('cal_optional')})</span></Label>
                 <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Repetir</Label>
+              <Label>{t('cal_repeat')}</Label>
               <Select value={recurrence} onValueChange={(v) => setRecurrence(v as RecurrenceType)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No repetir</SelectItem>
-                  <SelectItem value="weekly">Semanal</SelectItem>
-                  <SelectItem value="monthly">Mensual</SelectItem>
+                  <SelectItem value="none">{t('cal_no_repeat')}</SelectItem>
+                  <SelectItem value="weekly">{t('cal_weekly')}</SelectItem>
+                  <SelectItem value="monthly">{t('cal_monthly')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Recordatorio</Label>
+              <Label>{t('cal_reminder')}</Label>
               <Select value={reminder} onValueChange={setReminder}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="5">5 minutos antes</SelectItem>
-                  <SelectItem value="10">10 minutos antes</SelectItem>
-                  <SelectItem value="15">15 minutos antes</SelectItem>
-                  <SelectItem value="30">30 minutos antes</SelectItem>
-                  <SelectItem value="60">1 hora antes</SelectItem>
+                  <SelectItem value="5">{t('cal_min_before', { n: 5 })}</SelectItem>
+                  <SelectItem value="10">{t('cal_min_before', { n: 10 })}</SelectItem>
+                  <SelectItem value="15">{t('cal_min_before', { n: 15 })}</SelectItem>
+                  <SelectItem value="30">{t('cal_min_before', { n: 30 })}</SelectItem>
+                  <SelectItem value="60">{t('cal_1h_before')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center justify-between rounded-lg border border-border p-3">
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-muted-foreground" />
-                <Label className="text-sm">Añadir ubicación</Label>
-              </div>
-              <Switch checked={showMap} onCheckedChange={setShowMap} />
+            <div className="space-y-2">
+              <Label>{t('cal_location')}</Label>
+              <Select
+                value={selectedFavoriteId || locationMode}
+                onValueChange={(v) => {
+                  if (v === "none" || v === "custom") {
+                    setLocationMode(v as "none" | "custom");
+                    setSelectedFavoriteId("");
+                  } else {
+                    setLocationMode("none");
+                    setSelectedFavoriteId(v);
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t('cal_no_location')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t('cal_no_location')}</SelectItem>
+                  {favoritePlaces.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      ⭐ {p.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="custom">{t('cal_choose_map')}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            {showMap && <LocationPicker value={location} onChange={setLocation} />}
+            {locationMode === "custom" && (
+              <LocationPicker value={location} onChange={setLocation} defaultCenter={defaultCenter} />
+            )}
             <Button onClick={handleAdd} className="w-full">
-              Guardar evento
+              {t('cal_save_event')}
             </Button>
           </div>
         </DialogContent>
@@ -445,7 +483,7 @@ export function CalendarView({
       <Dialog open={!!editEvent} onOpenChange={(o) => !o && setEditEvent(null)}>
         <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Editar evento</DialogTitle>
+            <DialogTitle>{t('cal_edit_event')}</DialogTitle>
           </DialogHeader>
           {editEvent && (
             <div className="space-y-4 pt-2">
@@ -457,7 +495,7 @@ export function CalendarView({
                 })}
               </div>
               <div className="space-y-2">
-                <Label>Categoría</Label>
+                <Label>{t('cal_category')}</Label>
                 <Select value={editCategory} onValueChange={(v) => setEditCategory(v as EventCategory)}>
                   <SelectTrigger>
                     <SelectValue />
@@ -471,31 +509,31 @@ export function CalendarView({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>Hora inicio</Label>
+                  <Label>{t('cal_start_time')}</Label>
                   <Input type="time" value={editTime} onChange={(e) => setEditTime(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Hora fin <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                  <Label>{t('cal_end_time')} <span className="text-muted-foreground text-xs">({t('cal_optional')})</span></Label>
                   <Input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Recordatorio</Label>
+                <Label>{t('cal_reminder')}</Label>
                 <Select value={editReminder} onValueChange={setEditReminder}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="5">5 minutos antes</SelectItem>
-                    <SelectItem value="10">10 minutos antes</SelectItem>
-                    <SelectItem value="15">15 minutos antes</SelectItem>
-                    <SelectItem value="30">30 minutos antes</SelectItem>
-                    <SelectItem value="60">1 hora antes</SelectItem>
+                    <SelectItem value="5">{t('cal_min_before', { n: 5 })}</SelectItem>
+                    <SelectItem value="10">{t('cal_min_before', { n: 10 })}</SelectItem>
+                    <SelectItem value="15">{t('cal_min_before', { n: 15 })}</SelectItem>
+                    <SelectItem value="30">{t('cal_min_before', { n: 30 })}</SelectItem>
+                    <SelectItem value="60">{t('cal_1h_before')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <Button onClick={handleSaveEdit} className="w-full">
-                Guardar cambios
+                {t('cal_save_changes')}
               </Button>
             </div>
           )}

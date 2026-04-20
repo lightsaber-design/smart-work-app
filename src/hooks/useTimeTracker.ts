@@ -73,14 +73,13 @@ export function useTimeTracker() {
   const clockIn = useCallback(
     async (
       category: WorkCategory = "Predi",
-      onCreateEvent?: (params: { date: Date; category: WorkCategory; location?: GeoLocation }) => string
+      onCreateEvent?: (params: { date: Date; category: WorkCategory; location?: GeoLocation }) => string,
+      customTime?: Date
     ) => {
-      const location = await getCurrentPosition();
-      const startTime = new Date();
+      const startTime = customTime ?? new Date();
       const linkedEventId = onCreateEvent?.({
         date: startTime,
         category,
-        location: location || undefined,
       });
       const entry: TimeEntry = {
         id: crypto.randomUUID(),
@@ -88,21 +87,20 @@ export function useTimeTracker() {
         endTime: null,
         description: "",
         category,
-        startLocation: location,
+        startLocation: null,
         endLocation: null,
         linkedEventId,
       };
       setEntries((prev) => [entry, ...prev]);
       setIsRunning(true);
-      setElapsed(0);
+      setElapsed(Math.floor((Date.now() - startTime.getTime()) / 1000));
     },
     []
   );
 
   const clockOut = useCallback(
-    async (onUpdateEvent?: (id: string, endTime: string) => void) => {
-      const location = await getCurrentPosition();
-      const end = new Date();
+    async (onUpdateEvent?: (id: string, endTime: string) => void, customTime?: Date) => {
+      const end = customTime ?? new Date();
       const endTimeStr = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
       setEntries((prev) =>
         prev.map((e) => {
@@ -110,7 +108,7 @@ export function useTimeTracker() {
           if (e.linkedEventId) {
             onUpdateEvent?.(e.linkedEventId, endTimeStr);
           }
-          return { ...e, endTime: end, endLocation: location };
+          return { ...e, endTime: end };
         })
       );
       setIsRunning(false);
@@ -118,6 +116,13 @@ export function useTimeTracker() {
     },
     []
   );
+
+  const updateStartTime = useCallback((id: string, startTime: Date) => {
+    setEntries((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, startTime } : e))
+    );
+    setElapsed(Math.floor((Date.now() - startTime.getTime()) / 1000));
+  }, []);
 
   const updateDescription = useCallback((id: string, description: string) => {
     setEntries((prev) =>
@@ -170,6 +175,7 @@ export function useTimeTracker() {
     elapsed,
     clockIn,
     clockOut,
+    updateStartTime,
     updateDescription,
     updateCategory,
     deleteEntry,

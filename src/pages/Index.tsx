@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useTimeTracker } from "@/hooks/useTimeTracker";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
+import { useFavoritePlaces } from "@/hooks/useFavoritePlaces";
+import { useSetup } from "@/hooks/useSetup";
 import { ClockButton } from "@/components/ClockButton";
 import { DaySummary } from "@/components/DaySummary";
 import { BottomNav } from "@/components/BottomNav";
@@ -8,13 +10,20 @@ import { StatsView } from "@/components/StatsView";
 import { SettingsView } from "@/components/SettingsView";
 import { LocationMap } from "@/components/LocationMap";
 import { CalendarView } from "@/components/CalendarView";
+import { SetupScreen } from "@/components/SetupScreen";
+import { LanguageProvider } from "@/lib/LanguageContext";
+import { detectLanguage, Lang } from "@/lib/i18n";
+import { useT } from "@/lib/LanguageContext";
 
 type Tab = "timer" | "map" | "calendar" | "stats" | "settings";
 
-const Index = () => {
+function AppContent() {
+  const t = useT();
   const [activeTab, setActiveTab] = useState<Tab>("timer");
   const tracker = useTimeTracker();
   const calendar = useCalendarEvents();
+  const favorites = useFavoritePlaces();
+  const { setup, saveSetup } = useSetup();
 
   const handleClearAll = () => {
     localStorage.removeItem("time-entries");
@@ -22,15 +31,14 @@ const Index = () => {
   };
 
   const activeEntry = tracker.entries.find((e) => e.endTime === null);
+  const defaultCenter = setup.city ?? undefined;
 
-  // Notify when an event starts and the user is NOT clocked in
   useEffect(() => {
     const check = () => {
       const now = Date.now();
       calendar.events.forEach((event) => {
         if (event.notified || event.completed) return;
         const start = event.date.getTime();
-        // Trigger within the first minute after the event start time
         if (now >= start && now < start + 60_000) {
           if (!tracker.isRunning) {
             if ("Notification" in window && Notification.permission === "granted") {
@@ -40,23 +48,21 @@ const Index = () => {
               });
             }
           }
-          // Mark as notified either way to avoid spamming
           calendar.markNotified(event.id);
         }
       });
     };
-
     check();
     const interval = setInterval(check, 30_000);
     return () => clearInterval(interval);
   }, [calendar.events, tracker.isRunning, calendar.markNotified]);
 
   const titles: Record<Tab, string> = {
-    timer: "Fichaje",
-    map: "Mapa",
-    calendar: "Calendario",
-    stats: "Resumen",
-    settings: "Ajustes",
+    timer: t('nav_timer'),
+    map: t('nav_map'),
+    calendar: t('nav_calendar'),
+    stats: t('nav_stats'),
+    settings: t('nav_settings'),
   };
 
   return (
@@ -71,14 +77,16 @@ const Index = () => {
             <ClockButton
               isRunning={tracker.isRunning}
               elapsed={tracker.elapsed}
-              onClockIn={(cat) =>
+              onClockIn={(cat, customTime) =>
                 tracker.clockIn(cat, ({ date, category, location }) =>
-                  calendar.addCompletedEventNow({ date, category, location })
+                  calendar.addCompletedEventNow({ date, category, location }),
+                  customTime
                 )
               }
-              onClockOut={() =>
+              onClockOut={(customTime) =>
                 tracker.clockOut((eventId, endTime) =>
-                  calendar.updateEvent(eventId, { endTime })
+                  calendar.updateEvent(eventId, { endTime }),
+                  customTime
                 )
               }
               onUpdateCategory={(cat) => {
@@ -88,9 +96,14 @@ const Index = () => {
                   calendar.updateEvent(activeEntry.linkedEventId, { category: cat });
                 }
               }}
+              onUpdateStartTime={(startTime) => {
+                if (!activeEntry) return;
+                tracker.updateStartTime(activeEntry.id, startTime);
+              }}
               calendarEvents={calendar.events}
               activeCategory={activeEntry?.category}
               activeEntryId={activeEntry?.id}
+              activeEntryStartTime={activeEntry?.startTime}
             />
             <DaySummary
               todayTotal={tracker.todayTotal}
@@ -101,7 +114,13 @@ const Index = () => {
 
         {activeTab === "map" && (
           <div className="py-4 space-y-4">
-            <LocationMap entries={tracker.entries} />
+            <LocationMap
+              entries={tracker.entries}
+              favoritePlaces={favorites.places}
+              onAddFavorite={favorites.addPlace}
+              onDeleteFavorite={favorites.deletePlace}
+              defaultCenter={defaultCenter}
+            />
           </div>
         )}
 
@@ -113,6 +132,8 @@ const Index = () => {
             onToggleCompleted={calendar.toggleEventCompleted}
             onUpdateEvent={calendar.updateEvent}
             getEventsForDate={calendar.getEventsForDate}
+            favoritePlaces={favorites.places}
+            defaultCenter={defaultCenter}
           />
         )}
 
@@ -124,12 +145,37 @@ const Index = () => {
           <SettingsView
             entryCount={tracker.entries.length}
             onClearAll={handleClearAll}
+            setup={setup}
+            onSaveSetup={saveSetup}
           />
         )}
       </main>
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
+  );
+}
+
+const Index = () => {
+  const { setup, completeSetup, saveSetup } = useSetup();
+  const [setupLang, setSetupLang] = useState<Lang>(detectLanguage);
+  const lang = setup.completed ? (setup.language ?? detectLanguage()) : setupLang;
+
+  if (!setup.completed) {
+    return (
+      <LanguageProvider lang={lang}>
+        <SetupScreen
+          onComplete={completeSetup}
+          onLangChange={setSetupLang}
+        />
+      </LanguageProvider>
+    );
+  }
+
+  return (
+    <LanguageProvider lang={lang}>
+      <AppContent />
+    </LanguageProvider>
   );
 };
 
