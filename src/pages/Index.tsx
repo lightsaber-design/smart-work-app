@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useTimeTracker } from "@/hooks/useTimeTracker";
+import { useTimeTracker, formatDuration } from "@/hooks/useTimeTracker";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { useFavoritePlaces } from "@/hooks/useFavoritePlaces";
 import { useSetup, SetupData } from "@/hooks/useSetup";
@@ -14,7 +14,7 @@ import { SetupScreen } from "@/components/SetupScreen";
 import { LanguageProvider } from "@/lib/LanguageContext";
 import { detectLanguage, Lang } from "@/lib/i18n";
 import { useT } from "@/lib/LanguageContext";
-import { Search, Settings } from "lucide-react";
+import { ChevronUp, Settings } from "lucide-react";
 
 type Tab = "timer" | "map" | "calendar" | "stats" | "settings";
 
@@ -55,6 +55,7 @@ function getWeekDates(): Date[] {
 function AppContent({ setup, saveSetup }: AppContentProps) {
   const t = useT();
   const [activeTab, setActiveTab] = useState<Tab>("timer");
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const tracker = useTimeTracker();
   const calendar = useCalendarEvents();
   const favorites = useFavoritePlaces();
@@ -97,13 +98,13 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const DAY_NAMES = ["LUN", "MAR", "MIÉ", "JUE", "VIE"];
 
   return (
-    <div className="min-h-screen bg-background max-w-md mx-auto">
-      <main className="pb-24">
+    <div className="min-h-screen bg-background max-w-md mx-auto relative">
+      <main className={activeTab === "timer" ? "" : "pb-24"}>
         {/* ── HOME / TIMER TAB ── */}
         {activeTab === "timer" && (
-          <div className="flex flex-col gap-5">
+          <div className="h-screen flex flex-col relative pb-16">
             {/* Header */}
-            <div className="px-4 pt-6">
+            <div className="px-4 pt-6 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground font-medium">{getGreeting()}</p>
@@ -123,160 +124,185 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               </div>
             </div>
 
-            {/* Search */}
-            <div className="px-4">
-              <div className="flex items-center gap-3 bg-muted rounded-2xl px-4 py-3">
-                <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                <span className="text-sm text-muted-foreground">Buscar actividad...</span>
-              </div>
+            {/* Timer — hero, centered in remaining space */}
+            <div className="flex-1 flex items-center justify-center px-4">
+              <ClockButton
+                isRunning={tracker.isRunning}
+                elapsed={tracker.elapsed}
+                onClockIn={(cat, customTime) =>
+                  tracker.clockIn(
+                    cat,
+                    ({ date, category, location }) =>
+                      calendar.addCompletedEventNow({ date, category, location }),
+                    customTime
+                  )
+                }
+                onClockOut={(customTime) =>
+                  tracker.clockOut(
+                    (eventId, endTime) => calendar.updateEvent(eventId, { endTime }),
+                    customTime
+                  )
+                }
+                onUpdateCategory={(cat) => {
+                  if (!activeEntry) return;
+                  tracker.updateCategory(activeEntry.id, cat);
+                  if (activeEntry.linkedEventId) {
+                    calendar.updateEvent(activeEntry.linkedEventId, { category: cat });
+                  }
+                }}
+                onUpdateStartTime={(startTime) => {
+                  if (!activeEntry) return;
+                  tracker.updateStartTime(activeEntry.id, startTime);
+                }}
+                calendarEvents={calendar.events}
+                activeCategory={activeEntry?.category}
+                activeEntryId={activeEntry?.id}
+                activeEntryStartTime={activeEntry?.startTime}
+              />
             </div>
 
-            {/* Mis Actividades */}
-            <div className="px-4">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-bold text-foreground">Mis Actividades</h2>
+            {/* Pill — tap to open bottom sheet */}
+            <button
+              onClick={() => setSummaryOpen(true)}
+              className="flex-shrink-0 mx-4 mb-4 flex items-center justify-between px-4 py-3 rounded-2xl bg-card border border-border shadow-sm"
+            >
+              <div className="flex gap-4">
+                <span className="text-xs text-muted-foreground">
+                  Hoy{" "}
+                  <span className="font-bold text-foreground tabular-nums">
+                    {formatDuration(tracker.todayTotal).slice(0, 5)}
+                  </span>
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Mes{" "}
+                  <span className="font-bold text-foreground tabular-nums">
+                    {formatDuration(tracker.monthTotal).slice(0, 5)}
+                  </span>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs font-medium text-primary">
+                Resumen <ChevronUp className="w-3.5 h-3.5" />
+              </div>
+            </button>
+
+            {/* Backdrop — covers content only, NOT the nav */}
+            <div
+              className={`absolute top-0 left-0 right-0 bottom-16 z-20 bg-black/40 transition-opacity duration-300 ${
+                summaryOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+              }`}
+              onClick={() => setSummaryOpen(false)}
+            />
+
+            {/* Bottom sheet — slides up above the nav */}
+            <div
+              className={`absolute left-0 right-0 bottom-16 z-30 transition-transform duration-300 ease-out ${
+                summaryOpen ? "translate-y-0" : "translate-y-full"
+              }`}
+            >
+              <div className="bg-card rounded-t-3xl border-t border-x border-border shadow-2xl max-h-[75vh] overflow-y-auto">
+                {/* Drag handle */}
                 <button
-                  onClick={() => setActiveTab("stats")}
-                  className="text-xs font-medium text-primary"
+                  onClick={() => setSummaryOpen(false)}
+                  className="sticky top-0 w-full flex flex-col items-center pt-3 pb-2 bg-card z-10"
                 >
-                  Ver todo →
+                  <div className="w-10 h-1 rounded-full bg-border" />
                 </button>
-              </div>
-              <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-                {CATEGORIES.map((cat) => {
-                  const colors = CATEGORY_COLORS[cat];
-                  const catTodayEvents = todayEvents.filter((e) => e.category === cat);
-                  const totalMs = catTodayEvents.reduce((acc, e) => {
-                    if (!e.endTime) return acc;
-                    const [h, m] = e.endTime.split(":").map(Number);
-                    const end = new Date(e.date);
-                    end.setHours(h, m, 0, 0);
-                    return acc + Math.max(0, end.getTime() - e.date.getTime());
-                  }, 0);
-                  const totalHrs = Math.floor(totalMs / 3600000);
-                  const totalMins = Math.floor((totalMs % 3600000) / 60000);
-                  const totalCount = calendar.events.filter((e) => e.category === cat).length;
 
-                  return (
-                    <button
-                      key={cat}
-                      onClick={() => setActiveTab("calendar")}
-                      className="flex-shrink-0 w-40 rounded-2xl bg-card shadow-sm border border-border p-4 text-left"
-                    >
-                      <div
-                        className={`w-8 h-8 rounded-xl ${colors.bg} flex items-center justify-center mb-3`}
-                      >
-                        <span className={`text-sm font-bold ${colors.text}`}>
-                          {cat.charAt(0)}
-                        </span>
-                      </div>
-                      <p className="text-sm font-semibold text-foreground">{cat}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{totalCount} eventos</p>
-                      {totalMs > 0 && (
-                        <p className={`text-xs font-semibold ${colors.text} mt-0.5`}>
-                          {totalHrs > 0 ? `${totalHrs}h ` : ""}{totalMins}m hoy
-                        </p>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                {/* Content */}
+                <div className="px-4 pt-2 pb-8 space-y-5">
+                  <DaySummary todayTotal={tracker.todayTotal} monthTotal={tracker.monthTotal} />
 
-            {/* Progreso + Timer */}
-            <div className="px-4">
-              <div className="rounded-2xl bg-card border border-border shadow-sm p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="text-base font-bold text-foreground">Progreso</h2>
-                    <p className="text-xs text-muted-foreground">
-                      Gestiona tu tiempo diario
-                    </p>
+                  {/* Weekly strip */}
+                  <div className="flex justify-between">
+                    {weekDates.map((d, i) => {
+                      const isToday = d.toDateString() === new Date().toDateString();
+                      const hasEvents = calendar.events.some(
+                        (e) => e.date.toDateString() === d.toDateString()
+                      );
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => { setSummaryOpen(false); setActiveTab("calendar"); }}
+                          className={`flex flex-col items-center gap-1 w-11 py-2 rounded-xl transition-colors ${
+                            isToday ? "bg-primary" : "hover:bg-muted"
+                          }`}
+                        >
+                          <span
+                            className={`text-[9px] font-semibold ${
+                              isToday ? "text-primary-foreground" : "text-muted-foreground"
+                            }`}
+                          >
+                            {DAY_NAMES[i]}
+                          </span>
+                          <span
+                            className={`text-sm font-bold ${
+                              isToday ? "text-primary-foreground" : "text-foreground"
+                            }`}
+                          >
+                            {d.getDate()}
+                          </span>
+                          {hasEvents && !isToday && (
+                            <span className="w-1 h-1 rounded-full bg-primary/60" />
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <button
-                    onClick={() => setActiveTab("stats")}
-                    className="text-xs text-muted-foreground font-medium"
-                  >
-                    Estadísticas →
-                  </button>
-                </div>
 
-                {/* Weekly strip */}
-                <div className="flex justify-between mb-4">
-                  {weekDates.map((d, i) => {
-                    const isToday = d.toDateString() === new Date().toDateString();
-                    const hasEvents = calendar.events.some(
-                      (e) => e.date.toDateString() === d.toDateString()
-                    );
-                    return (
+                  {/* Mis Actividades */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="text-base font-bold text-foreground">Mis Actividades</h2>
                       <button
-                        key={i}
-                        onClick={() => setActiveTab("calendar")}
-                        className={`flex flex-col items-center gap-1 w-11 py-2 rounded-xl transition-colors ${
-                          isToday ? "bg-primary" : "hover:bg-muted"
-                        }`}
+                        onClick={() => { setSummaryOpen(false); setActiveTab("stats"); }}
+                        className="text-xs font-medium text-primary"
                       >
-                        <span
-                          className={`text-[9px] font-semibold ${
-                            isToday ? "text-primary-foreground" : "text-muted-foreground"
-                          }`}
-                        >
-                          {DAY_NAMES[i]}
-                        </span>
-                        <span
-                          className={`text-sm font-bold ${
-                            isToday ? "text-primary-foreground" : "text-foreground"
-                          }`}
-                        >
-                          {d.getDate()}
-                        </span>
-                        {hasEvents && !isToday && (
-                          <span className="w-1 h-1 rounded-full bg-primary/60" />
-                        )}
+                        Ver todo →
                       </button>
-                    );
-                  })}
-                </div>
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
+                      {CATEGORIES.map((cat) => {
+                        const colors = CATEGORY_COLORS[cat];
+                        const catTodayEvents = todayEvents.filter((e) => e.category === cat);
+                        const totalMs = catTodayEvents.reduce((acc, e) => {
+                          if (!e.endTime) return acc;
+                          const [h, m] = e.endTime.split(":").map(Number);
+                          const end = new Date(e.date);
+                          end.setHours(h, m, 0, 0);
+                          return acc + Math.max(0, end.getTime() - e.date.getTime());
+                        }, 0);
+                        const totalHrs = Math.floor(totalMs / 3600000);
+                        const totalMins = Math.floor((totalMs % 3600000) / 60000);
+                        const totalCount = calendar.events.filter((e) => e.category === cat).length;
 
-                {/* Timer */}
-                <ClockButton
-                  isRunning={tracker.isRunning}
-                  elapsed={tracker.elapsed}
-                  onClockIn={(cat, customTime) =>
-                    tracker.clockIn(
-                      cat,
-                      ({ date, category, location }) =>
-                        calendar.addCompletedEventNow({ date, category, location }),
-                      customTime
-                    )
-                  }
-                  onClockOut={(customTime) =>
-                    tracker.clockOut(
-                      (eventId, endTime) => calendar.updateEvent(eventId, { endTime }),
-                      customTime
-                    )
-                  }
-                  onUpdateCategory={(cat) => {
-                    if (!activeEntry) return;
-                    tracker.updateCategory(activeEntry.id, cat);
-                    if (activeEntry.linkedEventId) {
-                      calendar.updateEvent(activeEntry.linkedEventId, { category: cat });
-                    }
-                  }}
-                  onUpdateStartTime={(startTime) => {
-                    if (!activeEntry) return;
-                    tracker.updateStartTime(activeEntry.id, startTime);
-                  }}
-                  calendarEvents={calendar.events}
-                  activeCategory={activeEntry?.category}
-                  activeEntryId={activeEntry?.id}
-                  activeEntryStartTime={activeEntry?.startTime}
-                />
+                        return (
+                          <button
+                            key={cat}
+                            onClick={() => { setSummaryOpen(false); setActiveTab("calendar"); }}
+                            className="flex-shrink-0 w-40 rounded-2xl bg-muted border border-border p-4 text-left"
+                          >
+                            <div
+                              className={`w-8 h-8 rounded-xl ${colors.bg} flex items-center justify-center mb-3`}
+                            >
+                              <span className={`text-sm font-bold ${colors.text}`}>
+                                {cat.charAt(0)}
+                              </span>
+                            </div>
+                            <p className="text-sm font-semibold text-foreground">{cat}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{totalCount} eventos</p>
+                            {totalMs > 0 && (
+                              <p className={`text-xs font-semibold ${colors.text} mt-0.5`}>
+                                {totalHrs > 0 ? `${totalHrs}h ` : ""}{totalMins}m hoy
+                              </p>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-
-            {/* Day summary */}
-            <DaySummary todayTotal={tracker.todayTotal} monthTotal={tracker.monthTotal} />
           </div>
         )}
 

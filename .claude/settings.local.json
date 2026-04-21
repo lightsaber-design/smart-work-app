@@ -4,7 +4,11 @@
       "Bash(bun --version)",
       "Bash(npm --version)",
       "Bash(npx tsc *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "WebFetch(domain:claude.ai)",
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(gunzip -c webfetch-1776759678610-6e43rz.bin)",
+      "Bash(python3 -c \"import sys, gzip; data = gzip.decompress\\(sys.stdin.buffer.read\\(\\)\\); sys.stdout.buffer.write\\(data\\)\")"
     ]
   }
 }

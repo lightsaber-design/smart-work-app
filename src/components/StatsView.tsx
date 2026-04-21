@@ -8,12 +8,12 @@ interface StatsViewProps {
   calendarEvents: CalendarEvent[];
 }
 
-const categoryColors: Record<EventCategory, string> = {
-  Predi: "bg-blue-500",
-  Carrito: "bg-green-500",
-  LDC: "bg-purple-500",
-  Visitas: "bg-orange-500",
-  Estudio: "bg-pink-500",
+const categoryColors: Record<EventCategory, { bar: string; text: string }> = {
+  Predi:   { bar: "bg-blue-500",   text: "text-blue-500" },
+  Carrito: { bar: "bg-green-500",  text: "text-green-500" },
+  LDC:     { bar: "bg-purple-500", text: "text-purple-500" },
+  Visitas: { bar: "bg-orange-500", text: "text-orange-500" },
+  Estudio: { bar: "bg-pink-500",   text: "text-pink-500" },
 };
 
 const CATEGORY_ORDER: EventCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
@@ -87,7 +87,7 @@ export function StatsView({ entries, monthTotal, calendarEvents }: StatsViewProp
                 </div>
                 <div className="h-2 rounded-full bg-secondary overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-green-500 transition-all duration-500"
+                    className={`h-full rounded-full transition-all duration-500 ${categoryColors[category].bar}`}
                     style={{ width: ms > 0 ? `${(ms / maxCompleted) * 100}%` : "0%" }}
                   />
                 </div>

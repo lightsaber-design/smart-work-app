@@ -13,7 +13,7 @@ export function BottomNav({ activeTab, onTabChange, isRunning }: BottomNavProps)
   const t = useT();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-card/90 backdrop-blur-xl border-t border-border safe-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 bg-card/90 backdrop-blur-xl border-t border-border safe-bottom z-50">
       <div className="flex justify-around items-center h-16 max-w-md mx-auto px-4">
         {/* Stats */}
         <button

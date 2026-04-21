@@ -5,12 +5,6 @@ import {
   Plus, Trash2, BellOff, MapPin, Repeat, Clock, CheckCircle2,
   Circle, Pencil, ChevronLeft, ChevronRight,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -519,16 +513,30 @@ export function CalendarView({
         </>
       )}
 
-      {/* ── Add event dialog ── */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{t("cal_new_event")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div className="text-sm text-muted-foreground capitalize">
+      {/* ── Add event — bottom sheet ── */}
+      <div
+        className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${
+          dialogOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+        onClick={() => setDialogOpen(false)}
+      />
+      <div
+        className={`fixed left-0 right-0 bottom-0 max-w-md mx-auto z-40 transition-transform duration-300 ease-out ${
+          dialogOpen ? "translate-y-0" : "translate-y-full"
+        }`}
+      >
+        <div className="bg-card rounded-t-3xl border-t border-x border-border shadow-2xl max-h-[90vh] overflow-y-auto">
+          <button
+            onClick={() => setDialogOpen(false)}
+            className="sticky top-0 w-full flex flex-col items-center pt-3 pb-2 bg-card z-10"
+          >
+            <div className="w-10 h-1 rounded-full bg-border" />
+          </button>
+          <div className="px-5 pb-8 space-y-4">
+            <h2 className="text-base font-bold text-foreground">{t("cal_new_event")}</h2>
+            <p className="text-sm text-muted-foreground capitalize -mt-2">
               {selectedDate.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
-            </div>
+            </p>
             <div className="space-y-2">
               <Label>{t("cal_category")}</Label>
               <Select value={category} onValueChange={(v) => setCategory(v as EventCategory)}>
@@ -594,20 +602,34 @@ export function CalendarView({
             )}
             <Button onClick={handleAdd} className="w-full">{t("cal_save_event")}</Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
 
-      {/* ── Edit event dialog ── */}
-      <Dialog open={!!editEvent} onOpenChange={(o) => !o && setEditEvent(null)}>
-        <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{t("cal_edit_event")}</DialogTitle>
-          </DialogHeader>
+      {/* ── Edit event — bottom sheet ── */}
+      <div
+        className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${
+          !!editEvent ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+        onClick={() => setEditEvent(null)}
+      />
+      <div
+        className={`fixed left-0 right-0 bottom-0 max-w-md mx-auto z-40 transition-transform duration-300 ease-out ${
+          !!editEvent ? "translate-y-0" : "translate-y-full"
+        }`}
+      >
+        <div className="bg-card rounded-t-3xl border-t border-x border-border shadow-2xl max-h-[90vh] overflow-y-auto">
+          <button
+            onClick={() => setEditEvent(null)}
+            className="sticky top-0 w-full flex flex-col items-center pt-3 pb-2 bg-card z-10"
+          >
+            <div className="w-10 h-1 rounded-full bg-border" />
+          </button>
           {editEvent && (
-            <div className="space-y-4 pt-2">
-              <div className="text-sm text-muted-foreground capitalize">
+            <div className="px-5 pb-8 space-y-4">
+              <h2 className="text-base font-bold text-foreground">{t("cal_edit_event")}</h2>
+              <p className="text-sm text-muted-foreground capitalize -mt-2">
                 {editEvent.date.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
-              </div>
+              </p>
               <div className="space-y-2">
                 <Label>{t("cal_category")}</Label>
                 <Select value={editCategory} onValueChange={(v) => setEditCategory(v as EventCategory)}>
@@ -643,8 +665,8 @@ export function CalendarView({
               <Button onClick={handleSaveEdit} className="w-full">{t("cal_save_changes")}</Button>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
     </div>
   );
 }
