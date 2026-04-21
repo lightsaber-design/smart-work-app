@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { Lang, detectLanguage } from "@/lib/i18n";
 
 export interface SetupData {
+  name?: string;
   city: { name: string; lat: number; lng: number } | null;
   isPrecursor: boolean;
   hasBibleStudies: boolean;

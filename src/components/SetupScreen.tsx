@@ -4,7 +4,8 @@ import { CitySearch } from "@/components/CitySearch";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { MapPin, BookOpen, Clock } from "lucide-react";
+import { MapPin, BookOpen, Clock, User } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { LANGUAGES, Lang, detectLanguage } from "@/lib/i18n";
 import { useT } from "@/lib/LanguageContext";
 
@@ -15,6 +16,7 @@ interface SetupScreenProps {
 
 export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
   const t = useT();
+  const [name, setName] = useState("");
   const [city, setCity] = useState<{ name: string; lat: number; lng: number } | null>(null);
   const [isPrecursor, setIsPrecursor] = useState(false);
   const [hasBibleStudies, setHasBibleStudies] = useState(false);
@@ -26,7 +28,7 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
   };
 
   const handleSubmit = () => {
-    onComplete({ city, isPrecursor, hasBibleStudies, language: selectedLang });
+    onComplete({ name: name.trim() || undefined, city, isPrecursor, hasBibleStudies, language: selectedLang });
   };
 
   return (
@@ -64,6 +66,19 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Name */}
+        <div className="rounded-xl bg-card border border-border p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">Tu nombre</h2>
+          </div>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ej: Marco, Ana..."
+          />
         </div>
 
         {/* City */}

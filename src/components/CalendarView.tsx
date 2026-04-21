@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { Calendar } from "@/components/ui/calendar";
 import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
-import { Plus, Trash2, Bell, BellOff, MapPin, Repeat, Clock, X, CheckCircle2, Circle, Pencil } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Plus, Trash2, BellOff, MapPin, Repeat, Clock, CheckCircle2,
+  Circle, Pencil, ChevronLeft, ChevronRight,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -25,13 +27,15 @@ import { useT } from "@/lib/LanguageContext";
 
 const CATEGORIES: EventCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
 
-const categoryColors: Record<EventCategory, string> = {
-  Predi: "bg-blue-500",
-  Carrito: "bg-green-500",
-  LDC: "bg-purple-500",
-  Visitas: "bg-orange-500",
-  Estudio: "bg-pink-500",
+const CATEGORY_STYLE: Record<EventCategory, { card: string; dot: string; dotColor: string }> = {
+  Predi:   { card: "bg-blue-50 border-blue-200",   dot: "bg-blue-500",   dotColor: "#3b82f6" },
+  Carrito: { card: "bg-green-50 border-green-200",  dot: "bg-green-500",  dotColor: "#22c55e" },
+  LDC:     { card: "bg-purple-50 border-purple-200", dot: "bg-purple-500", dotColor: "#a855f7" },
+  Visitas: { card: "bg-orange-50 border-orange-200", dot: "bg-orange-500", dotColor: "#f97316" },
+  Estudio: { card: "bg-pink-50 border-pink-200",    dot: "bg-pink-500",   dotColor: "#ec4899" },
 };
+
+type CalendarMode = "daily" | "monthly";
 
 interface CalendarViewProps {
   events: CalendarEvent[];
@@ -47,23 +51,123 @@ interface CalendarViewProps {
   defaultCenter?: { lat: number; lng: number };
 }
 
-type CalendarTab = "calendar" | "add";
+const DAY_NAMES_SHORT = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
+const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); // 7 AM – 9 PM
 
-function computeEventDuration(event: CalendarEvent): string | null {
-  const start = event.date.getTime();
-  if (!event.endTime) return null;
-  const [h, m] = event.endTime.split(":").map(Number);
-  const endDate = new Date(event.date);
-  endDate.setHours(h, m, 0, 0);
-  const diffMs = endDate.getTime() - start;
-  if (diffMs <= 0) return null;
-  const hrs = Math.floor(diffMs / 3600000);
-  const mins = Math.floor((diffMs % 3600000) / 60000);
-  return `${hrs}h ${mins}m`;
+function formatHour(h: number) {
+  if (h === 12) return "12 PM";
+  return h > 12 ? `${h - 12} PM` : `${h} AM`;
 }
 
 function formatEventTime(date: Date) {
   return date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+}
+
+function computeDuration(event: CalendarEvent): string | null {
+  if (!event.endTime) return null;
+  const [h, m] = event.endTime.split(":").map(Number);
+  const end = new Date(event.date);
+  end.setHours(h, m, 0, 0);
+  const diff = end.getTime() - event.date.getTime();
+  if (diff <= 0) return null;
+  const hrs = Math.floor(diff / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+}
+
+function getWeekDates(anchorDate: Date): Date[] {
+  const dow = anchorDate.getDay();
+  const mondayOffset = dow === 0 ? -6 : 1 - dow;
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(anchorDate);
+    d.setDate(anchorDate.getDate() + mondayOffset + i);
+    return d;
+  });
+}
+
+function dayTotalFromEvents(dayEvents: CalendarEvent[]): { ms: number; hrs: number; mins: number } {
+  const ms = dayEvents.filter((e) => e.completed).reduce((acc, e) => {
+    if (!e.endTime) return acc;
+    const [h, m] = e.endTime.split(":").map(Number);
+    const end = new Date(e.date);
+    end.setHours(h, m, 0, 0);
+    return acc + Math.max(0, end.getTime() - e.date.getTime());
+  }, 0);
+  return { ms, hrs: Math.floor(ms / 3600000), mins: Math.floor((ms % 3600000) / 60000) };
+}
+
+// ── Shared event card ──────────────────────────────────────────────────────
+function EventCard({
+  event,
+  onToggle,
+  onEdit,
+  onDelete,
+  compact = false,
+}: {
+  event: CalendarEvent;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  compact?: boolean;
+}) {
+  const style = CATEGORY_STYLE[event.category] ?? { card: "bg-muted border-border", dot: "bg-primary" };
+  const duration = computeDuration(event);
+
+  if (compact) {
+    return (
+      <div className={`rounded-xl border px-2.5 py-1.5 mb-1.5 ${style.card} ${event.completed ? "opacity-50" : ""}`}>
+        <div className="flex items-center gap-1.5">
+          <button onClick={onToggle} className="flex-shrink-0">
+            {event.completed
+              ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+              : <Circle className="w-3.5 h-3.5 text-muted-foreground" />}
+          </button>
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style.dot}`} />
+          <span className="text-[11px] font-semibold text-foreground truncate">{event.category}</span>
+          <span className="text-[10px] text-muted-foreground ml-auto flex-shrink-0">{formatEventTime(event.date)}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`rounded-2xl border p-3 mb-2 ${style.card} ${event.completed ? "opacity-60" : ""}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <button onClick={onToggle} className="flex-shrink-0">
+            {event.completed
+              ? <CheckCircle2 className="w-4 h-4 text-green-500" />
+              : <Circle className="w-4 h-4 text-muted-foreground" />}
+          </button>
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground leading-tight">
+              {event.category}
+              {event.recurrence !== "none" && (
+                <span className="ml-1.5 text-[10px] bg-accent/80 text-accent-foreground px-1.5 py-0.5 rounded-full align-middle">
+                  <Repeat className="w-2.5 h-2.5 inline" />
+                </span>
+              )}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {formatEventTime(event.date)}
+              {event.endTime && ` – ${event.endTime}`}
+              {duration && ` · ${duration}`}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {event.location && <MapPin className="w-3.5 h-3.5 text-muted-foreground" />}
+          <button onClick={onEdit} className="p-1 rounded text-muted-foreground hover:text-primary transition-colors">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={onDelete} className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function CalendarView({
@@ -77,27 +181,41 @@ export function CalendarView({
   defaultCenter,
 }: CalendarViewProps) {
   const t = useT();
-  const [tab, setTab] = useState<CalendarTab>("calendar");
+  const [mode, setMode] = useState<CalendarMode>("daily");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [detailOpen, setDetailOpen] = useState(false);
+  const [monthOffset, setMonthOffset] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Add-event form state
   const [time, setTime] = useState("09:00");
   const [endTime, setEndTime] = useState("");
   const [category, setCategory] = useState<EventCategory>("Predi");
   const [reminder, setReminder] = useState("15");
-  const [showMap, setShowMap] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lng: number } | undefined>();
   const [recurrence, setRecurrence] = useState<RecurrenceType>("none");
   const [locationMode, setLocationMode] = useState<"none" | "custom">("none");
   const [selectedFavoriteId, setSelectedFavoriteId] = useState<string>("");
 
-  // Edit state
+  // Edit-event state
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
   const [editTime, setEditTime] = useState("09:00");
   const [editEndTime, setEditEndTime] = useState("");
   const [editCategory, setEditCategory] = useState<EventCategory>("Predi");
   const [editReminder, setEditReminder] = useState("15");
 
+  // Derived data
+  const selectedEvents = getEventsForDate(selectedDate).sort(
+    (a, b) => a.date.getTime() - b.date.getTime()
+  );
+  const { hrs: dayTotalHrs, mins: dayTotalMins, ms: dayTotalMs } = dayTotalFromEvents(selectedEvents);
+
+  // Month for monthly view
+  const monthBase = new Date();
+  monthBase.setDate(1);
+  monthBase.setMonth(monthBase.getMonth() + monthOffset);
+  const monthLabel = monthBase.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+
+  // ── Helpers ──
   const openEdit = (event: CalendarEvent) => {
     setEditEvent(event);
     const hh = String(event.date.getHours()).padStart(2, "0");
@@ -122,419 +240,407 @@ export function CalendarView({
     setEditEvent(null);
   };
 
-  const selectedEvents = getEventsForDate(selectedDate);
-
-  const eventDates = events.map((e) => e.date);
-
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const completedEventDates = events.filter((e) => e.completed).map((e) => e.date);
-  const pastPendingDates = events.filter((e) => {
-    const d = new Date(e.date);
-    d.setHours(0, 0, 0, 0);
-    return d.getTime() < now.getTime() && !e.completed;
-  }).map((e) => e.date);
-  const futureEventDates = events.filter((e) => {
-    const d = new Date(e.date);
-    d.setHours(0, 0, 0, 0);
-    return d.getTime() >= now.getTime() && !e.completed;
-  }).map((e) => e.date);
-
-  const handleDayClick = (d: Date | undefined) => {
-    if (d) {
-      setSelectedDate(d);
-      setDetailOpen(true);
-    }
-  };
-
   const handleAdd = () => {
     const [hours, minutes] = time.split(":").map(Number);
     const date = new Date(selectedDate);
     date.setHours(hours, minutes, 0, 0);
-
     const eventLocation =
       locationMode === "custom"
         ? location
         : selectedFavoriteId
         ? favoritePlaces.find((p) => p.id === selectedFavoriteId)?.location
         : undefined;
-
-    onAddEvent({
-      date,
-      endTime: endTime || undefined,
-      category,
-      reminderMinutesBefore: parseInt(reminder),
-      location: eventLocation,
-      recurrence,
-    });
-    setTime("09:00");
-    setEndTime("");
-    setCategory("Predi");
-    setReminder("15");
-    setShowMap(false);
-    setLocation(undefined);
-    setLocationMode("none");
-    setSelectedFavoriteId("");
-    setRecurrence("none");
+    onAddEvent({ date, endTime: endTime || undefined, category, reminderMinutesBefore: parseInt(reminder), location: eventLocation, recurrence });
+    setTime("09:00"); setEndTime(""); setCategory("Predi"); setReminder("15");
+    setLocation(undefined); setLocationMode("none"); setSelectedFavoriteId(""); setRecurrence("none");
     setDialogOpen(false);
   };
 
-  const completedDayEvents = selectedEvents.filter((e) => e.completed);
-  const dayTotalMs = completedDayEvents.reduce((acc, event) => {
-    if (!event.endTime) return acc;
-    const start = event.date.getTime();
-    const [h, m] = event.endTime.split(":").map(Number);
-    const endDate = new Date(event.date);
-    endDate.setHours(h, m, 0, 0);
-    return acc + Math.max(0, endDate.getTime() - start);
-  }, 0);
-  const dayTotalHrs = Math.floor(dayTotalMs / 3600000);
-  const dayTotalMins = Math.floor((dayTotalMs % 3600000) / 60000);
-
-  const notificationStatus =
+  const notifStatus =
     "Notification" in window
-      ? Notification.permission === "granted"
-        ? "granted"
-        : Notification.permission === "denied"
-        ? "denied"
-        : "default"
+      ? Notification.permission === "granted" ? "granted"
+      : Notification.permission === "denied" ? "denied"
+      : "default"
       : "unsupported";
 
-  const recurrenceLabel = (r: RecurrenceType) =>
-    r === "weekly" ? t('cal_weekly') : r === "monthly" ? t('cal_monthly') : "";
+  // Navigate daily view week strip
+  const dailyWeekDates = getWeekDates(selectedDate);
 
   return (
-    <div className="px-4 space-y-4 pb-24">
-      {notificationStatus !== "granted" && (
-        <div className="rounded-xl bg-accent/50 p-3 flex items-center gap-2 text-sm border border-border">
+    <div className="flex flex-col pb-24">
+      {/* Notification banner */}
+      {notifStatus !== "granted" && (
+        <div className="mx-4 mt-4 rounded-xl bg-accent/50 p-3 flex items-center gap-2 text-sm border border-border">
           <BellOff className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-          <span className="text-muted-foreground">
-            {notificationStatus === "denied"
-              ? t('cal_notif_blocked')
-              : t('cal_notif_allow')}
+          <span className="text-muted-foreground text-xs">
+            {notifStatus === "denied" ? t("cal_notif_blocked") : t("cal_notif_allow")}
           </span>
-          {notificationStatus === "default" && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="ml-auto text-xs"
-              onClick={() => Notification.requestPermission()}
-            >
-              {t('cal_notif_activate')}
+          {notifStatus === "default" && (
+            <Button size="sm" variant="outline" className="ml-auto text-xs" onClick={() => Notification.requestPermission()}>
+              {t("cal_notif_activate")}
             </Button>
           )}
         </div>
       )}
 
-      <div className="rounded-xl bg-card p-4 shadow-sm border border-border flex justify-center">
-        <Calendar
-          mode="single"
-          selected={selectedDate}
-          onSelect={handleDayClick}
-          modifiers={{
-            completedEvent: completedEventDates,
-            pastPending: pastPendingDates,
-            futureEvent: futureEventDates,
-          }}
-          modifiersClassNames={{
-            completedEvent: "bg-green-500/20 font-bold text-green-600",
-            pastPending: "bg-muted-foreground/20 font-bold text-muted-foreground",
-            futureEvent: "bg-primary/20 font-bold text-primary",
-          }}
-          className="pointer-events-auto"
-        />
-      </div>
-
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full bg-primary/40" />
-            {t('cal_upcoming')}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full bg-green-500/40" />
-            {t('cal_done')}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full bg-muted-foreground/40" />
-            {t('cal_pending')}
-          </span>
+      {/* Mode switcher */}
+      <div className="px-4 pt-4">
+        <div className="flex rounded-2xl bg-muted p-1 gap-1">
+          {(["daily", "monthly"] as CalendarMode[]).map((m) => {
+            const labels: Record<CalendarMode, string> = { daily: "Día", monthly: "Mes" };
+            return (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`flex-1 py-2 text-xs font-semibold rounded-xl transition-all ${
+                  mode === m
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {labels[m]}
+              </button>
+            );
+          })}
         </div>
-        <Button size="sm" variant="outline" className="gap-1" onClick={() => setDialogOpen(true)}>
-          <Plus className="w-4 h-4" />
-          {t('cal_add')}
-        </Button>
       </div>
 
-      {/* Day detail dialog */}
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedDate.toLocaleDateString("es-ES", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-              })}
-            </DialogTitle>
-          </DialogHeader>
+      {/* ────────────────── DAILY VIEW ────────────────── */}
+      {mode === "daily" && (
+        <>
+          <div className="px-4 pt-4">
+            {/* Date header */}
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => {
+                  const d = new Date(selectedDate);
+                  d.setDate(d.getDate() - 7);
+                  setSelectedDate(d);
+                }}
+                className="w-9 h-9 rounded-full bg-muted flex items-center justify-center"
+              >
+                <ChevronLeft className="w-5 h-5 text-muted-foreground" />
+              </button>
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground capitalize">
+                  {selectedDate.toLocaleDateString("es-ES", { weekday: "long" })}
+                </p>
+                <p className="text-base font-bold text-foreground">
+                  {selectedDate.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  const d = new Date(selectedDate);
+                  d.setDate(d.getDate() + 7);
+                  setSelectedDate(d);
+                }}
+                className="w-9 h-9 rounded-full bg-muted flex items-center justify-center"
+              >
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
 
-          {selectedEvents.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">{t('cal_no_events')}</p>
-          ) : (
-            <div className="space-y-4 pt-2">
-              {dayTotalMs > 0 && (
-                <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3">
-                  <Clock className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-semibold text-foreground">
-                    {t('cal_total')} {dayTotalHrs}h {dayTotalMins}m
+            {/* Weekly strip */}
+            <div className="flex justify-between mb-4">
+              {dailyWeekDates.map((d) => {
+                const isSelected = d.toDateString() === selectedDate.toDateString();
+                const isToday = d.toDateString() === new Date().toDateString();
+                const hasEvents = events.some((e) => e.date.toDateString() === d.toDateString());
+                return (
+                  <button
+                    key={d.toDateString()}
+                    onClick={() => setSelectedDate(d)}
+                    className={`flex flex-col items-center gap-1 w-10 py-2 rounded-2xl transition-colors ${
+                      isSelected ? "bg-primary" : isToday ? "bg-primary/10" : "hover:bg-muted"
+                    }`}
+                  >
+                    <span className={`text-[9px] font-semibold ${isSelected ? "text-primary-foreground" : "text-muted-foreground"}`}>
+                      {DAY_NAMES_SHORT[d.getDay()]}
+                    </span>
+                    <span className={`text-sm font-bold ${isSelected ? "text-primary-foreground" : isToday ? "text-primary" : "text-foreground"}`}>
+                      {d.getDate()}
+                    </span>
+                    {hasEvents && !isSelected && <span className="w-1 h-1 rounded-full bg-primary/60" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Day total + add */}
+            <div className="flex items-center justify-between mb-3">
+              {dayTotalMs > 0 ? (
+                <div className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-1.5">
+                  <Clock className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-xs font-semibold text-primary">
+                    {t("cal_total")} {dayTotalHrs}h {dayTotalMins}m
                   </span>
                 </div>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  {selectedEvents.length === 0 ? t("cal_no_events") : `${selectedEvents.length} evento(s)`}
+                </span>
               )}
-
-              <div className="space-y-3">
-                {selectedEvents.map((event) => {
-                  const duration = computeEventDuration(event);
-                  return (
-                    <div
-                      key={event.id}
-                      className={`rounded-lg p-3 space-y-2 ${event.completed ? "bg-green-500/10 border border-green-500/30" : "bg-secondary/50"}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => onToggleCompleted(event.id)}
-                            className="flex-shrink-0 transition-colors"
-                          >
-                            {event.completed ? (
-                              <CheckCircle2 className="w-5 h-5 text-green-500" />
-                            ) : (
-                              <Circle className="w-5 h-5 text-muted-foreground" />
-                            )}
-                          </button>
-                          <span className={`w-2.5 h-2.5 rounded-full ${categoryColors[event.category]}`} />
-                          <span className="text-sm font-semibold text-foreground">
-                            {event.category}
-                          </span>
-                          {event.recurrence !== "none" && (
-                            <span className="text-xs bg-accent text-accent-foreground px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                              <Repeat className="w-3 h-3" />
-                              {recurrenceLabel(event.recurrence)}
-                            </span>
-                          )}
-                          {event.location && (
-                            <MapPin className="w-3 h-3 text-muted-foreground" />
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => {
-                              setDetailOpen(false);
-                              openEdit(event);
-                            }}
-                            className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => onDeleteEvent(event.id)}
-                            className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span>
-                          {formatEventTime(event.date)}
-                          {event.endTime && ` – ${event.endTime}`}
-                        </span>
-                        {duration && (
-                          <span className="font-medium text-foreground bg-secondary px-1.5 py-0.5 rounded">
-                            {duration}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <Button size="sm" className="gap-1" onClick={() => setDialogOpen(true)}>
+                <Plus className="w-4 h-4" /> {t("cal_add")}
+              </Button>
             </div>
-          )}
+          </div>
 
-          <Button
-            variant="outline"
-            className="w-full gap-1 mt-2"
-            onClick={() => {
-              setDetailOpen(false);
-              setDialogOpen(true);
-            }}
-          >
-            <Plus className="w-4 h-4" />
-            {t('cal_add_event_day')}
-          </Button>
-        </DialogContent>
-      </Dialog>
+          {/* Timeline */}
+          <div className="px-4">
+            {HOURS.map((hour) => {
+              const hourEvents = selectedEvents.filter((e) => e.date.getHours() === hour);
+              return (
+                <div key={hour} className="flex gap-3">
+                  <div className="w-12 text-right flex-shrink-0 pt-1">
+                    <span className="text-[11px] text-muted-foreground">{formatHour(hour)}</span>
+                  </div>
+                  <div className="flex-1 border-l border-border/40 pl-4 pb-3 min-h-[52px]">
+                    {hourEvents.map((event) => (
+                      <EventCard
+                        key={event.id}
+                        event={event}
+                        onToggle={() => onToggleCompleted(event.id)}
+                        onEdit={() => openEdit(event)}
+                        onDelete={() => onDeleteEvent(event.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
-      {/* Add event dialog */}
+      {/* ────────────────── MONTHLY VIEW ────────────────── */}
+      {mode === "monthly" && (
+        <>
+          <div className="px-4 pt-4">
+            {/* Month nav */}
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => setMonthOffset((v) => v - 1)}
+                className="w-9 h-9 rounded-full bg-muted flex items-center justify-center"
+              >
+                <ChevronLeft className="w-5 h-5 text-muted-foreground" />
+              </button>
+              <p className="text-base font-bold text-foreground capitalize">{monthLabel}</p>
+              <button
+                onClick={() => setMonthOffset((v) => v + 1)}
+                className="w-9 h-9 rounded-full bg-muted flex items-center justify-center"
+              >
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+
+            {/* Leyenda */}
+            <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-primary/50" /> {t("cal_upcoming")}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500/50" /> {t("cal_done")}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground/50" /> {t("cal_pending")}
+              </span>
+            </div>
+          </div>
+
+          {/* Month calendar grid */}
+          <div className="px-4">
+            <div className="rounded-2xl bg-card border border-border shadow-sm p-3 flex justify-center">
+              <Calendar
+                mode="single"
+                month={monthBase}
+                selected={selectedDate}
+                onSelect={(d) => {
+                  if (d) {
+                    setSelectedDate(d);
+                    setMode("daily");
+                  }
+                }}
+                onMonthChange={(m) => {
+                  const diff =
+                    (m.getFullYear() - new Date().getFullYear()) * 12 +
+                    (m.getMonth() - new Date().getMonth());
+                  setMonthOffset(diff);
+                }}
+                modifiers={{
+                  completedEvent: events.filter((e) => e.completed).map((e) => e.date),
+                  pastPending: events.filter((e) => {
+                    const d = new Date(e.date); d.setHours(0, 0, 0, 0);
+                    const now = new Date(); now.setHours(0, 0, 0, 0);
+                    return d < now && !e.completed;
+                  }).map((e) => e.date),
+                  futureEvent: events.filter((e) => {
+                    const d = new Date(e.date); d.setHours(0, 0, 0, 0);
+                    const now = new Date(); now.setHours(0, 0, 0, 0);
+                    return d >= now && !e.completed;
+                  }).map((e) => e.date),
+                }}
+                modifiersClassNames={{
+                  completedEvent: "bg-green-500/20 font-bold text-green-600",
+                  pastPending: "bg-muted-foreground/20 font-bold text-muted-foreground",
+                  futureEvent: "bg-primary/20 font-bold text-primary",
+                }}
+                className="pointer-events-auto"
+              />
+            </div>
+
+            {/* Add button */}
+            <div className="flex justify-end mt-3 mb-4">
+              <Button size="sm" className="gap-1" onClick={() => setDialogOpen(true)}>
+                <Plus className="w-4 h-4" /> {t("cal_add")}
+              </Button>
+            </div>
+
+            {/* Events for selected date (quick preview in monthly mode) */}
+            {selectedEvents.length > 0 && (
+              <div className="space-y-1 mb-4">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                  {selectedDate.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
+                </p>
+                {selectedEvents.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    onToggle={() => onToggleCompleted(event.id)}
+                    onEdit={() => openEdit(event)}
+                    onDelete={() => onDeleteEvent(event.id)}
+                    compact
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── Add event dialog ── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{t('cal_new_event')}</DialogTitle>
+            <DialogTitle>{t("cal_new_event")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <div className="text-sm text-muted-foreground">
-              {selectedDate.toLocaleDateString("es-ES", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-              })}
+            <div className="text-sm text-muted-foreground capitalize">
+              {selectedDate.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
             </div>
             <div className="space-y-2">
-              <Label>{t('cal_category')}</Label>
+              <Label>{t("cal_category")}</Label>
               <Select value={category} onValueChange={(v) => setCategory(v as EventCategory)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                  ))}
+                  {CATEGORIES.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>{t('cal_start_time')}</Label>
+                <Label>{t("cal_start_time")}</Label>
                 <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>{t('cal_end_time')} <span className="text-muted-foreground text-xs">({t('cal_optional')})</span></Label>
+                <Label>{t("cal_end_time")} <span className="text-muted-foreground text-xs">({t("cal_optional")})</span></Label>
                 <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
               </div>
             </div>
             <div className="space-y-2">
-              <Label>{t('cal_repeat')}</Label>
+              <Label>{t("cal_repeat")}</Label>
               <Select value={recurrence} onValueChange={(v) => setRecurrence(v as RecurrenceType)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">{t('cal_no_repeat')}</SelectItem>
-                  <SelectItem value="weekly">{t('cal_weekly')}</SelectItem>
-                  <SelectItem value="monthly">{t('cal_monthly')}</SelectItem>
+                  <SelectItem value="none">{t("cal_no_repeat")}</SelectItem>
+                  <SelectItem value="weekly">{t("cal_weekly")}</SelectItem>
+                  <SelectItem value="monthly">{t("cal_monthly")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>{t('cal_reminder')}</Label>
+              <Label>{t("cal_reminder")}</Label>
               <Select value={reminder} onValueChange={setReminder}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="5">{t('cal_min_before', { n: 5 })}</SelectItem>
-                  <SelectItem value="10">{t('cal_min_before', { n: 10 })}</SelectItem>
-                  <SelectItem value="15">{t('cal_min_before', { n: 15 })}</SelectItem>
-                  <SelectItem value="30">{t('cal_min_before', { n: 30 })}</SelectItem>
-                  <SelectItem value="60">{t('cal_1h_before')}</SelectItem>
+                  <SelectItem value="5">{t("cal_min_before", { n: 5 })}</SelectItem>
+                  <SelectItem value="10">{t("cal_min_before", { n: 10 })}</SelectItem>
+                  <SelectItem value="15">{t("cal_min_before", { n: 15 })}</SelectItem>
+                  <SelectItem value="30">{t("cal_min_before", { n: 30 })}</SelectItem>
+                  <SelectItem value="60">{t("cal_1h_before")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>{t('cal_location')}</Label>
+              <Label>{t("cal_location")}</Label>
               <Select
                 value={selectedFavoriteId || locationMode}
                 onValueChange={(v) => {
-                  if (v === "none" || v === "custom") {
-                    setLocationMode(v as "none" | "custom");
-                    setSelectedFavoriteId("");
-                  } else {
-                    setLocationMode("none");
-                    setSelectedFavoriteId(v);
-                  }
+                  if (v === "none" || v === "custom") { setLocationMode(v as "none" | "custom"); setSelectedFavoriteId(""); }
+                  else { setLocationMode("none"); setSelectedFavoriteId(v); }
                 }}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder={t('cal_no_location')} />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("cal_no_location")} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">{t('cal_no_location')}</SelectItem>
-                  {favoritePlaces.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      ⭐ {p.name}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="custom">{t('cal_choose_map')}</SelectItem>
+                  <SelectItem value="none">{t("cal_no_location")}</SelectItem>
+                  {favoritePlaces.map((p) => <SelectItem key={p.id} value={p.id}>⭐ {p.name}</SelectItem>)}
+                  <SelectItem value="custom">{t("cal_choose_map")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {locationMode === "custom" && (
               <LocationPicker value={location} onChange={setLocation} defaultCenter={defaultCenter} />
             )}
-            <Button onClick={handleAdd} className="w-full">
-              {t('cal_save_event')}
-            </Button>
+            <Button onClick={handleAdd} className="w-full">{t("cal_save_event")}</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Edit event dialog */}
+      {/* ── Edit event dialog ── */}
       <Dialog open={!!editEvent} onOpenChange={(o) => !o && setEditEvent(null)}>
         <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{t('cal_edit_event')}</DialogTitle>
+            <DialogTitle>{t("cal_edit_event")}</DialogTitle>
           </DialogHeader>
           {editEvent && (
             <div className="space-y-4 pt-2">
-              <div className="text-sm text-muted-foreground">
-                {editEvent.date.toLocaleDateString("es-ES", {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "long",
-                })}
+              <div className="text-sm text-muted-foreground capitalize">
+                {editEvent.date.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
               </div>
               <div className="space-y-2">
-                <Label>{t('cal_category')}</Label>
+                <Label>{t("cal_category")}</Label>
                 <Select value={editCategory} onValueChange={(v) => setEditCategory(v as EventCategory)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                    ))}
+                    {CATEGORIES.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>{t('cal_start_time')}</Label>
+                  <Label>{t("cal_start_time")}</Label>
                   <Input type="time" value={editTime} onChange={(e) => setEditTime(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>{t('cal_end_time')} <span className="text-muted-foreground text-xs">({t('cal_optional')})</span></Label>
+                  <Label>{t("cal_end_time")} <span className="text-muted-foreground text-xs">({t("cal_optional")})</span></Label>
                   <Input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>{t('cal_reminder')}</Label>
+                <Label>{t("cal_reminder")}</Label>
                 <Select value={editReminder} onValueChange={setEditReminder}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="5">{t('cal_min_before', { n: 5 })}</SelectItem>
-                    <SelectItem value="10">{t('cal_min_before', { n: 10 })}</SelectItem>
-                    <SelectItem value="15">{t('cal_min_before', { n: 15 })}</SelectItem>
-                    <SelectItem value="30">{t('cal_min_before', { n: 30 })}</SelectItem>
-                    <SelectItem value="60">{t('cal_1h_before')}</SelectItem>
+                    <SelectItem value="5">{t("cal_min_before", { n: 5 })}</SelectItem>
+                    <SelectItem value="10">{t("cal_min_before", { n: 10 })}</SelectItem>
+                    <SelectItem value="15">{t("cal_min_before", { n: 15 })}</SelectItem>
+                    <SelectItem value="30">{t("cal_min_before", { n: 30 })}</SelectItem>
+                    <SelectItem value="60">{t("cal_1h_before")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleSaveEdit} className="w-full">
-                {t('cal_save_changes')}
-              </Button>
+              <Button onClick={handleSaveEdit} className="w-full">{t("cal_save_changes")}</Button>
             </div>
           )}
         </DialogContent>
