@@ -14,9 +14,11 @@ import { SetupScreen } from "@/components/SetupScreen";
 import { LanguageProvider } from "@/lib/LanguageContext";
 import { detectLanguage, Lang } from "@/lib/i18n";
 import { useT } from "@/lib/LanguageContext";
-import { ChevronUp, Settings } from "lucide-react";
+import { ChevronUp, MapPin, Settings, Menu, BookOpen } from "lucide-react";
+import { EstudiosView } from "@/components/EstudiosView";
+import { useEstudios } from "@/hooks/useEstudios";
 
-type Tab = "timer" | "map" | "calendar" | "stats" | "settings";
+type Tab = "timer" | "map" | "calendar" | "stats" | "settings" | "estudios";
 
 interface AppContentProps {
   setup: SetupData;
@@ -44,7 +46,7 @@ function getGreeting(): string {
 function getWeekDates(): Date[] {
   const today = new Date();
   const dow = today.getDay();
-  const offset = dow === 0 ? -6 : 1 - dow; // Monday start
+  const offset = dow === 0 ? -6 : 1 - dow;
   return Array.from({ length: 5 }, (_, i) => {
     const d = new Date(today);
     d.setDate(today.getDate() + offset + i);
@@ -56,9 +58,11 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const t = useT();
   const [activeTab, setActiveTab] = useState<Tab>("timer");
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const tracker = useTimeTracker();
   const calendar = useCalendarEvents();
   const favorites = useFavoritePlaces();
+  const estudios = useEstudios();
 
   const handleClearAll = () => {
     localStorage.removeItem("time-entries");
@@ -97,34 +101,35 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const weekDates = getWeekDates();
   const DAY_NAMES = ["LUN", "MAR", "MIÉ", "JUE", "VIE"];
 
+  const navigate = (tab: Tab) => {
+    setActiveTab(tab);
+    setMenuOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-background max-w-md mx-auto relative">
       <main className={activeTab === "timer" ? "" : "pb-24"}>
-        {/* ── HOME / TIMER TAB ── */}
+
+        {/* ── TIMER TAB ── */}
         {activeTab === "timer" && (
-          <div className="h-screen flex flex-col relative pb-16">
+          <div className="h-screen flex flex-col relative pb-16 overflow-hidden">
+
             {/* Header */}
-            <div className="px-4 pt-6 flex-shrink-0">
+            <div className="px-4 pt-5 flex-shrink-0">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground font-medium">{getGreeting()}</p>
-                  <h1 className="text-2xl font-bold text-foreground">{userName}</h1>
-                </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setActiveTab("settings")}
-                    className="w-9 h-9 rounded-full bg-muted flex items-center justify-center"
-                  >
-                    <Settings className="w-4 h-4 text-muted-foreground" />
+                  <button onClick={() => setMenuOpen(true)} className="p-1">
+                    <Menu className="w-5 h-5 text-primary" />
                   </button>
-                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm select-none">
-                    {userName.charAt(0).toUpperCase()}
-                  </div>
+                  <p className="text-sm text-muted-foreground font-medium">{getGreeting()}</p>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm select-none">
+                  {userName.charAt(0).toUpperCase()}
                 </div>
               </div>
+              <h1 className="text-2xl font-bold text-foreground mt-1 ml-1">{userName}</h1>
             </div>
 
-            {/* Timer — hero, centered in remaining space */}
             <div className="flex-1 flex items-center justify-center px-4">
               <ClockButton
                 isRunning={tracker.isRunning}
@@ -158,10 +163,12 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 activeCategory={activeEntry?.category}
                 activeEntryId={activeEntry?.id}
                 activeEntryStartTime={activeEntry?.startTime}
+                estudios={estudios.contacts.filter((c) => c.active)}
+                onEstudioSession={estudios.addSession}
               />
             </div>
 
-            {/* Pill — tap to open bottom sheet */}
+            {/* Summary pill */}
             <button
               onClick={() => setSummaryOpen(true)}
               className="flex-shrink-0 mx-4 mb-4 flex items-center justify-between px-4 py-3 rounded-2xl bg-card border border-border shadow-sm"
@@ -185,7 +192,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               </div>
             </button>
 
-            {/* Backdrop — covers content only, NOT the nav */}
+            {/* Backdrop */}
             <div
               className={`absolute top-0 left-0 right-0 bottom-16 z-20 bg-black/40 transition-opacity duration-300 ${
                 summaryOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
@@ -193,26 +200,22 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               onClick={() => setSummaryOpen(false)}
             />
 
-            {/* Bottom sheet — slides up above the nav */}
+            {/* Summary bottom sheet */}
             <div
               className={`absolute left-0 right-0 bottom-16 z-30 transition-transform duration-300 ease-out ${
                 summaryOpen ? "translate-y-0" : "translate-y-full"
               }`}
             >
               <div className="bg-card rounded-t-3xl border-t border-x border-border shadow-2xl max-h-[75vh] overflow-y-auto">
-                {/* Drag handle */}
                 <button
                   onClick={() => setSummaryOpen(false)}
                   className="sticky top-0 w-full flex flex-col items-center pt-3 pb-2 bg-card z-10"
                 >
                   <div className="w-10 h-1 rounded-full bg-border" />
                 </button>
-
-                {/* Content */}
                 <div className="px-4 pt-2 pb-8 space-y-5">
                   <DaySummary todayTotal={tracker.todayTotal} monthTotal={tracker.monthTotal} />
 
-                  {/* Weekly strip */}
                   <div className="flex justify-between">
                     {weekDates.map((d, i) => {
                       const isToday = d.toDateString() === new Date().toDateString();
@@ -227,18 +230,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                             isToday ? "bg-primary" : "hover:bg-muted"
                           }`}
                         >
-                          <span
-                            className={`text-[9px] font-semibold ${
-                              isToday ? "text-primary-foreground" : "text-muted-foreground"
-                            }`}
-                          >
+                          <span className={`text-[9px] font-semibold ${isToday ? "text-primary-foreground" : "text-muted-foreground"}`}>
                             {DAY_NAMES[i]}
                           </span>
-                          <span
-                            className={`text-sm font-bold ${
-                              isToday ? "text-primary-foreground" : "text-foreground"
-                            }`}
-                          >
+                          <span className={`text-sm font-bold ${isToday ? "text-primary-foreground" : "text-foreground"}`}>
                             {d.getDate()}
                           </span>
                           {hasEvents && !isToday && (
@@ -249,7 +244,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                     })}
                   </div>
 
-                  {/* Mis Actividades */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <h2 className="text-base font-bold text-foreground">Mis Actividades</h2>
@@ -281,12 +275,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                             onClick={() => { setSummaryOpen(false); setActiveTab("calendar"); }}
                             className="flex-shrink-0 w-40 rounded-2xl bg-muted border border-border p-4 text-left"
                           >
-                            <div
-                              className={`w-8 h-8 rounded-xl ${colors.bg} flex items-center justify-center mb-3`}
-                            >
-                              <span className={`text-sm font-bold ${colors.text}`}>
-                                {cat.charAt(0)}
-                              </span>
+                            <div className={`w-8 h-8 rounded-xl ${colors.bg} flex items-center justify-center mb-3`}>
+                              <span className={`text-sm font-bold ${colors.text}`}>{cat.charAt(0)}</span>
                             </div>
                             <p className="text-sm font-semibold text-foreground">{cat}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">{totalCount} eventos</p>
@@ -310,9 +300,17 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         {activeTab === "map" && (
           <>
             <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
-              <h1 className="text-xl font-bold text-foreground">{t("nav_map")}</h1>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setMenuOpen(true)}
+                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+                >
+                  <Menu className="w-4 h-4 text-muted-foreground" />
+                </button>
+                <h1 className="text-xl font-bold text-foreground">{t("nav_map")}</h1>
+              </div>
             </header>
-            <div className="py-4 space-y-4">
+            <div className="py-4">
               <LocationMap
                 entries={tracker.entries}
                 favoritePlaces={favorites.places}
@@ -326,23 +324,44 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
         {/* ── CALENDAR TAB ── */}
         {activeTab === "calendar" && (
-          <CalendarView
-            events={calendar.events}
-            onAddEvent={calendar.addEvent}
-            onDeleteEvent={calendar.deleteEvent}
-            onToggleCompleted={calendar.toggleEventCompleted}
-            onUpdateEvent={calendar.updateEvent}
-            getEventsForDate={calendar.getEventsForDate}
-            favoritePlaces={favorites.places}
-            defaultCenter={defaultCenter}
-          />
+          <>
+            <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setMenuOpen(true)}
+                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+                >
+                  <Menu className="w-4 h-4 text-muted-foreground" />
+                </button>
+                <h1 className="text-xl font-bold text-foreground">{t("nav_calendar")}</h1>
+              </div>
+            </header>
+            <CalendarView
+              events={calendar.events}
+              onAddEvent={calendar.addEvent}
+              onDeleteEvent={calendar.deleteEvent}
+              onToggleCompleted={calendar.toggleEventCompleted}
+              onUpdateEvent={calendar.updateEvent}
+              getEventsForDate={calendar.getEventsForDate}
+              favoritePlaces={favorites.places}
+              defaultCenter={defaultCenter}
+            />
+          </>
         )}
 
         {/* ── STATS TAB ── */}
         {activeTab === "stats" && (
           <>
             <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
-              <h1 className="text-xl font-bold text-foreground">{t("nav_stats")}</h1>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setMenuOpen(true)}
+                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+                >
+                  <Menu className="w-4 h-4 text-muted-foreground" />
+                </button>
+                <h1 className="text-xl font-bold text-foreground">{t("nav_stats")}</h1>
+              </div>
             </header>
             <StatsView
               entries={tracker.monthEntries}
@@ -352,11 +371,44 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
           </>
         )}
 
+        {/* ── ESTUDIOS TAB ── */}
+        {activeTab === "estudios" && (
+          <>
+            <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setMenuOpen(true)}
+                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+                >
+                  <Menu className="w-4 h-4 text-muted-foreground" />
+                </button>
+                <h1 className="text-xl font-bold text-foreground">Estudios</h1>
+              </div>
+            </header>
+            <EstudiosView
+              contacts={estudios.contacts}
+              favoritePlaces={favorites.places}
+              onAddContact={estudios.addContact}
+              onDeleteContact={estudios.deleteContact}
+              onAddSession={estudios.addSession}
+              onToggleActive={estudios.toggleActive}
+            />
+          </>
+        )}
+
         {/* ── SETTINGS TAB ── */}
         {activeTab === "settings" && (
           <>
             <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
-              <h1 className="text-xl font-bold text-foreground">{t("nav_settings")}</h1>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setMenuOpen(true)}
+                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+                >
+                  <Menu className="w-4 h-4 text-muted-foreground" />
+                </button>
+                <h1 className="text-xl font-bold text-foreground">{t("nav_settings")}</h1>
+              </div>
             </header>
             <SettingsView
               entryCount={tracker.entries.length}
@@ -373,6 +425,54 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         onTabChange={setActiveTab}
         isRunning={tracker.isRunning}
       />
+
+      {/* Tap outside to close */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-[60]" onClick={() => setMenuOpen(false)} />
+      )}
+
+      {/* Dropdown menu — scales in from top-left */}
+      <div
+        className={`fixed top-[68px] left-4 z-[70] transition-all duration-200 origin-top-left ${
+          menuOpen ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+        }`}
+      >
+        <div className="bg-card rounded-2xl shadow-xl border border-border overflow-hidden min-w-[190px]">
+          <button
+            onClick={() => navigate("estudios")}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 transition-colors text-left ${
+              activeTab === "estudios" ? "bg-primary/10 text-primary" : "active:bg-muted text-foreground"
+            }`}
+          >
+            <BookOpen className="w-4 h-4 flex-shrink-0" />
+            <span className="text-sm font-medium">Estudios</span>
+          </button>
+
+          <div className="h-px bg-border mx-3" />
+
+          <button
+            onClick={() => navigate("map")}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 transition-colors text-left ${
+              activeTab === "map" ? "bg-primary/10 text-primary" : "active:bg-muted text-foreground"
+            }`}
+          >
+            <MapPin className="w-4 h-4 flex-shrink-0" />
+            <span className="text-sm font-medium">{t("nav_map")}</span>
+          </button>
+
+          <div className="h-px bg-border mx-3" />
+
+          <button
+            onClick={() => navigate("settings")}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 transition-colors text-left ${
+              activeTab === "settings" ? "bg-primary/10 text-primary" : "active:bg-muted text-foreground"
+            }`}
+          >
+            <Settings className="w-4 h-4 flex-shrink-0" />
+            <span className="text-sm font-medium">{t("nav_settings")}</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

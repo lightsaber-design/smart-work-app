@@ -21,9 +21,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup }: Set
   const [cityDraft, setCityDraft] = useState(setup.city ?? undefined);
 
   const handleSaveCity = () => {
-    if (cityDraft) {
-      onSaveSetup({ city: cityDraft });
-    }
+    if (cityDraft) onSaveSetup({ city: cityDraft });
     setEditingCity(false);
   };
 
@@ -31,14 +29,12 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup }: Set
 
   return (
     <div className="px-4 space-y-4 pb-24">
-      {/* Profile */}
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border space-y-4">
         <div className="flex items-center gap-2">
           <User className="w-4 h-4 text-primary" />
           <h3 className="text-sm font-semibold text-foreground">{t('set_profile')}</h3>
         </div>
 
-        {/* City */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label className="flex items-center gap-1.5 text-sm">
@@ -69,7 +65,6 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup }: Set
           )}
         </div>
 
-        {/* Precursor */}
         <div className="flex items-center justify-between pt-1">
           <Label className="text-sm text-foreground">{t('set_precursor')}</Label>
           <Switch
@@ -78,7 +73,6 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup }: Set
           />
         </div>
 
-        {/* Bible Studies */}
         <div className="flex items-center justify-between">
           <Label className="flex items-center gap-1.5 text-sm text-foreground">
             <BookOpen className="w-3.5 h-3.5 text-muted-foreground" />
@@ -91,7 +85,6 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup }: Set
         </div>
       </div>
 
-      {/* Language */}
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border space-y-3">
         <div className="flex items-center gap-2">
           <Globe className="w-4 h-4 text-primary" />
@@ -115,7 +108,6 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup }: Set
         </div>
       </div>
 
-      {/* Data */}
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           {t('set_data')}

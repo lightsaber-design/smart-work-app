@@ -1,6 +1,7 @@
-import { Play, Square, Clock } from "lucide-react";
+import { Play, Square, Clock, BookOpen } from "lucide-react";
 import { formatDuration, WorkCategory } from "@/hooks/useTimeTracker";
 import { CalendarEvent } from "@/hooks/useCalendarEvents";
+import { EstudioContact } from "@/hooks/useEstudios";
 import {
   Select,
   SelectContent,
@@ -23,7 +24,7 @@ function timeStrToDate(timeStr: string): Date {
   return date;
 }
 
-const CATEGORIES: WorkCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
+const ALL_CATEGORIES: WorkCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
 
 interface ClockButtonProps {
   isRunning: boolean;
@@ -36,13 +37,15 @@ interface ClockButtonProps {
   activeCategory?: WorkCategory;
   activeEntryId?: string;
   activeEntryStartTime?: Date;
+  estudios?: EstudioContact[];
+  onEstudioSession?: (contactId: string) => void;
 }
 
 function detectCategoryFromEvents(events: CalendarEvent[]): WorkCategory | null {
   const now = Date.now();
   for (const event of events) {
     const start = event.date.getTime();
-    let end = start + 2 * 60 * 60 * 1000; // default 2h
+    let end = start + 2 * 60 * 60 * 1000;
     if (event.endTime) {
       const [h, m] = event.endTime.split(":").map(Number);
       const endDate = new Date(event.date);
@@ -56,12 +59,27 @@ function detectCategoryFromEvents(events: CalendarEvent[]): WorkCategory | null 
   return null;
 }
 
-export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, onUpdateCategory, onUpdateStartTime, calendarEvents, activeCategory, activeEntryId, activeEntryStartTime }: ClockButtonProps) {
+export function ClockButton({
+  isRunning, elapsed, onClockIn, onClockOut, onUpdateCategory, onUpdateStartTime,
+  calendarEvents, activeCategory, activeEntryId, activeEntryStartTime,
+  estudios = [], onEstudioSession,
+}: ClockButtonProps) {
   const t = useT();
   const detected = detectCategoryFromEvents(calendarEvents);
   const [category, setCategory] = useState<WorkCategory>(detected || "Predi");
   const [editingTime, setEditingTime] = useState(false);
   const [customTimeStr, setCustomTimeStr] = useState(getCurrentTimeStr());
+  const [selectedEstudioId, setSelectedEstudioId] = useState<string>("");
+
+  const activeStudios = estudios.filter((e) => e.active);
+  const categories = activeStudios.length > 0 ? ALL_CATEGORIES : ALL_CATEGORIES.filter((c) => c !== "Estudio");
+
+  // Auto-select when category switches to Estudio
+  useEffect(() => {
+    if (category === "Estudio" && activeStudios.length === 1) {
+      setSelectedEstudioId(activeStudios[0].id);
+    }
+  }, [category, activeStudios.length]);
 
   useEffect(() => {
     if (!isRunning) {
@@ -91,6 +109,9 @@ export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, onUpdat
   const handleAction = () => {
     if (isRunning) {
       onClockOut();
+      if (selectedEstudioId && onEstudioSession) {
+        onEstudioSession(selectedEstudioId);
+      }
     } else {
       const customTime = editingTime ? timeStrToDate(customTimeStr) : undefined;
       onClockIn(category, customTime);
@@ -98,38 +119,63 @@ export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, onUpdat
     }
   };
 
-  const elapsedMs = elapsed * 1000;
+  const currentCategory = isRunning ? (activeCategory || category) : category;
+  const showEstudioPicker = currentCategory === "Estudio" && activeStudios.length > 0;
 
   return (
     <div className="flex flex-col items-center gap-6 py-8">
       <div className="text-4xl font-bold tracking-tight text-foreground tabular-nums">
-        {isRunning ? formatDuration(elapsedMs) : "00:00:00"}
+        {isRunning ? formatDuration(elapsed * 1000) : "00:00:00"}
       </div>
 
-      <div className="w-48">
+      <div className="w-48 space-y-2">
         <Select
-          value={isRunning ? (activeCategory || category) : category}
+          value={currentCategory}
           onValueChange={(v) => {
             const cat = v as WorkCategory;
             setCategory(cat);
-            if (isRunning && activeEntryId) {
-              onUpdateCategory(cat);
-            }
+            if (cat !== "Estudio") setSelectedEstudioId("");
+            if (isRunning && activeEntryId) onUpdateCategory(cat);
           }}
         >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {CATEGORIES.map((cat) => (
+            {categories.map((cat) => (
               <SelectItem key={cat} value={cat}>{cat}</SelectItem>
             ))}
           </SelectContent>
         </Select>
+
+        {/* Estudio contact picker */}
+        {showEstudioPicker && (
+          activeStudios.length === 1 ? (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 text-sm text-primary">
+              <BookOpen className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="truncate font-medium">{activeStudios[0].name}</span>
+            </div>
+          ) : (
+            <Select value={selectedEstudioId} onValueChange={setSelectedEstudioId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccionar estudio…" />
+              </SelectTrigger>
+              <SelectContent>
+                {activeStudios.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    <span className="flex items-center gap-2">
+                      <BookOpen className="w-3.5 h-3.5" />
+                      {e.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )
+        )}
+
         {!isRunning && detected && (
-          <p className="text-xs text-muted-foreground text-center mt-1">
-            {t('timer_detected')}
-          </p>
+          <p className="text-xs text-muted-foreground text-center">{t('timer_detected')}</p>
         )}
       </div>
 
@@ -150,10 +196,7 @@ export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, onUpdat
               className="text-center text-sm font-medium bg-muted border border-border rounded-md px-3 py-1.5 text-foreground"
             />
             {isRunning && (
-              <button
-                onClick={handleSaveStartTime}
-                className="text-xs font-medium text-primary hover:underline"
-              >
+              <button onClick={handleSaveStartTime} className="text-xs font-medium text-primary hover:underline">
                 {t('timer_save')}
               </button>
             )}
@@ -164,12 +207,11 @@ export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, onUpdat
       <p className="text-sm text-muted-foreground">
         {isRunning ? t('timer_working') : t('timer_ready')}
       </p>
+
       <button
         onClick={handleAction}
         className={`relative flex items-center justify-center w-24 h-24 rounded-full transition-all duration-300 active:scale-95 ${
-          isRunning
-            ? "bg-destructive timer-glow-active"
-            : "bg-primary timer-glow"
+          isRunning ? "bg-destructive timer-glow-active" : "bg-primary timer-glow"
         }`}
       >
         {isRunning ? (
@@ -178,6 +220,7 @@ export function ClockButton({ isRunning, elapsed, onClockIn, onClockOut, onUpdat
           <Play className="w-8 h-8 text-primary-foreground ml-1" />
         )}
       </button>
+
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
         {isRunning ? t('timer_stop') : t('timer_clock_in')}
       </p>
