@@ -345,6 +345,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               getEventsForDate={calendar.getEventsForDate}
               favoritePlaces={favorites.places}
               defaultCenter={defaultCenter}
+              estudiosContacts={estudios.contacts}
             />
           </>
         )}
@@ -389,8 +390,15 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               contacts={estudios.contacts}
               favoritePlaces={favorites.places}
               onAddContact={estudios.addContact}
+              onUpdateContact={estudios.updateContact}
               onDeleteContact={estudios.deleteContact}
+              onArchiveContact={estudios.archiveContact}
+              onUnarchiveContact={estudios.unarchiveContact}
               onAddSession={estudios.addSession}
+              onScheduleSession={estudios.scheduleSession}
+              onGenerateScheduled={estudios.generateScheduledSessions}
+              onDeleteSession={estudios.deleteSession}
+              onCompleteSession={estudios.completeSession}
               onToggleActive={estudios.toggleActive}
             />
           </>

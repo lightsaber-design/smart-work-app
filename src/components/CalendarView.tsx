@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
+import { EstudioContact } from "@/hooks/useEstudios";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Plus, Trash2, BellOff, MapPin, Repeat, Clock, CheckCircle2,
-  Circle, Pencil, ChevronLeft, ChevronRight,
+  Circle, Pencil, ChevronLeft, ChevronRight, BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,7 @@ interface CalendarViewProps {
   getEventsForDate: (date: Date) => CalendarEvent[];
   favoritePlaces: FavoritePlace[];
   defaultCenter?: { lat: number; lng: number };
+  estudiosContacts?: EstudioContact[];
 }
 
 const DAY_NAMES_SHORT = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
@@ -173,6 +175,7 @@ export function CalendarView({
   getEventsForDate,
   favoritePlaces,
   defaultCenter,
+  estudiosContacts = [],
 }: CalendarViewProps) {
   const t = useT();
   const [mode, setMode] = useState<CalendarMode>("daily");
@@ -385,6 +388,13 @@ export function CalendarView({
           <div className="px-4">
             {HOURS.map((hour) => {
               const hourEvents = selectedEvents.filter((e) => e.date.getHours() === hour);
+              const hourEstudios = estudiosContacts
+                .flatMap((c) =>
+                  (c.sessions ?? [])
+                    .filter((s) => s.pending && new Date(s.date).toDateString() === selectedDate.toDateString())
+                    .map((s) => ({ ...s, contactName: c.name }))
+                )
+                .filter((s) => parseInt(s.time.split(":")[0]) === hour);
               return (
                 <div key={hour} className="flex gap-3">
                   <div className="w-12 text-right flex-shrink-0 pt-1">
@@ -399,6 +409,19 @@ export function CalendarView({
                         onEdit={() => openEdit(event)}
                         onDelete={() => onDeleteEvent(event.id)}
                       />
+                    ))}
+                    {hourEstudios.map((s) => (
+                      <div
+                        key={s.id}
+                        className="rounded-xl border border-pink-200 bg-pink-50 px-2.5 py-1.5 mb-1.5 flex items-center gap-2"
+                      >
+                        <BookOpen className="w-3.5 h-3.5 text-pink-500 flex-shrink-0" />
+                        <span className="text-[11px] font-semibold text-pink-700 truncate">{s.contactName}</span>
+                        {s.lesson && (
+                          <span className="text-[10px] text-pink-500 truncate flex-1">{s.lesson}</span>
+                        )}
+                        <span className="text-[10px] text-pink-400 ml-auto flex-shrink-0">{s.time}</span>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -430,7 +453,7 @@ export function CalendarView({
             </div>
 
             {/* Leyenda */}
-            <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-3">
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-primary/50" /> {t("cal_upcoming")}
               </span>
@@ -439,6 +462,9 @@ export function CalendarView({
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground/50" /> {t("cal_pending")}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full ring-2 ring-pink-400" /> Estudio
               </span>
             </div>
           </div>
@@ -474,11 +500,14 @@ export function CalendarView({
                     const now = new Date(); now.setHours(0, 0, 0, 0);
                     return d >= now && !e.completed;
                   }).map((e) => e.date),
+                  estudioSession: estudiosContacts
+                    .flatMap((c) => (c.sessions ?? []).filter((s) => s.pending).map((s) => new Date(s.date))),
                 }}
                 modifiersClassNames={{
                   completedEvent: "bg-green-500/20 font-bold text-green-600",
                   pastPending: "bg-muted-foreground/20 font-bold text-muted-foreground",
                   futureEvent: "bg-primary/20 font-bold text-primary",
+                  estudioSession: "ring-2 ring-pink-400 ring-offset-1",
                 }}
                 className="pointer-events-auto"
               />
