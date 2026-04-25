@@ -3,7 +3,7 @@ import {
   BookOpen, Plus, Trash2, CheckCircle2, MapPin, Clock,
   Paperclip, X, FileText, Image, File,
   CalendarPlus, History, ArrowLeft, MoreVertical,
-  ChevronDown, ChevronUp, StickyNote, Pencil, RefreshCw, Archive,
+  StickyNote, Pencil, RefreshCw, Archive, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,32 +58,16 @@ function nowTime(): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+function isoToDateStr(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /* ── small shared components ── */
 function FileTypeIcon({ type }: { type: string }) {
   if (type.startsWith("image/")) return <Image className="w-4 h-4 text-blue-500" />;
   if (type === "application/pdf") return <FileText className="w-4 h-4 text-red-500" />;
   return <File className="w-4 h-4 text-muted-foreground" />;
-}
-
-function FileList({ files }: { files: SessionFile[] }) {
-  if (!files?.length) return null;
-  return (
-    <div className="flex flex-wrap gap-1.5 mt-1.5">
-      {files.map((f) => (
-        <button
-          key={f.id}
-          onClick={async () => {
-            const url = await getFileURL(f.id);
-            if (url) window.open(url, "_blank");
-          }}
-          className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-muted text-xs"
-        >
-          <FileTypeIcon type={f.type} />
-          <span className="truncate max-w-[120px]">{f.name}</span>
-        </button>
-      ))}
-    </div>
-  );
 }
 
 function FilePicker({ files, onChange }: {
@@ -133,7 +117,6 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
   const [notes, setNotes] = useState(contact?.notes ?? "");
   const [placeId, setPlaceId] = useState(contact?.favoritePlaceId ?? "none");
 
-  // schedule
   const initFreq: ScheduleFrequency | "none" = contact?.schedule?.frequency ?? "none";
   const [freq, setFreq] = useState<ScheduleFrequency | "none">(initFreq);
   const [schedDay, setSchedDay] = useState(contact?.schedule?.dayOfWeek ?? new Date().getDay());
@@ -168,7 +151,6 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
         </div>
 
         <div className="px-4 space-y-4 overflow-y-auto flex-1">
-          {/* Basic info */}
           <div className="space-y-1.5">
             <Label>Nombre *</Label>
             <Input placeholder="Ej: Juan García" value={name} onChange={(e) => setName(e.target.value)} />
@@ -198,7 +180,6 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
             <Input placeholder="Ej: Interesado en el libro de Juan" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
 
-          {/* Schedule */}
           <div className="space-y-3 pt-2 border-t border-border">
             <div className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4 text-primary" />
@@ -246,7 +227,6 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
                     onChange={(e) => setSchedLesson(e.target.value)}
                   />
                 </div>
-                {/* preview */}
                 <div className="rounded-xl bg-primary/5 border border-primary/20 px-3 py-2 space-y-1">
                   <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">Próximas fechas generadas</p>
                   {getNextOccurrences({ frequency: freq, dayOfWeek: schedDay, time: schedTime }, 3).map((d, i) => (
@@ -270,191 +250,191 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
   );
 }
 
-/* ── Session sheet (registrar ahora) ── */
-function SessionSheet({ contact, onSave, onClose }: {
+/* ── Unified session form sheet (add now / schedule / edit) ── */
+function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onClose }: {
+  session: EstudioSession | null;
   contact: EstudioContact;
-  onSave: (contactId: string, data: { time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
+  onSave: (data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
+  onComplete?: () => void;
+  onDelete: () => void;
   onClose: () => void;
 }) {
-  const [time, setTime] = useState(nowTime());
-  const [lesson, setLesson] = useState("");
-  const [notes, setNotes] = useState("");
+  const isNew = session === null;
+  const isPending = session?.pending ?? false;
+
+  const [date, setDate] = useState(session ? isoToDateStr(session.date) : todayDateStr());
+  const [time, setTime] = useState(session?.time ?? nowTime());
+  const [lesson, setLesson] = useState(session?.lesson ?? "");
+  const [notes, setNotes] = useState(session?.notes ?? "");
+  const [existingFiles, setExistingFiles] = useState<SessionFile[]>(session?.files ?? []);
   const [pendingFiles, setPendingFiles] = useState<{ file: File; id: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const metas: SessionFile[] = [];
+      const metas: SessionFile[] = [...existingFiles];
       for (const { file, id } of pendingFiles) {
         await saveFile(id, file);
         metas.push({ id, name: file.name, type: file.type, size: file.size });
       }
-      onSave(contact.id, { time, lesson: lesson.trim() || undefined, notes: notes.trim() || undefined, files: metas });
+      onSave({ date, time, lesson: lesson.trim() || undefined, notes: notes.trim() || undefined, files: metas });
       onClose();
     } finally { setSaving(false); }
   };
 
-  return (
-    <>
-      <div className="fixed inset-0 z-[80] bg-black/40" onClick={onClose} />
-      <div className="fixed left-0 right-0 bottom-0 max-w-md mx-auto z-[90] flex flex-col bg-card rounded-t-3xl border-t border-x shadow-2xl max-h-[88vh]">
-        <button className="w-full flex justify-center pt-3 pb-2 flex-shrink-0" onClick={onClose}>
-          <div className="w-10 h-1 rounded-full bg-border" />
-        </button>
-        <div className="px-4 pb-3 flex-shrink-0">
-          <p className="text-xs text-muted-foreground">Registrar sesión</p>
-          <h2 className="text-base font-semibold">{contact.name}</h2>
-        </div>
-        <div className="px-4 space-y-4 overflow-y-auto flex-1">
-          <div className="space-y-1.5">
-            <Label>Hora</Label>
-            <input type="time" value={time} onChange={(e) => setTime(e.target.value)}
-              className="w-full text-sm bg-muted border border-border rounded-lg px-3 py-2 text-foreground" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Lección <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
-            <Input placeholder="Ej: Cap. 3 — La esperanza de la resurrección" value={lesson} onChange={(e) => setLesson(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Notas <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
-            <Input placeholder="Ej: Mostró interés en el tema de la familia" value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Archivos <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
-            <FilePicker files={pendingFiles} onChange={setPendingFiles} />
-          </div>
-        </div>
-        <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-border bg-card mt-2">
-          <Button onClick={handleSave} disabled={saving} className="w-full">
-            {saving ? "Guardando…" : "Guardar sesión"}
-          </Button>
-        </div>
-      </div>
-    </>
-  );
-}
-
-/* ── Schedule session sheet ── */
-function ScheduleSheet({ contact, onSave, onClose }: {
-  contact: EstudioContact;
-  onSave: (contactId: string, data: { date: string; time: string; lesson?: string; files: SessionFile[] }) => void;
-  onClose: () => void;
-}) {
-  const [date, setDate] = useState(todayDateStr());
-  const [time, setTime] = useState(contact.schedule?.time ?? "10:00");
-  const [lesson, setLesson] = useState(contact.schedule?.lesson ?? "");
-  const [pendingFiles, setPendingFiles] = useState<{ file: File; id: string }[]>([]);
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    if (!date) return;
-    setSaving(true);
-    try {
-      const metas: SessionFile[] = [];
-      for (const { file, id } of pendingFiles) {
-        await saveFile(id, file);
-        metas.push({ id, name: file.name, type: file.type, size: file.size });
-      }
-      onSave(contact.id, { date, time, lesson: lesson.trim() || undefined, files: metas });
-      onClose();
-    } finally { setSaving(false); }
-  };
+  const subtitle = isNew
+    ? (isPending ? "Programar sesión" : "Registrar sesión")
+    : (isPending ? "Sesión programada" : "Sesión registrada");
 
   return (
     <>
       <div className="fixed inset-0 z-[80] bg-black/40" onClick={onClose} />
-      <div className="fixed left-0 right-0 bottom-0 max-w-md mx-auto z-[90] flex flex-col bg-card rounded-t-3xl border-t border-x shadow-2xl max-h-[88vh]">
+      <div className="fixed left-0 right-0 bottom-0 max-w-md mx-auto z-[90] flex flex-col bg-card rounded-t-3xl border-t border-x shadow-2xl max-h-[90vh]">
         <button className="w-full flex justify-center pt-3 pb-2 flex-shrink-0" onClick={onClose}>
           <div className="w-10 h-1 rounded-full bg-border" />
         </button>
         <div className="px-4 pb-3 flex-shrink-0">
-          <p className="text-xs text-muted-foreground">Programar sesión futura</p>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
           <h2 className="text-base font-semibold">{contact.name}</h2>
         </div>
+
         <div className="px-4 space-y-4 overflow-y-auto flex-1">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Fecha</Label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-                className="w-full text-sm bg-muted border border-border rounded-lg px-3 py-2 text-foreground" />
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full text-sm bg-muted border border-border rounded-lg px-3 py-2 text-foreground"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Hora</Label>
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)}
-                className="w-full text-sm bg-muted border border-border rounded-lg px-3 py-2 text-foreground" />
+              <input
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="w-full text-sm bg-muted border border-border rounded-lg px-3 py-2 text-foreground"
+              />
             </div>
           </div>
           <div className="space-y-1.5">
             <Label>Lección <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
-            <Input placeholder="Ej: Cap. 3" value={lesson} onChange={(e) => setLesson(e.target.value)} />
+            <Input
+              placeholder="Ej: Cap. 3 — La esperanza de la resurrección"
+              value={lesson}
+              onChange={(e) => setLesson(e.target.value)}
+            />
           </div>
           <div className="space-y-1.5">
-            <Label>Archivos <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+            <Label>Notas <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+            <Input
+              placeholder="Ej: Mostró interés en el tema de la familia"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+
+          {existingFiles.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Archivos</Label>
+              <div className="space-y-1">
+                {existingFiles.map((f) => (
+                  <div key={f.id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-muted">
+                    <FileTypeIcon type={f.type} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{f.name}</p>
+                      <p className="text-xs text-muted-foreground">{formatFileSize(f.size)}</p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const url = await getFileURL(f.id);
+                        if (url) window.open(url, "_blank");
+                      }}
+                    >
+                      <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+                    </button>
+                    <button onClick={() => setExistingFiles(existingFiles.filter((ef) => ef.id !== f.id))}>
+                      <X className="w-3.5 h-3.5 text-muted-foreground" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label>
+              {existingFiles.length > 0 ? "Añadir archivos" : "Archivos"}
+              <span className="text-muted-foreground font-normal text-xs ml-1">(opcional)</span>
+            </Label>
             <FilePicker files={pendingFiles} onChange={setPendingFiles} />
           </div>
         </div>
-        <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-border bg-card mt-2">
+
+        <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-border bg-card mt-2 space-y-2">
           <Button onClick={handleSave} disabled={saving || !date} className="w-full">
-            {saving ? "Guardando…" : "Programar sesión"}
+            {saving ? "Guardando…" : isNew ? (isPending ? "Programar sesión" : "Guardar sesión") : "Guardar cambios"}
           </Button>
+          {!isNew && isPending && onComplete && (
+            <Button
+              variant="outline"
+              onClick={() => { onComplete(); onClose(); }}
+              className="w-full gap-2"
+            >
+              <CheckCircle2 className="w-4 h-4 text-green-500" /> Marcar como completada
+            </Button>
+          )}
+          {!isNew && (
+            <Button
+              variant="ghost"
+              onClick={() => { onDelete(); onClose(); }}
+              className="w-full text-destructive gap-2"
+            >
+              <Trash2 className="w-4 h-4" /> Eliminar sesión
+            </Button>
+          )}
         </div>
       </div>
     </>
   );
 }
 
-/* ── History session card (expandible) ── */
-function HistorySessionCard({ session }: { session: EstudioSession }) {
-  const [open, setOpen] = useState(false);
-  const hasExtra = !!(session.notes || (session.files ?? []).length > 0);
-
+/* ── History session card (click to open) ── */
+function HistorySessionCard({ session, onOpen }: { session: EstudioSession; onOpen: () => void }) {
   return (
-    <div className="rounded-2xl border bg-card border-border overflow-hidden">
-      <button onClick={() => hasExtra && setOpen((v) => !v)} className="w-full text-left p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="text-xs text-muted-foreground capitalize">{formatDateLabel(session.date)}</p>
-            {session.lesson
-              ? <p className="text-sm font-medium text-foreground mt-0.5">{session.lesson}</p>
-              : <p className="text-sm text-muted-foreground mt-0.5 italic">Sin lección registrada</p>
-            }
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-xs text-muted-foreground">{session.time}</span>
-            {session.notes && <StickyNote className="w-3.5 h-3.5 text-muted-foreground" />}
-            {(session.files ?? []).length > 0 && (
-              <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full font-medium">
-                {session.files.length} archivo{session.files.length !== 1 ? "s" : ""}
-              </span>
-            )}
-            {hasExtra && (open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />)}
-          </div>
+    <button
+      onClick={onOpen}
+      className="w-full text-left rounded-2xl border bg-card border-border p-4 active:scale-[0.99] transition-all"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-muted-foreground capitalize">{formatDateLabel(session.date)}</p>
+          {session.lesson
+            ? <p className="text-sm font-medium text-foreground mt-0.5">{session.lesson}</p>
+            : <p className="text-sm text-muted-foreground mt-0.5 italic">Sin lección registrada</p>
+          }
         </div>
-      </button>
-      {open && hasExtra && (
-        <div className="border-t border-border px-4 py-3 space-y-3 bg-muted/30">
-          {session.notes && (
-            <div className="space-y-1">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Notas</p>
-              <p className="text-sm text-foreground whitespace-pre-wrap">{session.notes}</p>
-            </div>
-          )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-xs text-muted-foreground">{session.time}</span>
+          {session.notes && <StickyNote className="w-3.5 h-3.5 text-muted-foreground" />}
           {(session.files ?? []).length > 0 && (
-            <div className="space-y-1">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Archivos</p>
-              <FileList files={session.files} />
-            </div>
+            <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full font-medium">
+              {session.files.length} archivo{session.files.length !== 1 ? "s" : ""}
+            </span>
           )}
+          <ChevronRight className="w-4 h-4 text-muted-foreground" />
         </div>
-      )}
-    </div>
+      </div>
+    </button>
   );
 }
 
 /* ── Contact detail view ── */
 function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, onArchive, onUnarchive,
-  onAddSession, onScheduleSession, onGenerateScheduled, onDeleteSession, onCompleteSession,
+  onAddSession, onUpdateSession, onGenerateScheduled, onDeleteSession, onCompleteSession,
 }: {
   contact: EstudioContact;
   favoritePlaces: FavoritePlace[];
@@ -464,15 +444,17 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
   onArchive: (id: string) => void;
   onUnarchive: (id: string) => void;
   onAddSession: (contactId: string, data?: { time?: string; lesson?: string; notes?: string; files?: SessionFile[] }) => void;
-  onScheduleSession: (contactId: string, data: { date: string; time: string; lesson?: string; files: SessionFile[] }) => void;
+  onUpdateSession: (contactId: string, sessionId: string, data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
   onGenerateScheduled: (contactId: string) => void;
   onDeleteSession: (contactId: string, sessionId: string) => void;
   onCompleteSession: (contactId: string, sessionId: string) => void;
 }) {
-  const [sessionOpen, setSessionOpen] = useState(false);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [newSessionOpen, setNewSessionOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<EstudioSession | null>(null);
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   const doneSessions = (contact.sessions ?? [])
     .filter((s) => !s.pending)
@@ -513,7 +495,6 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
               </p>
             )}
           </div>
-          {/* Edit + menu */}
           <button
             onClick={() => setEditOpen(true)}
             className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
@@ -567,18 +548,14 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
         </div>
 
         {/* Action buttons */}
-        <div className="flex gap-2 mt-3">
-          {contact.active && (
-            <Button size="sm" onClick={() => setSessionOpen(true)} className="flex-1 gap-1.5">
+        {contact.active && (
+          <div className="mt-3">
+            <Button size="sm" onClick={() => setNewSessionOpen(true)} className="w-full gap-1.5">
               <BookOpen className="w-4 h-4" />
-              {sessionToday ? "Añadir sesión" : "Sesión hoy"}
+              {sessionToday ? "Añadir otra sesión" : "Registrar sesión de hoy"}
             </Button>
-          )}
-          <Button size="sm" variant="outline" onClick={() => setScheduleOpen(true)} className="flex-1 gap-1.5">
-            <CalendarPlus className="w-4 h-4" />
-            Programar
-          </Button>
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="px-4 pt-4 space-y-6">
@@ -631,17 +608,19 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
           {upcomingSessions.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border p-6 text-center">
               <p className="text-xs text-muted-foreground">Sin sesiones programadas</p>
-              <button onClick={() => setScheduleOpen(true)} className="mt-2 text-xs font-medium text-primary">
-                Programar una sesión →
-              </button>
+              <p className="text-xs text-muted-foreground mt-1">Usa "Generar sesiones" para crear las próximas</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {upcomingSessions.map((s) => {
+              {(showAllUpcoming ? upcomingSessions : upcomingSessions.slice(0, 1)).map((s) => {
                 const isPast = new Date(s.date) < new Date() && new Date(s.date).toDateString() !== new Date().toDateString();
                 return (
-                  <div key={s.id}
-                    className={`rounded-2xl border p-4 space-y-2 ${isPast ? "bg-orange-50 border-orange-200" : "bg-primary/5 border-primary/20"}`}
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedSession(s)}
+                    className={`w-full text-left rounded-2xl border p-4 space-y-1 active:scale-[0.99] transition-all ${
+                      isPast ? "bg-orange-50 border-orange-200" : "bg-primary/5 border-primary/20"
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -655,26 +634,20 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                             Pendiente
                           </span>
                         )}
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
                       </div>
                     </div>
-                    <FileList files={s.files ?? []} />
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        onClick={() => onCompleteSession(contact.id, s.id)}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-green-500/10 text-green-600 text-xs font-medium active:bg-green-500/20"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Completar
-                      </button>
-                      <button
-                        onClick={() => onDeleteSession(contact.id, s.id)}
-                        className="p-1.5 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+                  </button>
                 );
               })}
+              {!showAllUpcoming && upcomingSessions.length > 1 && (
+                <button
+                  onClick={() => setShowAllUpcoming(true)}
+                  className="w-full text-center text-xs font-medium text-primary py-2"
+                >
+                  Ver {upcomingSessions.length - 1} más →
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -696,18 +669,49 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
             </div>
           ) : (
             <div className="space-y-2">
-              {doneSessions.map((s) => <HistorySessionCard key={s.id} session={s} />)}
+              {(showAllHistory ? doneSessions : doneSessions.slice(0, 1)).map((s) => (
+                <HistorySessionCard
+                  key={s.id}
+                  session={s}
+                  onOpen={() => setSelectedSession(s)}
+                />
+              ))}
+              {!showAllHistory && doneSessions.length > 1 && (
+                <button
+                  onClick={() => setShowAllHistory(true)}
+                  className="w-full text-center text-xs font-medium text-muted-foreground py-2"
+                >
+                  Ver {doneSessions.length - 1} más →
+                </button>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      {sessionOpen && (
-        <SessionSheet contact={contact} onSave={(id, data) => onAddSession(id, data)} onClose={() => setSessionOpen(false)} />
+      {/* ── New session sheet (registro rápido) ── */}
+      {newSessionOpen && (
+        <SessionEditSheet
+          session={null}
+          contact={contact}
+          onSave={(data) => onAddSession(contact.id, { time: data.time, lesson: data.lesson, notes: data.notes, files: data.files })}
+          onDelete={() => {}}
+          onClose={() => setNewSessionOpen(false)}
+        />
       )}
-      {scheduleOpen && (
-        <ScheduleSheet contact={contact} onSave={onScheduleSession} onClose={() => setScheduleOpen(false)} />
+
+      {/* ── Edit existing session sheet ── */}
+      {selectedSession && (
+        <SessionEditSheet
+          session={selectedSession}
+          contact={contact}
+          onSave={(data) => onUpdateSession(contact.id, selectedSession.id, data)}
+          onComplete={selectedSession.pending ? () => onCompleteSession(contact.id, selectedSession.id) : undefined}
+          onDelete={() => onDeleteSession(contact.id, selectedSession.id)}
+          onClose={() => setSelectedSession(null)}
+        />
       )}
+
       {editOpen && (
         <ContactSheet contact={contact} favoritePlaces={favoritePlaces} onSave={onUpdate} onClose={() => setEditOpen(false)} />
       )}
@@ -795,7 +799,7 @@ interface EstudiosViewProps {
   onArchiveContact: (id: string) => void;
   onUnarchiveContact: (id: string) => void;
   onAddSession: (contactId: string, data?: { time?: string; lesson?: string; notes?: string; files?: SessionFile[] }) => void;
-  onScheduleSession: (contactId: string, data: { date: string; time: string; lesson?: string; files: SessionFile[] }) => void;
+  onUpdateSession: (contactId: string, sessionId: string, data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
   onGenerateScheduled: (contactId: string) => void;
   onDeleteSession: (contactId: string, sessionId: string) => void;
   onCompleteSession: (contactId: string, sessionId: string) => void;
@@ -805,7 +809,7 @@ interface EstudiosViewProps {
 export function EstudiosView({
   contacts, favoritePlaces,
   onAddContact, onUpdateContact, onDeleteContact, onArchiveContact, onUnarchiveContact,
-  onAddSession, onScheduleSession, onGenerateScheduled, onDeleteSession, onCompleteSession,
+  onAddSession, onUpdateSession, onGenerateScheduled, onDeleteSession, onCompleteSession,
 }: EstudiosViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -815,7 +819,6 @@ export function EstudiosView({
   const active = contacts.filter((c) => c.active);
   const archived = contacts.filter((c) => !c.active);
 
-  /* ── Detail view ── */
   if (selectedContact) {
     return (
       <ContactDetail
@@ -827,7 +830,7 @@ export function EstudiosView({
         onArchive={onArchiveContact}
         onUnarchive={onUnarchiveContact}
         onAddSession={onAddSession}
-        onScheduleSession={onScheduleSession}
+        onUpdateSession={onUpdateSession}
         onGenerateScheduled={onGenerateScheduled}
         onDeleteSession={onDeleteSession}
         onCompleteSession={onCompleteSession}
@@ -835,7 +838,6 @@ export function EstudiosView({
     );
   }
 
-  /* ── List view ── */
   return (
     <div className="pb-24">
       <div className="px-4 pt-4 pb-2 flex items-center justify-between">

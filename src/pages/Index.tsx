@@ -17,6 +17,7 @@ import { useT } from "@/lib/LanguageContext";
 import { ChevronUp, MapPin, Settings, Menu, BookOpen } from "lucide-react";
 import { EstudiosView } from "@/components/EstudiosView";
 import { useEstudios } from "@/hooks/useEstudios";
+import { MissedStudyBanner } from "@/components/MissedStudyBanner";
 
 type Tab = "timer" | "map" | "calendar" | "stats" | "settings" | "estudios";
 
@@ -395,7 +396,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               onArchiveContact={estudios.archiveContact}
               onUnarchiveContact={estudios.unarchiveContact}
               onAddSession={estudios.addSession}
-              onScheduleSession={estudios.scheduleSession}
+              onUpdateSession={estudios.updateSession}
               onGenerateScheduled={estudios.generateScheduledSessions}
               onDeleteSession={estudios.deleteSession}
               onCompleteSession={estudios.completeSession}
@@ -427,6 +428,12 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
           </>
         )}
       </main>
+
+      <MissedStudyBanner
+        contacts={estudios.contacts}
+        onComplete={estudios.completeSession}
+        onReschedule={estudios.updateSession}
+      />
 
       <BottomNav
         activeTab={activeTab}

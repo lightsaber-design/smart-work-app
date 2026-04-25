@@ -166,6 +166,114 @@ function EventCard({
   );
 }
 
+// ── Hours heatmap grid ────────────────────────────────────────────────────
+function HoursMonthGrid({
+  monthBase,
+  getEventsForDate,
+  onSelectDate,
+}: {
+  monthBase: Date;
+  getEventsForDate: (date: Date) => CalendarEvent[];
+  onSelectDate: (date: Date) => void;
+}) {
+  const year = monthBase.getFullYear();
+  const month = monthBase.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDow = new Date(year, month, 1).getDay();
+  const offset = firstDow === 0 ? 6 : firstDow - 1; // lunes primero
+
+  const days: (Date | null)[] = [
+    ...Array(offset).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1)),
+  ];
+  while (days.length % 7 !== 0) days.push(null);
+
+  const weeks: (Date | null)[][] = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+
+  const today = new Date();
+
+  return (
+    <div className="rounded-2xl bg-card border border-border shadow-sm p-3">
+      {/* Cabecera días */}
+      <div className="grid grid-cols-7 mb-1">
+        {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
+          <div key={d} className="text-center text-[9px] font-semibold text-muted-foreground py-1">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Semanas */}
+      <div className="space-y-1">
+        {weeks.map((week, wi) => (
+          <div key={wi} className="grid grid-cols-7 gap-1">
+            {week.map((day, di) => {
+              if (!day) return <div key={di} />;
+
+              const dayEvents = getEventsForDate(day);
+              const { hrs, mins, ms } = dayTotalFromEvents(dayEvents);
+              const isToday = day.toDateString() === today.toDateString();
+
+              // Etiqueta compacta de horas
+              let label = "";
+              if (ms > 0) {
+                label = hrs >= 1
+                  ? mins >= 30 ? `${hrs}.5h` : `${hrs}h`
+                  : `${mins}m`;
+              }
+
+              // Color según intensidad de horas
+              const bgClass =
+                ms >= 5 * 3_600_000 ? "bg-primary text-primary-foreground" :
+                ms >= 3 * 3_600_000 ? "bg-primary/75 text-primary-foreground" :
+                ms >= 1 * 3_600_000 ? "bg-primary/45 text-foreground" :
+                ms > 0              ? "bg-primary/20 text-foreground" :
+                                      "bg-muted/40 text-muted-foreground";
+
+              return (
+                <button
+                  key={di}
+                  onClick={() => onSelectDate(day)}
+                  className={`relative aspect-square rounded-xl flex items-center justify-center transition-all active:scale-95 ${bgClass} ${
+                    isToday ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : ""
+                  }`}
+                >
+                  {/* Número de día — esquina superior derecha */}
+                  <span className="absolute top-[3px] right-[5px] text-[8px] font-semibold leading-none opacity-60">
+                    {day.getDate()}
+                  </span>
+                  {/* Total horas — centro */}
+                  {label ? (
+                    <span className="text-[11px] font-bold leading-none mt-1">{label}</span>
+                  ) : (
+                    <span className="text-[10px] opacity-20 mt-1">·</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Leyenda */}
+      <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-border/40">
+        <span className="text-[9px] text-muted-foreground">Menos</span>
+        {[
+          "bg-muted/40",
+          "bg-primary/20",
+          "bg-primary/45",
+          "bg-primary/75",
+          "bg-primary",
+        ].map((c, i) => (
+          <span key={i} className={`w-3.5 h-3.5 rounded-md ${c}`} />
+        ))}
+        <span className="text-[9px] text-muted-foreground">Más</span>
+      </div>
+    </div>
+  );
+}
+
 export function CalendarView({
   events,
   onAddEvent,
@@ -179,6 +287,7 @@ export function CalendarView({
 }: CalendarViewProps) {
   const t = useT();
   const [mode, setMode] = useState<CalendarMode>("daily");
+  const [monthHoursMode, setMonthHoursMode] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [monthOffset, setMonthOffset] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -435,7 +544,7 @@ export function CalendarView({
       {mode === "monthly" && (
         <>
           <div className="px-4 pt-4">
-            {/* Month nav */}
+            {/* Month nav + toggle horas */}
             <div className="flex items-center justify-between mb-4">
               <button
                 onClick={() => setMonthOffset((v) => v - 1)}
@@ -444,100 +553,142 @@ export function CalendarView({
                 <ChevronLeft className="w-5 h-5 text-muted-foreground" />
               </button>
               <p className="text-base font-bold text-foreground capitalize">{monthLabel}</p>
-              <button
-                onClick={() => setMonthOffset((v) => v + 1)}
-                className="w-9 h-9 rounded-full bg-muted flex items-center justify-center"
-              >
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setMonthOffset((v) => v + 1)}
+                  className="w-9 h-9 rounded-full bg-muted flex items-center justify-center"
+                >
+                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                </button>
+                <button
+                  onClick={() => setMonthHoursMode((v) => !v)}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all border ${
+                    monthHoursMode
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted text-muted-foreground border-border"
+                  }`}
+                >
+                  <Clock className="w-3 h-3" />
+                  {monthHoursMode ? "Horas" : "Normal"}
+                </button>
+              </div>
             </div>
 
-            {/* Leyenda */}
-            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-3">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-primary/50" /> {t("cal_upcoming")}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-green-500/50" /> {t("cal_done")}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground/50" /> {t("cal_pending")}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full ring-2 ring-pink-400" /> Estudio
-              </span>
-            </div>
+            {/* Leyenda — solo en modo normal */}
+            {!monthHoursMode && (
+              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-3">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-primary/50" /> {t("cal_upcoming")}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-green-500/50" /> {t("cal_done")}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground/50" /> {t("cal_pending")}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full ring-2 ring-pink-400" /> Estudio
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Month calendar grid */}
+          {/* Grid — normal o horas */}
           <div className="px-4">
-            <div className="rounded-2xl bg-card border border-border shadow-sm p-3 flex justify-center">
-              <Calendar
-                mode="single"
-                month={monthBase}
-                selected={selectedDate}
-                onSelect={(d) => {
-                  if (d) {
-                    setSelectedDate(d);
-                    setMode("daily");
-                  }
-                }}
-                onMonthChange={(m) => {
-                  const diff =
-                    (m.getFullYear() - new Date().getFullYear()) * 12 +
-                    (m.getMonth() - new Date().getMonth());
-                  setMonthOffset(diff);
-                }}
-                modifiers={{
-                  completedEvent: events.filter((e) => e.completed).map((e) => e.date),
-                  pastPending: events.filter((e) => {
-                    const d = new Date(e.date); d.setHours(0, 0, 0, 0);
-                    const now = new Date(); now.setHours(0, 0, 0, 0);
-                    return d < now && !e.completed;
-                  }).map((e) => e.date),
-                  futureEvent: events.filter((e) => {
-                    const d = new Date(e.date); d.setHours(0, 0, 0, 0);
-                    const now = new Date(); now.setHours(0, 0, 0, 0);
-                    return d >= now && !e.completed;
-                  }).map((e) => e.date),
-                  estudioSession: estudiosContacts
-                    .flatMap((c) => (c.sessions ?? []).filter((s) => s.pending).map((s) => new Date(s.date))),
-                }}
-                modifiersClassNames={{
-                  completedEvent: "bg-green-500/20 font-bold text-green-600",
-                  pastPending: "bg-muted-foreground/20 font-bold text-muted-foreground",
-                  futureEvent: "bg-primary/20 font-bold text-primary",
-                  estudioSession: "ring-2 ring-pink-400 ring-offset-1",
-                }}
-                className="pointer-events-auto"
-              />
-            </div>
+            {monthHoursMode ? (
+              <>
+                <HoursMonthGrid
+                  monthBase={monthBase}
+                  getEventsForDate={getEventsForDate}
+                  onSelectDate={(d) => { setSelectedDate(d); setMode("daily"); }}
+                />
+                {/* Total del mes */}
+                {(() => {
+                  const daysInMonth = new Date(monthBase.getFullYear(), monthBase.getMonth() + 1, 0).getDate();
+                  const monthTotalMs = Array.from({ length: daysInMonth }, (_, i) => {
+                    const d = new Date(monthBase.getFullYear(), monthBase.getMonth(), i + 1);
+                    return dayTotalFromEvents(getEventsForDate(d)).ms;
+                  }).reduce((a, b) => a + b, 0);
+                  if (monthTotalMs === 0) return null;
+                  const mHrs = Math.floor(monthTotalMs / 3_600_000);
+                  const mMins = Math.floor((monthTotalMs % 3_600_000) / 60_000);
+                  return (
+                    <div className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-primary/10 px-4 py-2">
+                      <Clock className="w-3.5 h-3.5 text-primary" />
+                      <span className="text-xs font-semibold text-primary">
+                        Total del mes: {mHrs}h {mMins}m
+                      </span>
+                    </div>
+                  );
+                })()}
+              </>
+            ) : (
+              <>
+                <div className="rounded-2xl bg-card border border-border shadow-sm p-3 flex justify-center">
+                  <Calendar
+                    mode="single"
+                    month={monthBase}
+                    selected={selectedDate}
+                    onSelect={(d) => {
+                      if (d) { setSelectedDate(d); setMode("daily"); }
+                    }}
+                    onMonthChange={(m) => {
+                      const diff =
+                        (m.getFullYear() - new Date().getFullYear()) * 12 +
+                        (m.getMonth() - new Date().getMonth());
+                      setMonthOffset(diff);
+                    }}
+                    modifiers={{
+                      completedEvent: events.filter((e) => e.completed).map((e) => e.date),
+                      pastPending: events.filter((e) => {
+                        const d = new Date(e.date); d.setHours(0, 0, 0, 0);
+                        const now = new Date(); now.setHours(0, 0, 0, 0);
+                        return d < now && !e.completed;
+                      }).map((e) => e.date),
+                      futureEvent: events.filter((e) => {
+                        const d = new Date(e.date); d.setHours(0, 0, 0, 0);
+                        const now = new Date(); now.setHours(0, 0, 0, 0);
+                        return d >= now && !e.completed;
+                      }).map((e) => e.date),
+                      estudioSession: estudiosContacts
+                        .flatMap((c) => (c.sessions ?? []).filter((s) => s.pending).map((s) => new Date(s.date))),
+                    }}
+                    modifiersClassNames={{
+                      completedEvent: "bg-green-500/20 font-bold text-green-600",
+                      pastPending: "bg-muted-foreground/20 font-bold text-muted-foreground",
+                      futureEvent: "bg-primary/20 font-bold text-primary",
+                      estudioSession: "ring-2 ring-pink-400 ring-offset-1",
+                    }}
+                    className="pointer-events-auto"
+                  />
+                </div>
 
-            {/* Add button */}
+                {/* Eventos del día seleccionado */}
+                {selectedEvents.length > 0 && (
+                  <div className="space-y-1 mt-3 mb-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                      {selectedDate.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
+                    </p>
+                    {selectedEvents.map((event) => (
+                      <EventCard
+                        key={event.id}
+                        event={event}
+                        onToggle={() => onToggleCompleted(event.id)}
+                        onEdit={() => openEdit(event)}
+                        onDelete={() => onDeleteEvent(event.id)}
+                        compact
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
             <div className="flex justify-end mt-3 mb-4">
               <Button size="sm" className="gap-1" onClick={() => setDialogOpen(true)}>
                 <Plus className="w-4 h-4" /> {t("cal_add")}
               </Button>
             </div>
-
-            {/* Events for selected date (quick preview in monthly mode) */}
-            {selectedEvents.length > 0 && (
-              <div className="space-y-1 mb-4">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  {selectedDate.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
-                </p>
-                {selectedEvents.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    onToggle={() => onToggleCompleted(event.id)}
-                    onEdit={() => openEdit(event)}
-                    onDelete={() => onDeleteEvent(event.id)}
-                    compact
-                  />
-                ))}
-              </div>
-            )}
           </div>
         </>
       )}

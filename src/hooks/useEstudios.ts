@@ -159,26 +159,50 @@ export function useEstudios() {
 
   const addSession = useCallback((
     contactId: string,
-    data?: { time?: string; lesson?: string; notes?: string; files?: SessionFile[] }
+    data?: { time?: string; lesson?: string; notes?: string; files?: SessionFile[]; forceNew?: boolean }
   ) => {
     setContacts((prev) => {
+      const contact = prev.find((c) => c.id === contactId);
+      if (!contact) return prev;
+
+      // Find next pending session — skip if forceNew is set
+      const nextPending = data?.forceNew
+        ? null
+        : contact.sessions
+            .filter((s) => s.pending)
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] ?? null;
+
+      let newSessions: EstudioSession[];
+      if (nextPending) {
+        newSessions = contact.sessions.map((s) =>
+          s.id === nextPending.id
+            ? {
+                ...s,
+                date: new Date().toISOString(),
+                time: data?.time ?? now(),
+                lesson: data?.lesson?.trim() || s.lesson,
+                notes: data?.notes?.trim() || undefined,
+                files: data?.files ?? s.files,
+                pending: false,
+              }
+            : s
+        );
+      } else {
+        newSessions = [
+          ...contact.sessions,
+          {
+            id: crypto.randomUUID(),
+            date: new Date().toISOString(),
+            time: data?.time ?? now(),
+            lesson: data?.lesson?.trim() || undefined,
+            notes: data?.notes?.trim() || undefined,
+            files: data?.files ?? [],
+          },
+        ];
+      }
+
       const updated = prev.map((c) =>
-        c.id === contactId
-          ? {
-              ...c,
-              sessions: [
-                ...c.sessions,
-                {
-                  id: crypto.randomUUID(),
-                  date: new Date().toISOString(),
-                  time: data?.time ?? now(),
-                  lesson: data?.lesson?.trim() || undefined,
-                  notes: data?.notes?.trim() || undefined,
-                  files: data?.files ?? [],
-                },
-              ],
-            }
-          : c
+        c.id === contactId ? { ...c, sessions: newSessions } : c
       );
       persist(updated);
       return updated;
@@ -216,21 +240,22 @@ export function useEstudios() {
     });
   }, []);
 
-  const generateScheduledSessions = useCallback((contactId: string, count = 4) => {
+  const generateScheduledSessions = useCallback((contactId: string) => {
+    const MAX_PENDING = 4;
     setContacts((prev) => {
       const contact = prev.find((c) => c.id === contactId);
       if (!contact?.schedule) return prev;
 
-      const existing = new Set(
-        contact.sessions
-          .filter((s) => s.pending)
-          .map((s) => new Date(s.date).toDateString())
-      );
+      const existingPending = contact.sessions.filter((s) => s.pending);
+      const toGenerate = MAX_PENDING - existingPending.length;
+      if (toGenerate <= 0) return prev;
 
-      const occurrences = getNextOccurrences(contact.schedule, count * 2);
+      const existing = new Set(existingPending.map((s) => new Date(s.date).toDateString()));
+
+      const occurrences = getNextOccurrences(contact.schedule, MAX_PENDING * 2);
       const toAdd = occurrences
         .filter((d) => !existing.has(d.toDateString()))
-        .slice(0, count);
+        .slice(0, toGenerate);
 
       if (!toAdd.length) return prev;
 
@@ -262,6 +287,38 @@ export function useEstudios() {
       const updated = prev.map((c) =>
         c.id === contactId
           ? { ...c, sessions: c.sessions.filter((s) => s.id !== sessionId) }
+          : c
+      );
+      persist(updated);
+      return updated;
+    });
+  }, []);
+
+  const updateSession = useCallback((
+    contactId: string,
+    sessionId: string,
+    data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }
+  ) => {
+    setContacts((prev) => {
+      const updated = prev.map((c) =>
+        c.id === contactId
+          ? {
+              ...c,
+              sessions: c.sessions.map((s) => {
+                if (s.id !== sessionId) return s;
+                const [year, month, day] = data.date.split("-").map(Number);
+                const [hours, minutes] = data.time.split(":").map(Number);
+                const d = new Date(year, month - 1, day, hours, minutes);
+                return {
+                  ...s,
+                  date: d.toISOString(),
+                  time: data.time,
+                  lesson: data.lesson?.trim() || undefined,
+                  notes: data.notes?.trim() || undefined,
+                  files: data.files,
+                };
+              }),
+            }
           : c
       );
       persist(updated);
@@ -308,6 +365,7 @@ export function useEstudios() {
     scheduleSession,
     generateScheduledSessions,
     deleteSession,
+    updateSession,
     completeSession,
     toggleActive,
   };
