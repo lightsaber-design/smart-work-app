@@ -52,7 +52,7 @@ export function MissedStudyBanner({ contacts, onComplete, onReschedule }: Missed
   const missed: MissedEntry[] = [];
   for (const contact of contacts) {
     if (!contact.active) continue;
-    for (const session of contact.sessions) {
+    for (const session of (contact.sessions ?? [])) {
       if (!session.pending) continue;
       const sessionMs = new Date(session.date).getTime();
       // past by more than 5 minutes

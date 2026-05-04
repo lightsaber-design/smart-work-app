@@ -1,4 +1,4 @@
-import { Play, Square, Clock, BookOpen, X } from "lucide-react";
+import { Pause, Play, Square, BookOpen, X, Clock } from "lucide-react";
 import { formatDuration, WorkCategory } from "@/hooks/useTimeTracker";
 import { CalendarEvent } from "@/hooks/useCalendarEvents";
 import { EstudioContact, EstudioSession, SessionFile } from "@/hooks/useEstudios";
@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useT } from "@/lib/LanguageContext";
 
 function getCurrentTimeStr(): string {
@@ -27,7 +27,7 @@ function timeStrToDate(timeStr: string): Date {
 function formatSessionDay(isoDate: string): string {
   const d = new Date(isoDate);
   const now = new Date();
-  const diffDays = Math.round((d.getTime() - now.setHours(0,0,0,0)) / 86400000);
+  const diffDays = Math.round((d.getTime() - now.setHours(0, 0, 0, 0)) / 86400000);
   if (diffDays === 0) return "hoy";
   if (diffDays === 1) return "mañana";
   if (diffDays === -1) return "ayer";
@@ -36,11 +36,18 @@ function formatSessionDay(isoDate: string): string {
 
 const ALL_CATEGORIES: WorkCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
 
-type SessionData = {
-  time: string;
-  files: SessionFile[];
+const CATEGORY_META: Record<WorkCategory, { icon: string; gradient: [string, string]; ring: string }> = {
+  Predi:   { icon: "🏠", gradient: ["#60a5fa", "#818cf8"], ring: "#818cf8" },
+  Carrito: { icon: "🛒", gradient: ["#4ade80", "#34d399"], ring: "#34d399" },
+  LDC:     { icon: "📖", gradient: ["#c084fc", "#818cf8"], ring: "#a855f7" },
+  Visitas: { icon: "🚶", gradient: ["#fb923c", "#f59e0b"], ring: "#f97316" },
+  Estudio: { icon: "📚", gradient: ["#f472b6", "#e879f9"], ring: "#ec4899" },
 };
 
+const RING_RADIUS = 108;
+const CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+type SessionData = { time: string; files: SessionFile[] };
 type PendingPrompt = {
   contactId: string;
   contactName: string;
@@ -64,6 +71,8 @@ interface ClockButtonProps {
     contactId: string,
     data?: { time?: string; lesson?: string; notes?: string; files?: SessionFile[]; forceNew?: boolean }
   ) => void;
+  // Para la ultima actividad.
+  entries?: { category: WorkCategory; startTime: Date; endTime: Date | null }[];
 }
 
 function detectCategoryFromEvents(events: CalendarEvent[]): WorkCategory | null {
@@ -87,7 +96,7 @@ function detectCategoryFromEvents(events: CalendarEvent[]): WorkCategory | null 
 export function ClockButton({
   isRunning, elapsed, onClockIn, onClockOut, onUpdateCategory, onUpdateStartTime,
   calendarEvents, activeCategory, activeEntryId, activeEntryStartTime,
-  estudios = [], onEstudioSession,
+  estudios = [], onEstudioSession, entries = [],
 }: ClockButtonProps) {
   const t = useT();
   const detected = detectCategoryFromEvents(calendarEvents);
@@ -97,14 +106,17 @@ export function ClockButton({
   const [selectedEstudioId, setSelectedEstudioId] = useState<string>("");
   const [pendingPrompt, setPendingPrompt] = useState<PendingPrompt | null>(null);
 
-  const activeStudios = estudios.filter((e) => e.active);
-  const categories = activeStudios.length > 0 ? ALL_CATEGORIES : ALL_CATEGORIES.filter((c) => c !== "Estudio");
+  const activeStudios = useMemo(() => estudios.filter((e) => e.active), [estudios]);
+  const categories = useMemo(
+    () => activeStudios.length > 0 ? ALL_CATEGORIES : ALL_CATEGORIES.filter((c) => c !== "Estudio"),
+    [activeStudios.length]
+  );
 
   useEffect(() => {
     if (category === "Estudio" && activeStudios.length === 1) {
       setSelectedEstudioId(activeStudios[0].id);
     }
-  }, [category, activeStudios.length]);
+  }, [category, activeStudios]);
 
   useEffect(() => {
     if (!isRunning) {
@@ -134,33 +146,21 @@ export function ClockButton({
   const handleAction = () => {
     if (isRunning) {
       onClockOut();
-
       if (selectedEstudioId && onEstudioSession) {
         const contact = estudios.find((e) => e.id === selectedEstudioId);
-        const nextPending = contact?.sessions
+        if (!contact) { onEstudioSession(selectedEstudioId); return; }
+        const nextPending = (contact.sessions ?? [])
           .filter((s) => s.pending)
           .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] ?? null;
-
         const sessionData: SessionData = { time: getCurrentTimeStr(), files: [] };
-
         if (nextPending) {
-          const diffMs = new Date(nextPending.date).getTime() - Date.now();
-          const diffHoursAbs = Math.abs(diffMs) / (1000 * 60 * 60);
-
+          const diffHoursAbs = Math.abs(new Date(nextPending.date).getTime() - Date.now()) / (1000 * 60 * 60);
           if (diffHoursAbs <= 1) {
-            // Dentro de ±1 hora → completar automáticamente
             onEstudioSession(selectedEstudioId, sessionData);
           } else {
-            // Más de 1 hora de diferencia → preguntar al usuario
-            setPendingPrompt({
-              contactId: selectedEstudioId,
-              contactName: contact!.name,
-              nextSession: nextPending,
-              sessionData,
-            });
+            setPendingPrompt({ contactId: selectedEstudioId, contactName: contact.name, nextSession: nextPending, sessionData });
           }
         } else {
-          // Sin sesión pendiente → nueva sesión normal
           onEstudioSession(selectedEstudioId, sessionData);
         }
       }
@@ -172,38 +172,120 @@ export function ClockButton({
   };
 
   const currentCategory = isRunning ? (activeCategory || category) : category;
+  const meta = CATEGORY_META[currentCategory];
   const showEstudioPicker = currentCategory === "Estudio" && activeStudios.length > 0;
+
+  // Ring progress: fraction of current hour elapsed
+  const elapsedMs = elapsed * 1000;
+  const progress = elapsedMs > 0 ? (elapsedMs % 3_600_000) / 3_600_000 : 0;
+  const dashOffset = CIRCUMFERENCE * (1 - progress);
 
   return (
     <>
-      <div className="flex flex-col items-center gap-6 py-8">
-        <div className="text-4xl font-bold tracking-tight text-foreground tabular-nums">
-          {isRunning ? formatDuration(elapsed * 1000) : "00:00:00"}
+      <div className="flex flex-col items-center w-full gap-0">
+
+        {/* ── Circular timer ── */}
+        <div
+          className="relative flex items-center justify-center rounded-full shadow-2xl"
+          style={{
+            width: 256,
+            height: 256,
+            background: `radial-gradient(circle at 40% 35%, ${meta.gradient[0]}33, transparent 60%), radial-gradient(circle at 70% 70%, ${meta.gradient[1]}22, transparent 60%), var(--card)`,
+          }}
+        >
+          {/* SVG ring */}
+          <svg
+            className="absolute inset-0 -rotate-90"
+            width="256"
+            height="256"
+            viewBox="0 0 256 256"
+          >
+            {/* track */}
+            <circle
+              cx="128"
+              cy="128"
+              r={RING_RADIUS}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="6"
+              className="text-border opacity-30"
+            />
+            {/* progress */}
+            {elapsedMs > 0 && (
+              <circle
+                cx="128"
+                cy="128"
+                r={RING_RADIUS}
+                fill="none"
+                stroke={meta.ring}
+                strokeWidth="6"
+                strokeLinecap="round"
+                strokeDasharray={CIRCUMFERENCE}
+                strokeDashoffset={dashOffset}
+                style={{ transition: "stroke-dashoffset 1s linear" }}
+              />
+            )}
+          </svg>
+
+          {/* Inner content */}
+          <div className="flex flex-col items-center gap-2 z-10">
+            <p className="text-sm font-semibold text-muted-foreground tracking-wide">{currentCategory}</p>
+            <p className="text-4xl font-bold tabular-nums text-foreground leading-none">
+              {isRunning ? formatDuration(elapsedMs).slice(0, 5) : "00:00"}
+            </p>
+
+            {/* Play / Pause button */}
+            <button
+              onClick={handleAction}
+              className="mt-2 w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-95 shadow"
+              style={{ background: `linear-gradient(135deg, ${meta.gradient[0]}, ${meta.gradient[1]})` }}
+            >
+              {isRunning
+                ? <Pause className="w-4 h-4 text-white fill-white" />
+                : <Play className="w-4 h-4 text-white fill-white ml-0.5" />}
+            </button>
+          </div>
         </div>
 
-        <div className="w-48 space-y-2">
-          <Select
-            value={currentCategory}
-            onValueChange={(v) => {
-              const cat = v as WorkCategory;
-              setCategory(cat);
-              if (cat !== "Estudio") setSelectedEstudioId("");
-              if (isRunning && activeEntryId) onUpdateCategory(cat);
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((cat) => (
-                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* ── Category icons ── */}
+        <div className="flex items-center justify-center gap-4 mt-6">
+          {categories.map((cat) => {
+            const m = CATEGORY_META[cat];
+            const isActive = currentCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => {
+                  setCategory(cat);
+                  if (cat !== "Estudio") setSelectedEstudioId("");
+                  if (isRunning && activeEntryId) onUpdateCategory(cat);
+                }}
+                className="flex flex-col items-center gap-1.5"
+              >
+                <div
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl transition-all shadow-sm ${
+                    isActive ? "scale-110 shadow-md" : "opacity-60"
+                  }`}
+                  style={isActive
+                    ? { background: `linear-gradient(135deg, ${m.gradient[0]}, ${m.gradient[1]})` }
+                    : { background: "var(--muted)" }
+                  }
+                >
+                  {m.icon}
+                </div>
+                <span className={`text-[10px] font-semibold ${isActive ? "text-foreground" : "text-muted-foreground"}`}>
+                  {cat}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-          {showEstudioPicker && (
-            activeStudios.length === 1 ? (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 text-sm text-primary">
+        {/* ── Estudio picker ── */}
+        {showEstudioPicker && (
+          <div className="mt-4 w-56">
+            {activeStudios.length === 1 ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/10 text-sm text-primary">
                 <BookOpen className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="truncate font-medium">{activeStudios[0].name}</span>
               </div>
@@ -223,21 +305,18 @@ export function ClockButton({
                   ))}
                 </SelectContent>
               </Select>
-            )
-          )}
+            )}
+          </div>
+        )}
 
-          {!isRunning && detected && (
-            <p className="text-xs text-muted-foreground text-center">{t('timer_detected')}</p>
-          )}
-        </div>
-
-        <div className="flex flex-col items-center gap-2">
+        {/* ── Edit start time ── */}
+        <div className="flex flex-col items-center gap-2 mt-4">
           <button
             onClick={handleToggleEdit}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <Clock className="w-3 h-3" />
-            {editingTime ? t('timer_cancel') : isRunning ? t('timer_edit_start') : t('timer_forgot')}
+            {editingTime ? t("timer_cancel") : isRunning ? t("timer_edit_start") : t("timer_forgot")}
           </button>
           {editingTime && (
             <>
@@ -245,40 +324,20 @@ export function ClockButton({
                 type="time"
                 value={customTimeStr}
                 onChange={(e) => setCustomTimeStr(e.target.value)}
-                className="text-center text-sm font-medium bg-muted border border-border rounded-md px-3 py-1.5 text-foreground"
+                className="text-center text-sm font-medium bg-muted border border-border rounded-xl px-3 py-1.5 text-foreground"
               />
               {isRunning && (
                 <button onClick={handleSaveStartTime} className="text-xs font-medium text-primary hover:underline">
-                  {t('timer_save')}
+                  {t("timer_save")}
                 </button>
               )}
             </>
           )}
         </div>
 
-        <p className="text-sm text-muted-foreground">
-          {isRunning ? t('timer_working') : t('timer_ready')}
-        </p>
-
-        <button
-          onClick={handleAction}
-          className={`relative flex items-center justify-center w-24 h-24 rounded-full transition-all duration-300 active:scale-95 ${
-            isRunning ? "bg-destructive timer-glow-active" : "bg-primary timer-glow"
-          }`}
-        >
-          {isRunning ? (
-            <Square className="w-8 h-8 text-destructive-foreground fill-current" />
-          ) : (
-            <Play className="w-8 h-8 text-primary-foreground ml-1" />
-          )}
-        </button>
-
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          {isRunning ? t('timer_stop') : t('timer_clock_in')}
-        </p>
       </div>
 
-      {/* ── Prompt de sesión pendiente ── */}
+      {/* ── Prompt sesión pendiente ── */}
       {pendingPrompt && (
         <div className="fixed bottom-24 left-0 right-0 px-4 max-w-md mx-auto z-50 animate-in slide-in-from-bottom-4 duration-200">
           <div className="bg-card border border-border rounded-2xl p-4 shadow-xl">
@@ -300,19 +359,13 @@ export function ClockButton({
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => {
-                  onEstudioSession!(pendingPrompt.contactId, pendingPrompt.sessionData);
-                  setPendingPrompt(null);
-                }}
+                onClick={() => { onEstudioSession?.(pendingPrompt.contactId, pendingPrompt.sessionData); setPendingPrompt(null); }}
                 className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
               >
                 Sí
               </button>
               <button
-                onClick={() => {
-                  onEstudioSession!(pendingPrompt.contactId, { ...pendingPrompt.sessionData, forceNew: true });
-                  setPendingPrompt(null);
-                }}
+                onClick={() => { onEstudioSession?.(pendingPrompt.contactId, { ...pendingPrompt.sessionData, forceNew: true }); setPendingPrompt(null); }}
                 className="flex-1 py-2 rounded-xl bg-muted text-foreground text-sm font-medium"
               >
                 No, sesión nueva

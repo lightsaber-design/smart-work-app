@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { generateId } from "@/lib/uuid";
 
 export interface SessionFile {
   id: string;
@@ -42,7 +43,60 @@ export type ContactFormData = Pick<EstudioContact, "name" | "address" | "notes" 
   schedule?: ContactSchedule;
 };
 
-/* Computes next N occurrences from today based on a schedule */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isScheduleFrequency(value: unknown): value is ScheduleFrequency {
+  return value === "weekly" || value === "fortnightly" || value === "monthly";
+}
+
+function parseStoredSchedule(value: unknown): ContactSchedule | undefined {
+  if (!isRecord(value) || !isScheduleFrequency(value.frequency)) return undefined;
+  if (typeof value.dayOfWeek !== "number" || value.dayOfWeek < 0 || value.dayOfWeek > 6) return undefined;
+  if (typeof value.time !== "string") return undefined;
+
+  return {
+    frequency: value.frequency,
+    dayOfWeek: value.dayOfWeek,
+    time: value.time,
+    lesson: typeof value.lesson === "string" ? value.lesson : undefined,
+  };
+}
+
+function parseStoredSession(value: unknown): EstudioSession | null {
+  if (!isRecord(value)) return null;
+
+  return {
+    id: typeof value.id === "string" ? value.id : generateId(),
+    date: typeof value.date === "string" ? value.date : new Date().toISOString(),
+    time: typeof value.time === "string" ? value.time : now(),
+    lesson: typeof value.lesson === "string" ? value.lesson : undefined,
+    notes: typeof value.notes === "string" ? value.notes : undefined,
+    files: Array.isArray(value.files) ? (value.files as SessionFile[]) : [],
+    pending: typeof value.pending === "boolean" ? value.pending : undefined,
+  };
+}
+
+function parseStoredContact(value: unknown): EstudioContact | null {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.name !== "string") return null;
+
+  return {
+    id: value.id,
+    name: value.name,
+    address: typeof value.address === "string" ? value.address : undefined,
+    notes: typeof value.notes === "string" ? value.notes : undefined,
+    favoritePlaceId: typeof value.favoritePlaceId === "string" ? value.favoritePlaceId : undefined,
+    schedule: parseStoredSchedule(value.schedule),
+    sessions: Array.isArray(value.sessions)
+      ? value.sessions.map(parseStoredSession).filter((session): session is EstudioSession => session !== null)
+      : [],
+    active: typeof value.active === "boolean" ? value.active : true,
+    createdAt: typeof value.createdAt === "string" ? value.createdAt : new Date().toISOString(),
+  };
+}
+
+/* Calcula las proximas N ocurrencias desde hoy segun una programacion. */
 export function getNextOccurrences(schedule: ContactSchedule, count: number): Date[] {
   const results: Date[] = [];
   const [h, m] = schedule.time.split(":").map(Number);
@@ -54,7 +108,7 @@ export function getNextOccurrences(schedule: ContactSchedule, count: number): Da
   const candidateToday = new Date(start);
   candidateToday.setHours(h, m, 0, 0);
   const skipToday = dayDiff === 0 && candidateToday <= new Date();
-  let cursor = new Date(start);
+  const cursor = new Date(start);
   cursor.setDate(cursor.getDate() + (skipToday ? 7 : dayDiff));
 
   while (results.length < count) {
@@ -76,14 +130,22 @@ function now(): string {
 function load(): EstudioContact[] {
   try {
     const saved = localStorage.getItem("estudios");
-    return saved ? JSON.parse(saved) : [];
+    if (!saved) return [];
+    const parsed = JSON.parse(saved) as unknown;
+    if (!Array.isArray(parsed)) throw new Error("bad format");
+    return parsed.map(parseStoredContact).filter((contact): contact is EstudioContact => contact !== null);
   } catch {
+    localStorage.removeItem("estudios");
     return [];
   }
 }
 
 function persist(contacts: EstudioContact[]) {
-  localStorage.setItem("estudios", JSON.stringify(contacts));
+  try {
+    localStorage.setItem("estudios", JSON.stringify(contacts));
+  } catch (e) {
+    console.error("Error guardando estudios:", e);
+  }
 }
 
 export function useEstudios() {
@@ -94,7 +156,7 @@ export function useEstudios() {
       const updated = [
         ...prev,
         {
-          id: crypto.randomUUID(),
+          id: generateId(),
           name: data.name.trim(),
           address: data.address?.trim() || undefined,
           notes: data.notes?.trim() || undefined,
@@ -165,7 +227,7 @@ export function useEstudios() {
       const contact = prev.find((c) => c.id === contactId);
       if (!contact) return prev;
 
-      // Find next pending session — skip if forceNew is set
+      // Busca la proxima sesion pendiente; si forceNew esta activo se crea una nueva.
       const nextPending = data?.forceNew
         ? null
         : contact.sessions
@@ -191,7 +253,7 @@ export function useEstudios() {
         newSessions = [
           ...contact.sessions,
           {
-            id: crypto.randomUUID(),
+            id: generateId(),
             date: new Date().toISOString(),
             time: data?.time ?? now(),
             lesson: data?.lesson?.trim() || undefined,
@@ -224,7 +286,7 @@ export function useEstudios() {
               sessions: [
                 ...c.sessions,
                 {
-                  id: crypto.randomUUID(),
+                  id: generateId(),
                   date: d.toISOString(),
                   time: data.time,
                   lesson: data.lesson?.trim() || undefined,
@@ -259,14 +321,15 @@ export function useEstudios() {
 
       if (!toAdd.length) return prev;
 
+      const schedule = contact.schedule;
       const newSessions: EstudioSession[] = toAdd.map((d) => {
-        const [h, m] = contact.schedule!.time.split(":").map(Number);
+        const [h, m] = schedule.time.split(":").map(Number);
         const time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
         return {
-          id: crypto.randomUUID(),
+          id: generateId(),
           date: d.toISOString(),
           time,
-          lesson: contact.schedule!.lesson?.trim() || undefined,
+          lesson: schedule.lesson?.trim() || undefined,
           files: [],
           pending: true,
         };

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { generateId } from "@/lib/uuid";
 
 export type EventCategory = "Predi" | "Carrito" | "LDC" | "Visitas" | "Estudio";
 export type RecurrenceType = "none" | "weekly" | "monthly";
@@ -25,8 +26,58 @@ export interface AddEventParams {
   recurrence: RecurrenceType;
 }
 
+interface PersistedCalendarEvent extends Omit<CalendarEvent, "date"> {
+  date: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isEventCategory(value: unknown): value is EventCategory {
+  return value === "Predi" || value === "Carrito" || value === "LDC" || value === "Visitas" || value === "Estudio";
+}
+
+function isRecurrenceType(value: unknown): value is RecurrenceType {
+  return value === "none" || value === "weekly" || value === "monthly";
+}
+
+function parseStoredEvent(value: unknown): CalendarEvent | null {
+  if (!isRecord(value) || typeof value.id !== "string" || !isEventCategory(value.category)) return null;
+
+  const date = new Date(String(value.date));
+  if (Number.isNaN(date.getTime())) return null;
+
+  const recurrence = isRecurrenceType(value.recurrence) ? value.recurrence : "none";
+  const reminder =
+    typeof value.reminderMinutesBefore === "number" && Number.isFinite(value.reminderMinutesBefore)
+      ? value.reminderMinutesBefore
+      : 15;
+  const location =
+    isRecord(value.location) &&
+    typeof value.location.lat === "number" &&
+    typeof value.location.lng === "number" &&
+    Number.isFinite(value.location.lat) &&
+    Number.isFinite(value.location.lng)
+      ? { lat: value.location.lat, lng: value.location.lng }
+      : undefined;
+
+  return {
+    id: value.id,
+    date,
+    endTime: typeof value.endTime === "string" ? value.endTime : undefined,
+    category: value.category,
+    reminderMinutesBefore: reminder,
+    notified: typeof value.notified === "boolean" ? value.notified : false,
+    location,
+    recurrence,
+    parentId: typeof value.parentId === "string" ? value.parentId : undefined,
+    completed: typeof value.completed === "boolean" ? value.completed : false,
+  };
+}
+
 function generateRecurringEvents(params: AddEventParams, count: number): CalendarEvent[] {
-  const parentId = crypto.randomUUID();
+  const parentId = generateId();
   const events: CalendarEvent[] = [];
 
   for (let i = 0; i < count; i++) {
@@ -38,7 +89,7 @@ function generateRecurringEvents(params: AddEventParams, count: number): Calenda
     }
 
     events.push({
-      id: i === 0 ? parentId : crypto.randomUUID(),
+      id: i === 0 ? parentId : generateId(),
       date,
       endTime: params.endTime,
       category: params.category,
@@ -56,20 +107,29 @@ function generateRecurringEvents(params: AddEventParams, count: number): Calenda
 
 export function useCalendarEvents() {
   const [events, setEvents] = useState<CalendarEvent[]>(() => {
-    const saved = localStorage.getItem("calendar-events");
-    if (saved) {
-      return JSON.parse(saved).map((e: any) => ({
-        ...e,
-        date: new Date(e.date),
-        recurrence: e.recurrence || "none",
-        completed: e.completed || false,
-      }));
+    try {
+      const saved = localStorage.getItem("calendar-events");
+      if (saved) {
+        const parsed = JSON.parse(saved) as unknown;
+        if (!Array.isArray(parsed)) throw new Error("bad format");
+        return parsed.map(parseStoredEvent).filter((event): event is CalendarEvent => event !== null);
+      }
+    } catch {
+      localStorage.removeItem("calendar-events");
     }
     return [];
   });
 
   useEffect(() => {
-    localStorage.setItem("calendar-events", JSON.stringify(events));
+    try {
+      const persisted: PersistedCalendarEvent[] = events.map((event) => ({
+        ...event,
+        date: event.date.toISOString(),
+      }));
+      localStorage.setItem("calendar-events", JSON.stringify(persisted));
+    } catch (e) {
+      console.error("Error guardando eventos:", e);
+    }
   }, [events]);
 
   useEffect(() => {
@@ -88,7 +148,7 @@ export function useCalendarEvents() {
       setEvents((prev) => [...prev, ...recurring].sort((a, b) => a.date.getTime() - b.date.getTime()));
     } else {
       const event: CalendarEvent = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         date: params.date,
         endTime: params.endTime || undefined,
         category: params.category,
@@ -104,7 +164,7 @@ export function useCalendarEvents() {
 
   const addCompletedEventNow = useCallback(
     (params: { date: Date; category: EventCategory; location?: { lat: number; lng: number } }) => {
-      const id = crypto.randomUUID();
+      const id = generateId();
       const event: CalendarEvent = {
         id,
         date: params.date,
@@ -125,7 +185,8 @@ export function useCalendarEvents() {
   const deleteEvent = useCallback((id: string) => {
     setEvents((prev) => {
       const event = prev.find((e) => e.id === id);
-      if (event?.recurrence !== "none") {
+      if (!event) return prev;
+      if (event.recurrence !== "none") {
         const parentId = event.parentId || event.id;
         return prev.filter((e) => e.id !== parentId && e.parentId !== parentId);
       }

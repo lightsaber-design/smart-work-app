@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { generateId } from "@/lib/uuid";
 
 export interface GeoLocation {
   lat: number;
@@ -18,49 +19,69 @@ export interface TimeEntry {
   linkedEventId?: string;
 }
 
-function getCurrentPosition(): Promise<GeoLocation | null> {
-  return new Promise((resolve) => {
-    if (!navigator.geolocation) {
-      resolve(null);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => resolve(null),
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  });
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isWorkCategory(value: unknown): value is WorkCategory {
+  return value === "Predi" || value === "Carrito" || value === "LDC" || value === "Visitas" || value === "Estudio";
+}
+
+function parseGeoLocation(value: unknown): GeoLocation | null {
+  if (!isRecord(value) || typeof value.lat !== "number" || typeof value.lng !== "number") return null;
+  if (!Number.isFinite(value.lat) || !Number.isFinite(value.lng)) return null;
+  return { lat: value.lat, lng: value.lng };
+}
+
+function parseStoredEntry(value: unknown): TimeEntry | null {
+  if (!isRecord(value) || typeof value.id !== "string") return null;
+
+  const startTime = new Date(String(value.startTime));
+  if (Number.isNaN(startTime.getTime())) return null;
+
+  const parsedEndTime = value.endTime ? new Date(String(value.endTime)) : null;
+
+  return {
+    id: value.id,
+    startTime,
+    endTime: parsedEndTime && !Number.isNaN(parsedEndTime.getTime()) ? parsedEndTime : null,
+    description: typeof value.description === "string" ? value.description : "",
+    category: isWorkCategory(value.category) ? value.category : "Predi",
+    startLocation: parseGeoLocation(value.startLocation),
+    endLocation: parseGeoLocation(value.endLocation),
+    linkedEventId: typeof value.linkedEventId === "string" ? value.linkedEventId : undefined,
+  };
 }
 
 export function useTimeTracker() {
   const [entries, setEntries] = useState<TimeEntry[]>(() => {
-    const saved = localStorage.getItem("time-entries");
-    if (saved) {
-      return JSON.parse(saved).map((e: any) => ({
-        ...e,
-        startTime: new Date(e.startTime),
-        endTime: e.endTime ? new Date(e.endTime) : null,
-        startLocation: e.startLocation || null,
-        endLocation: e.endLocation || null,
-      }));
+    try {
+      const saved = localStorage.getItem("time-entries");
+      if (saved) {
+        const parsed = JSON.parse(saved) as unknown;
+        if (!Array.isArray(parsed)) throw new Error("bad format");
+        return parsed.map(parseStoredEntry).filter((entry): entry is TimeEntry => entry !== null);
+      }
+    } catch {
+      localStorage.removeItem("time-entries");
     }
     return [];
   });
 
-  const [isRunning, setIsRunning] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-
   const activeEntry = entries.find((e) => e.endTime === null);
+  const [isRunning, setIsRunning] = useState(() => entries.some((e) => e.endTime === null));
+  const [elapsed, setElapsed] = useState(() => {
+    const active = entries.find((e) => e.endTime === null);
+    return active ? Math.floor((Date.now() - active.startTime.getTime()) / 1000) : 0;
+  });
 
   useEffect(() => {
-    localStorage.setItem("time-entries", JSON.stringify(entries));
-  }, [entries]);
-
-  useEffect(() => {
-    if (activeEntry) {
-      setIsRunning(true);
+    try {
+      localStorage.setItem("time-entries", JSON.stringify(entries));
+    } catch (e) {
+      console.error("Error guardando entradas:", e);
     }
-  }, []);
+  }, [entries]);
 
   useEffect(() => {
     if (!isRunning || !activeEntry) return;
@@ -82,7 +103,7 @@ export function useTimeTracker() {
         category,
       });
       const entry: TimeEntry = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         startTime,
         endTime: null,
         description: "",

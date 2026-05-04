@@ -1,11 +1,11 @@
 import { BarChart3, CalendarDays, Clock } from "lucide-react";
 import { useT } from "@/lib/LanguageContext";
 
-type Tab = "timer" | "map" | "calendar" | "stats" | "settings";
+export type AppTab = "timer" | "map" | "calendar" | "stats" | "settings" | "estudios";
 
 interface BottomNavProps {
-  activeTab: Tab;
-  onTabChange: (tab: Tab) => void;
+  activeTab: AppTab;
+  onTabChange: (tab: AppTab) => void;
   isRunning?: boolean;
 }
 
@@ -23,7 +23,7 @@ export function BottomNav({ activeTab, onTabChange, isRunning }: BottomNavProps)
           <span className="text-[10px] font-medium">{t("nav_stats")}</span>
         </button>
 
-        {/* Center timer button */}
+        {/* Boton central del temporizador. */}
         <button
           onClick={() => onTabChange("timer")}
           className={`relative flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition-all active:scale-95 -mt-5 ${

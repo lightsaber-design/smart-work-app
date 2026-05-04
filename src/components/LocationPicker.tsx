@@ -4,8 +4,17 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useT } from "@/lib/LanguageContext";
 
-// Fix default marker icon
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+interface LeafletDefaultIconPrototype extends L.Icon.Default {
+  _getIconUrl?: () => string;
+}
+
+interface NominatimResult {
+  lat: string;
+  lon: string;
+}
+
+// Corrige el icono por defecto de Leaflet cuando se empaqueta con Vite.
+delete (L.Icon.Default.prototype as LeafletDefaultIconPrototype)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
   iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
@@ -40,16 +49,20 @@ export function LocationPicker({ value, onChange, defaultCenter }: LocationPicke
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(search)}&limit=1`
       );
-      const data = await res.json();
-      if (data.length > 0) {
-        const loc = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      if (!res.ok) return;
+      const data = (await res.json()) as NominatimResult[];
+      const firstResult = data[0];
+      if (firstResult) {
+        const loc = { lat: parseFloat(firstResult.lat), lng: parseFloat(firstResult.lon) };
+        if (!Number.isFinite(loc.lat) || !Number.isFinite(loc.lng)) return;
         onChange(loc);
         mapRef.current?.setView([loc.lat, loc.lng], 15);
       }
     } catch {
-      // silently fail
+      // La busqueda depende de red externa; si falla mantenemos la seleccion actual.
+    } finally {
+      setSearching(false);
     }
-    setSearching(false);
   };
 
   const handleClick = (lat: number, lng: number) => {

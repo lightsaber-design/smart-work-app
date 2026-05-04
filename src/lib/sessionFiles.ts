@@ -31,7 +31,11 @@ export async function getFileURL(id: string): Promise<string | null> {
     const req = tx.objectStore(STORE).get(id);
     req.onsuccess = () => {
       if (!req.result) return resolve(null);
-      resolve(URL.createObjectURL(req.result));
+      try {
+        resolve(URL.createObjectURL(req.result));
+      } catch {
+        resolve(null);
+      }
     };
     req.onerror = () => reject(req.error);
   });

@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { generateId } from "@/lib/uuid";
 import {
   BookOpen, Plus, Trash2, CheckCircle2, MapPin, Clock,
   Paperclip, X, FileText, Image, File,
@@ -77,7 +78,7 @@ function FilePicker({ files, onChange }: {
   const ref = useRef<HTMLInputElement>(null);
   const add = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newFiles = Array.from(e.target.files ?? []);
-    onChange([...files, ...newFiles.map((f) => ({ file: f, id: crypto.randomUUID() }))]);
+    onChange([...files, ...newFiles.map((f) => ({ file: f, id: generateId() }))]);
     e.target.value = "";
   };
   return (
@@ -123,6 +124,12 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
   const [schedTime, setSchedTime] = useState(contact?.schedule?.time ?? "10:00");
   const [schedLesson, setSchedLesson] = useState(contact?.schedule?.lesson ?? "");
 
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   const handleSave = () => {
     if (!name.trim()) return;
     const schedule: ContactSchedule | undefined =
@@ -150,7 +157,7 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
           <h2 className="text-base font-semibold">{contact ? "Editar estudio" : "Nuevo estudio"}</h2>
         </div>
 
-        <div className="px-4 space-y-4 overflow-y-auto flex-1">
+        <div className="px-4 space-y-4 overflow-y-auto flex-1 pb-4">
           <div className="space-y-1.5">
             <Label>Nombre *</Label>
             <Input placeholder="Ej: Juan García" value={name} onChange={(e) => setName(e.target.value)} />
@@ -204,7 +211,7 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {DAY_NAMES.map((d, i) => (
-                          <SelectItem key={i} value={String(i)}>{d}</SelectItem>
+                          <SelectItem key={d} value={String(i)}>{d}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -238,12 +245,12 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
               </>
             )}
           </div>
+        </div>
 
-          <div className="pt-4 pb-20">
-            <Button onClick={handleSave} disabled={!name.trim()} className="w-full">
-              {contact ? "Guardar cambios" : "Guardar estudio"}
-            </Button>
-          </div>
+        <div className="flex-shrink-0 px-4 pt-3 pb-6 border-t border-border bg-card">
+          <Button onClick={handleSave} disabled={!name.trim()} className="w-full">
+            {contact ? "Guardar cambios" : "Guardar estudio"}
+          </Button>
         </div>
       </div>
     </>
@@ -269,6 +276,12 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
   const [existingFiles, setExistingFiles] = useState<SessionFile[]>(session?.files ?? []);
   const [pendingFiles, setPendingFiles] = useState<{ file: File; id: string }[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -351,7 +364,10 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
                     <button
                       onClick={async () => {
                         const url = await getFileURL(f.id);
-                        if (url) window.open(url, "_blank");
+                        if (url) {
+                          window.open(url, "_blank");
+                          setTimeout(() => URL.revokeObjectURL(url), 10_000);
+                        }
                       }}
                     >
                       <FileText className="w-3.5 h-3.5 text-muted-foreground" />
@@ -374,7 +390,7 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
           </div>
         </div>
 
-        <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-border bg-card mt-2 space-y-2">
+        <div className="flex-shrink-0 px-4 pt-3 pb-6 border-t border-border bg-card mt-2 space-y-2">
           <Button onClick={handleSave} disabled={saving || !date} className="w-full">
             {saving ? "Guardando…" : isNew ? (isPending ? "Programar sesión" : "Guardar sesión") : "Guardar cambios"}
           </Button>
@@ -587,7 +603,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
             <div className="space-y-0.5">
               {getNextOccurrences(contact.schedule, 3).map((d, i) => (
                 <p key={i} className="text-xs text-muted-foreground capitalize">
-                  • {d.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })} · {contact.schedule!.time}
+                  • {d.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })} · {contact.schedule.time}
                 </p>
               ))}
             </div>

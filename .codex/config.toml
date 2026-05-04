@@ -1,0 +1,6 @@
+[mcp_servers.ruflo]
+args = [
+    "-y",
+    "@claude-flow/cli@latest",
+]
+command = "npx"
