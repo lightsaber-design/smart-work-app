@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Trash2, MapPin, BookOpen, User, Globe } from "lucide-react";
+import { Trash2, MapPin, BookOpen, User, Globe, Moon } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,11 @@ interface SettingsViewProps {
   entryCount: number;
   setup: SetupData;
   onSaveSetup: (data: Partial<SetupData>) => void;
+  isDark?: boolean;
+  onToggleDark?: () => void;
 }
 
-export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup }: SettingsViewProps) {
+export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDark, onToggleDark }: SettingsViewProps) {
   const t = useT();
   const [editingCity, setEditingCity] = useState(false);
   const [cityDraft, setCityDraft] = useState(setup.city ?? undefined);
@@ -107,6 +109,18 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup }: Set
           ))}
         </div>
       </div>
+
+      {onToggleDark !== undefined && (
+        <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2 text-sm text-foreground cursor-pointer" htmlFor="dark-mode-toggle">
+              <Moon className="w-4 h-4 text-primary" />
+              Modo nocturno
+            </Label>
+            <Switch id="dark-mode-toggle" checked={!!isDark} onCheckedChange={onToggleDark} />
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">

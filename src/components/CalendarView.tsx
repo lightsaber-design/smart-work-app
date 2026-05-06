@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
 import { EstudioContact } from "@/hooks/useEstudios";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Plus, Trash2, BellOff, MapPin, Repeat, Clock, CheckCircle2,
   Circle, Pencil, ChevronLeft, ChevronRight, BookOpen,
@@ -23,12 +22,12 @@ import { useT } from "@/lib/LanguageContext";
 
 const CATEGORIES: EventCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
 
-const CATEGORY_STYLE: Record<EventCategory, { card: string; border: string; dot: string; dotColor: string }> = {
-  Predi:   { card: "bg-blue-50 border-blue-200",    border: "border-blue-200",   dot: "bg-blue-500",   dotColor: "#3b82f6" },
-  Carrito: { card: "bg-green-50 border-green-200",  border: "border-green-200",  dot: "bg-green-500",  dotColor: "#22c55e" },
-  LDC:     { card: "bg-purple-50 border-purple-200", border: "border-purple-200", dot: "bg-purple-500", dotColor: "#a855f7" },
-  Visitas: { card: "bg-orange-50 border-orange-200", border: "border-orange-200", dot: "bg-orange-500", dotColor: "#f97316" },
-  Estudio: { card: "bg-pink-50 border-pink-200",    border: "border-pink-200",   dot: "bg-pink-500",   dotColor: "#ec4899" },
+const CATEGORY_STYLE: Record<EventCategory, { card: string; border: string; dot: string; dotColor: string; accent: string }> = {
+  Predi:   { card: "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/50",    border: "border-blue-200 dark:border-blue-800/50",   dot: "bg-blue-500",   dotColor: "#3b82f6", accent: "#3b82f6" },
+  Carrito: { card: "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800/50",  border: "border-green-200 dark:border-green-800/50",  dot: "bg-green-500",  dotColor: "#22c55e", accent: "#22c55e" },
+  LDC:     { card: "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800/50", border: "border-purple-200 dark:border-purple-800/50", dot: "bg-purple-500", dotColor: "#a855f7", accent: "#a855f7" },
+  Visitas: { card: "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800/50", border: "border-orange-200 dark:border-orange-800/50", dot: "bg-orange-500", dotColor: "#f97316", accent: "#f97316" },
+  Estudio: { card: "bg-pink-50 dark:bg-pink-950/30 border-pink-200 dark:border-pink-800/50",    border: "border-pink-200 dark:border-pink-800/50",   dot: "bg-pink-500",   dotColor: "#ec4899", accent: "#ec4899" },
 };
 
 type CalendarMode = "daily" | "monthly";
@@ -129,42 +128,38 @@ function EventCard({
   }
 
   return (
-    <div className={`mb-2 ${event.completed ? "opacity-60" : ""}`}>
-      {/* Caja 1: nombre / categoría */}
-      <div className={`rounded-t-2xl rounded-b-none border-x border-t px-3 py-2.5 ${style.card}`}>
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <button onClick={onToggle} className="flex-shrink-0">
-              {event.completed
-                ? <CheckCircle2 className="w-4 h-4 text-green-500" />
-                : <Circle className="w-4 h-4 text-muted-foreground" />}
-            </button>
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
-            <p className={`text-sm font-semibold text-foreground leading-tight truncate ${event.completed ? "line-through" : ""}`}>
-              {event.category}
-              {event.recurrence !== "none" && (
-                <Repeat className="w-2.5 h-2.5 inline ml-1.5 opacity-50" />
-              )}
-            </p>
-          </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {event.location && <MapPin className="w-3.5 h-3.5 text-muted-foreground" />}
-            <button onClick={onEdit} className="p-1 rounded text-muted-foreground hover:text-primary transition-colors">
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={onDelete} className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors">
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
+    <div className={`mb-2 rounded-2xl overflow-hidden border shadow-sm ${style.card} ${style.border} ${event.completed ? "opacity-60" : ""}`}
+      style={{ borderLeftWidth: 3, borderLeftColor: style.accent }}
+    >
+      {/* Row 1: toggle + name + actions */}
+      <div className="flex items-center justify-between gap-2 px-3 pt-2.5 pb-1">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <button onClick={onToggle} className="flex-shrink-0 cursor-pointer">
+            {event.completed
+              ? <CheckCircle2 className="w-4 h-4 text-green-500" />
+              : <Circle className="w-4 h-4 text-muted-foreground" />}
+          </button>
+          <p className={`text-sm font-semibold text-foreground leading-tight truncate ${event.completed ? "line-through" : ""}`}>
+            {event.category}
+            {event.recurrence !== "none" && (
+              <Repeat className="w-2.5 h-2.5 inline ml-1.5 opacity-50" />
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          {event.location && <MapPin className="w-3.5 h-3.5 text-muted-foreground" />}
+          <button onClick={onEdit} className="p-1 rounded text-muted-foreground hover:text-primary transition-colors cursor-pointer">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={onDelete} className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors cursor-pointer">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
-
-      {/* Caja 2: horario / duración */}
-      <div className={`rounded-t-none rounded-b-2xl border-x border-b border-t-0 px-3 py-2 bg-background/60 ${style.border}`}>
-        <div className="flex items-center gap-1.5">
-          <Clock className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-          <span className="text-[11px] text-muted-foreground">{timeLabel}</span>
-        </div>
+      {/* Row 2: time */}
+      <div className="flex items-center gap-1.5 px-3 pb-2.5">
+        <Clock className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+        <span className="text-[11px] text-muted-foreground">{timeLabel}</span>
       </div>
     </div>
   );
@@ -250,6 +245,133 @@ function HoursMonthGrid({
           <span key={c} className={`w-3.5 h-3.5 rounded-md ${c}`} />
         ))}
         <span className="text-[9px] text-muted-foreground">Más</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Event state monthly grid ──────────────────────────────────────────────
+function EventMonthGrid({
+  monthBase,
+  events,
+  selectedDate,
+  estudiosContacts,
+  onSelectDate,
+}: {
+  monthBase: Date;
+  events: CalendarEvent[];
+  selectedDate: Date;
+  estudiosContacts: EstudioContact[];
+  onSelectDate: (date: Date) => void;
+}) {
+  const year = monthBase.getFullYear();
+  const month = monthBase.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDow = new Date(year, month, 1).getDay();
+  const offset = firstDow === 0 ? 6 : firstDow - 1;
+
+  const days: (Date | null)[] = [
+    ...Array(offset).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1)),
+  ];
+  while (days.length % 7 !== 0) days.push(null);
+
+  const weeks: (Date | null)[][] = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+
+  const today = new Date();
+  const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
+
+  const estudioDateStrings = new Set(
+    estudiosContacts.flatMap((c) =>
+      (c.sessions ?? []).filter((s) => s.pending).map((s) => new Date(s.date).toDateString())
+    )
+  );
+
+  return (
+    <div className="rounded-2xl bg-card border border-border shadow-sm p-3">
+      <div className="grid grid-cols-7 mb-1">
+        {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
+          <div key={d} className="text-center text-[9px] font-semibold text-muted-foreground py-1">{d}</div>
+        ))}
+      </div>
+      <div className="space-y-1">
+        {weeks.map((week, wi) => (
+          <div key={wi} className="grid grid-cols-7 gap-1">
+            {week.map((day, di) => {
+              if (!day) return <div key={`empty-${wi}-${di}`} />;
+
+              const dayMidnight = new Date(day); dayMidnight.setHours(0, 0, 0, 0);
+              const isSelected = day.toDateString() === selectedDate.toDateString();
+              const isToday = day.toDateString() === today.toDateString();
+              const isEstudio = estudioDateStrings.has(day.toDateString());
+
+              const dayEvents = events.filter((e) => e.date.toDateString() === day.toDateString());
+              const hasCompleted = dayEvents.some((e) => e.completed);
+              const hasFuture = dayEvents.some((e) => {
+                const d = new Date(e.date); d.setHours(0, 0, 0, 0);
+                return d >= todayMidnight && !e.completed;
+              });
+              const hasPastPending = dayEvents.some((e) => {
+                const d = new Date(e.date); d.setHours(0, 0, 0, 0);
+                return d < todayMidnight && !e.completed;
+              });
+
+              const bgClass = isSelected
+                ? "bg-primary text-primary-foreground"
+                : hasCompleted
+                ? "bg-green-500/25 text-foreground"
+                : hasFuture
+                ? "bg-primary/20 text-foreground"
+                : hasPastPending
+                ? "bg-muted-foreground/20 text-muted-foreground"
+                : "bg-muted/40 text-muted-foreground";
+
+              const categoryDots = Array.from(
+                new Set(dayEvents.slice(0, 3).map((e) => e.category))
+              );
+
+              return (
+                <button
+                  key={day.toDateString()}
+                  onClick={() => onSelectDate(day)}
+                  className={`relative aspect-square rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 ${bgClass} ${
+                    isToday && !isSelected ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : ""
+                  } ${isEstudio && !isSelected ? "ring-2 ring-pink-400 ring-offset-1 ring-offset-card" : ""}`}
+                >
+                  <span className={`text-[11px] font-bold leading-none ${isSelected ? "text-primary-foreground" : ""}`}>
+                    {day.getDate()}
+                  </span>
+                  {categoryDots.length > 0 && (
+                    <div className="flex items-center gap-[2px]">
+                      {categoryDots.map((cat) => (
+                        <span
+                          key={cat}
+                          className="w-[4px] h-[4px] rounded-full flex-shrink-0"
+                          style={{ backgroundColor: isSelected ? "rgba(255,255,255,0.7)" : CATEGORY_STYLE[cat]?.dotColor ?? "#888" }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-3 mt-3 pt-2 border-t border-border/40 flex-wrap">
+        <span className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
+          <span className="w-3 h-3 rounded-md bg-primary/20" /> Por venir
+        </span>
+        <span className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
+          <span className="w-3 h-3 rounded-md bg-green-500/25" /> Realizado
+        </span>
+        <span className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
+          <span className="w-3 h-3 rounded-md bg-muted-foreground/20" /> Pendiente
+        </span>
+        <span className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
+          <span className="w-3 h-3 rounded-md ring-2 ring-pink-400" /> Estudio
+        </span>
       </div>
     </div>
   );
@@ -524,7 +646,7 @@ export function CalendarView({
             <div className="flex items-center justify-between mb-4">
               <button
                 onClick={() => setMonthOffset((v) => v - 1)}
-                className="w-9 h-9 rounded-full bg-muted flex items-center justify-center"
+                className="w-9 h-9 rounded-full bg-muted flex items-center justify-center cursor-pointer"
               >
                 <ChevronLeft className="w-5 h-5 text-muted-foreground" />
               </button>
@@ -532,13 +654,13 @@ export function CalendarView({
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setMonthOffset((v) => v + 1)}
-                  className="w-9 h-9 rounded-full bg-muted flex items-center justify-center"
+                  className="w-9 h-9 rounded-full bg-muted flex items-center justify-center cursor-pointer"
                 >
                   <ChevronRight className="w-5 h-5 text-muted-foreground" />
                 </button>
                 <button
                   onClick={() => setMonthHoursMode((v) => !v)}
-                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all border ${
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all border cursor-pointer ${
                     monthHoursMode
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-muted text-muted-foreground border-border"
@@ -550,22 +672,6 @@ export function CalendarView({
               </div>
             </div>
 
-            {!monthHoursMode && (
-              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-3">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-primary/50" /> {t("cal_upcoming")}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-green-500/50" /> {t("cal_done")}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground/50" /> {t("cal_pending")}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full ring-2 ring-pink-400" /> Estudio
-                </span>
-              </div>
-            )}
           </div>
 
           <div className="px-4">
@@ -597,45 +703,16 @@ export function CalendarView({
               </>
             ) : (
               <>
-                <div className="rounded-2xl bg-card border border-border shadow-sm p-3 flex justify-center">
-                  <Calendar
-                    mode="single"
-                    month={monthBase}
-                    selected={selectedDate}
-                    onSelect={(d) => { if (d) { setSelectedDate(d); setMode("daily"); } }}
-                    onMonthChange={(m) => {
-                      const diff =
-                        (m.getFullYear() - new Date().getFullYear()) * 12 +
-                        (m.getMonth() - new Date().getMonth());
-                      setMonthOffset(diff);
-                    }}
-                    modifiers={{
-                      completedEvent: events.filter((e) => e.completed).map((e) => e.date),
-                      pastPending: events.filter((e) => {
-                        const d = new Date(e.date); d.setHours(0, 0, 0, 0);
-                        const now = new Date(); now.setHours(0, 0, 0, 0);
-                        return d < now && !e.completed;
-                      }).map((e) => e.date),
-                      futureEvent: events.filter((e) => {
-                        const d = new Date(e.date); d.setHours(0, 0, 0, 0);
-                        const now = new Date(); now.setHours(0, 0, 0, 0);
-                        return d >= now && !e.completed;
-                      }).map((e) => e.date),
-                      estudioSession: estudiosContacts
-                        .flatMap((c) => (c.sessions ?? []).filter((s) => s.pending).map((s) => new Date(s.date))),
-                    }}
-                    modifiersClassNames={{
-                      completedEvent: "bg-green-500/20 font-bold text-green-600",
-                      pastPending: "bg-muted-foreground/20 font-bold text-muted-foreground",
-                      futureEvent: "bg-primary/20 font-bold text-primary",
-                      estudioSession: "ring-2 ring-pink-400 ring-offset-1",
-                    }}
-                    className="pointer-events-auto"
-                  />
-                </div>
+                <EventMonthGrid
+                  monthBase={monthBase}
+                  events={events}
+                  selectedDate={selectedDate}
+                  estudiosContacts={estudiosContacts}
+                  onSelectDate={(d) => { setSelectedDate(d); setMode("daily"); }}
+                />
 
                 {selectedEvents.length > 0 && (
-                  <div className="space-y-1 mt-3 mb-4">
+                  <div className="space-y-1.5 mt-3 mb-4">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                       {selectedDate.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
                     </p>

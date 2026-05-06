@@ -96,6 +96,38 @@ function parseStoredContact(value: unknown): EstudioContact | null {
   };
 }
 
+function targetPendingCount(freq: ScheduleFrequency): number {
+  return freq === "weekly" ? 4 : 2;
+}
+
+/* Rellena sesiones pendientes hasta el objetivo segun la frecuencia. Puro, no muta. */
+function fillPendingSessions(contact: EstudioContact): EstudioContact {
+  if (!contact.schedule) return contact;
+  const schedule = contact.schedule;
+  const target = targetPendingCount(schedule.frequency);
+  const existing = contact.sessions.filter((s) => s.pending);
+  const toGenerate = target - existing.length;
+  if (toGenerate <= 0) return contact;
+
+  const existingDates = new Set(existing.map((s) => new Date(s.date).toDateString()));
+  const occurrences = getNextOccurrences(schedule, target * 2);
+  const toAdd = occurrences.filter((d) => !existingDates.has(d.toDateString())).slice(0, toGenerate);
+  if (!toAdd.length) return contact;
+
+  const [h, m] = schedule.time.split(":").map(Number);
+  const time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  const newSessions: EstudioSession[] = toAdd.map((d) => ({
+    id: generateId(),
+    date: d.toISOString(),
+    time,
+    lesson: schedule.lesson?.trim() || undefined,
+    files: [],
+    pending: true,
+  }));
+
+  return { ...contact, sessions: [...contact.sessions, ...newSessions] };
+}
+
 /* Calcula las proximas N ocurrencias desde hoy segun una programacion. */
 export function getNextOccurrences(schedule: ContactSchedule, count: number): Date[] {
   const results: Date[] = [];
@@ -133,7 +165,10 @@ function load(): EstudioContact[] {
     if (!saved) return [];
     const parsed = JSON.parse(saved) as unknown;
     if (!Array.isArray(parsed)) throw new Error("bad format");
-    return parsed.map(parseStoredContact).filter((contact): contact is EstudioContact => contact !== null);
+    const contacts = parsed.map(parseStoredContact).filter((contact): contact is EstudioContact => contact !== null);
+    const filled = contacts.map(fillPendingSessions);
+    if (JSON.stringify(contacts) !== JSON.stringify(filled)) persist(filled);
+    return filled;
   } catch {
     localStorage.removeItem("estudios");
     return [];
@@ -153,20 +188,18 @@ export function useEstudios() {
 
   const addContact = useCallback((data: ContactFormData) => {
     setContacts((prev) => {
-      const updated = [
-        ...prev,
-        {
-          id: generateId(),
-          name: data.name.trim(),
-          address: data.address?.trim() || undefined,
-          notes: data.notes?.trim() || undefined,
-          favoritePlaceId: data.favoritePlaceId || undefined,
-          schedule: data.schedule,
-          sessions: [],
-          active: true,
-          createdAt: new Date().toISOString(),
-        },
-      ];
+      const newContact: EstudioContact = {
+        id: generateId(),
+        name: data.name.trim(),
+        address: data.address?.trim() || undefined,
+        notes: data.notes?.trim() || undefined,
+        favoritePlaceId: data.favoritePlaceId || undefined,
+        schedule: data.schedule,
+        sessions: [],
+        active: true,
+        createdAt: new Date().toISOString(),
+      };
+      const updated = [...prev, fillPendingSessions(newContact)];
       persist(updated);
       return updated;
     });
@@ -174,18 +207,18 @@ export function useEstudios() {
 
   const updateContact = useCallback((id: string, data: ContactFormData) => {
     setContacts((prev) => {
-      const updated = prev.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              name: data.name.trim(),
-              address: data.address?.trim() || undefined,
-              notes: data.notes?.trim() || undefined,
-              favoritePlaceId: data.favoritePlaceId || undefined,
-              schedule: data.schedule,
-            }
-          : c
-      );
+      const updated = prev.map((c) => {
+        if (c.id !== id) return c;
+        const merged = {
+          ...c,
+          name: data.name.trim(),
+          address: data.address?.trim() || undefined,
+          notes: data.notes?.trim() || undefined,
+          favoritePlaceId: data.favoritePlaceId || undefined,
+          schedule: data.schedule,
+        };
+        return fillPendingSessions(merged);
+      });
       persist(updated);
       return updated;
     });
@@ -271,79 +304,7 @@ export function useEstudios() {
     });
   }, []);
 
-  const scheduleSession = useCallback((
-    contactId: string,
-    data: { date: string; time: string; lesson?: string; files?: SessionFile[] }
-  ) => {
-    const [year, month, day] = data.date.split("-").map(Number);
-    const [hours, minutes] = data.time.split(":").map(Number);
-    const d = new Date(year, month - 1, day, hours, minutes);
-    setContacts((prev) => {
-      const updated = prev.map((c) =>
-        c.id === contactId
-          ? {
-              ...c,
-              sessions: [
-                ...c.sessions,
-                {
-                  id: generateId(),
-                  date: d.toISOString(),
-                  time: data.time,
-                  lesson: data.lesson?.trim() || undefined,
-                  files: data.files ?? [],
-                  pending: true,
-                },
-              ],
-            }
-          : c
-      );
-      persist(updated);
-      return updated;
-    });
-  }, []);
 
-  const generateScheduledSessions = useCallback((contactId: string) => {
-    const MAX_PENDING = 4;
-    setContacts((prev) => {
-      const contact = prev.find((c) => c.id === contactId);
-      if (!contact?.schedule) return prev;
-
-      const existingPending = contact.sessions.filter((s) => s.pending);
-      const toGenerate = MAX_PENDING - existingPending.length;
-      if (toGenerate <= 0) return prev;
-
-      const existing = new Set(existingPending.map((s) => new Date(s.date).toDateString()));
-
-      const occurrences = getNextOccurrences(contact.schedule, MAX_PENDING * 2);
-      const toAdd = occurrences
-        .filter((d) => !existing.has(d.toDateString()))
-        .slice(0, toGenerate);
-
-      if (!toAdd.length) return prev;
-
-      const schedule = contact.schedule;
-      const newSessions: EstudioSession[] = toAdd.map((d) => {
-        const [h, m] = schedule.time.split(":").map(Number);
-        const time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-        return {
-          id: generateId(),
-          date: d.toISOString(),
-          time,
-          lesson: schedule.lesson?.trim() || undefined,
-          files: [],
-          pending: true,
-        };
-      });
-
-      const updated = prev.map((c) =>
-        c.id === contactId
-          ? { ...c, sessions: [...c.sessions, ...newSessions] }
-          : c
-      );
-      persist(updated);
-      return updated;
-    });
-  }, []);
 
   const deleteSession = useCallback((contactId: string, sessionId: string) => {
     setContacts((prev) => {
@@ -391,31 +352,21 @@ export function useEstudios() {
 
   const completeSession = useCallback((contactId: string, sessionId: string) => {
     setContacts((prev) => {
-      const updated = prev.map((c) =>
-        c.id === contactId
-          ? {
-              ...c,
-              sessions: c.sessions.map((s) =>
-                s.id === sessionId ? { ...s, pending: false } : s
-              ),
-            }
-          : c
-      );
+      const updated = prev.map((c) => {
+        if (c.id !== contactId) return c;
+        const withCompleted = {
+          ...c,
+          sessions: c.sessions.map((s) =>
+            s.id === sessionId ? { ...s, pending: false } : s
+          ),
+        };
+        return fillPendingSessions(withCompleted);
+      });
       persist(updated);
       return updated;
     });
   }, []);
 
-  // kept for ClockButton compatibility
-  const toggleActive = useCallback((id: string) => {
-    setContacts((prev) => {
-      const updated = prev.map((c) =>
-        c.id === id ? { ...c, active: !c.active } : c
-      );
-      persist(updated);
-      return updated;
-    });
-  }, []);
 
   return {
     contacts,
@@ -425,11 +376,8 @@ export function useEstudios() {
     archiveContact,
     unarchiveContact,
     addSession,
-    scheduleSession,
-    generateScheduledSessions,
     deleteSession,
     updateSession,
     completeSession,
-    toggleActive,
   };
 }

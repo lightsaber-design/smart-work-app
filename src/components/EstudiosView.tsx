@@ -450,7 +450,7 @@ function HistorySessionCard({ session, onOpen }: { session: EstudioSession; onOp
 
 /* ── Contact detail view ── */
 function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, onArchive, onUnarchive,
-  onAddSession, onUpdateSession, onGenerateScheduled, onDeleteSession, onCompleteSession,
+  onAddSession, onUpdateSession, onDeleteSession, onCompleteSession,
 }: {
   contact: EstudioContact;
   favoritePlaces: FavoritePlace[];
@@ -461,7 +461,6 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
   onUnarchive: (id: string) => void;
   onAddSession: (contactId: string, data?: { time?: string; lesson?: string; notes?: string; files?: SessionFile[] }) => void;
   onUpdateSession: (contactId: string, sessionId: string, data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
-  onGenerateScheduled: (contactId: string) => void;
   onDeleteSession: (contactId: string, sessionId: string) => void;
   onCompleteSession: (contactId: string, sessionId: string) => void;
 }) {
@@ -579,26 +578,16 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
         {/* ── Schedule banner ── */}
         {contact.schedule && (
           <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 text-primary" />
-                <div>
-                  <p className="text-xs font-semibold text-primary">
-                    {FREQ_LABELS[contact.schedule.frequency]} · {DAY_NAMES[contact.schedule.dayOfWeek]} · {contact.schedule.time}
-                  </p>
-                  {contact.schedule.lesson && (
-                    <p className="text-xs text-muted-foreground">{contact.schedule.lesson}</p>
-                  )}
-                </div>
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-primary" />
+              <div>
+                <p className="text-xs font-semibold text-primary">
+                  {FREQ_LABELS[contact.schedule.frequency]} · {DAY_NAMES[contact.schedule.dayOfWeek]} · {contact.schedule.time}
+                </p>
+                {contact.schedule.lesson && (
+                  <p className="text-xs text-muted-foreground">{contact.schedule.lesson}</p>
+                )}
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-xs flex-shrink-0"
-                onClick={() => onGenerateScheduled(contact.id)}
-              >
-                Generar sesiones
-              </Button>
             </div>
             <div className="space-y-0.5">
               {getNextOccurrences(contact.schedule, 3).map((d, i) => (
@@ -624,7 +613,6 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
           {upcomingSessions.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border p-6 text-center">
               <p className="text-xs text-muted-foreground">Sin sesiones programadas</p>
-              <p className="text-xs text-muted-foreground mt-1">Usa "Generar sesiones" para crear las próximas</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -816,16 +804,14 @@ interface EstudiosViewProps {
   onUnarchiveContact: (id: string) => void;
   onAddSession: (contactId: string, data?: { time?: string; lesson?: string; notes?: string; files?: SessionFile[] }) => void;
   onUpdateSession: (contactId: string, sessionId: string, data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
-  onGenerateScheduled: (contactId: string) => void;
   onDeleteSession: (contactId: string, sessionId: string) => void;
   onCompleteSession: (contactId: string, sessionId: string) => void;
-  onToggleActive: (id: string) => void;
 }
 
 export function EstudiosView({
   contacts, favoritePlaces,
   onAddContact, onUpdateContact, onDeleteContact, onArchiveContact, onUnarchiveContact,
-  onAddSession, onUpdateSession, onGenerateScheduled, onDeleteSession, onCompleteSession,
+  onAddSession, onUpdateSession, onDeleteSession, onCompleteSession,
 }: EstudiosViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -847,7 +833,6 @@ export function EstudiosView({
         onUnarchive={onUnarchiveContact}
         onAddSession={onAddSession}
         onUpdateSession={onUpdateSession}
-        onGenerateScheduled={onGenerateScheduled}
         onDeleteSession={onDeleteSession}
         onCompleteSession={onCompleteSession}
       />

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useScrollLock } from "@/hooks/useScrollLock";
-import { useTimeTracker, formatDuration } from "@/hooks/useTimeTracker";
+import { useTimeTracker } from "@/hooks/useTimeTracker";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { useFavoritePlaces } from "@/hooks/useFavoritePlaces";
 import { useSetup, SetupData } from "@/hooks/useSetup";
@@ -15,10 +15,11 @@ import { SetupScreen } from "@/components/SetupScreen";
 import { LanguageProvider } from "@/lib/LanguageContext";
 import { detectLanguage, Lang } from "@/lib/i18n";
 import { useT } from "@/lib/LanguageContext";
-import { ChevronUp, MapPin, Settings, BookOpen } from "lucide-react";
+import { ChevronUp, MapPin, Settings, BookOpen, Moon, Sun } from "lucide-react";
 import { EstudiosView } from "@/components/EstudiosView";
 import { useEstudios } from "@/hooks/useEstudios";
 import { MissedStudyBanner } from "@/components/MissedStudyBanner";
+import { useDarkMode } from "@/hooks/useDarkMode";
 
 type Tab = AppTab;
 
@@ -30,12 +31,12 @@ interface AppContentProps {
 const CATEGORIES = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"] as const;
 type Category = typeof CATEGORIES[number];
 
-const CATEGORY_COLORS: Record<Category, { bg: string; text: string; dot: string }> = {
-  Predi:   { bg: "bg-blue-100",   text: "text-blue-600",   dot: "bg-blue-500" },
-  Carrito: { bg: "bg-green-100",  text: "text-green-600",  dot: "bg-green-500" },
-  LDC:     { bg: "bg-purple-100", text: "text-purple-600", dot: "bg-purple-500" },
-  Visitas: { bg: "bg-orange-100", text: "text-orange-600", dot: "bg-orange-500" },
-  Estudio: { bg: "bg-pink-100",   text: "text-pink-600",   dot: "bg-pink-500" },
+const CATEGORY_META: Record<Category, { icon: string; gradient: [string, string] }> = {
+  Predi:   { icon: "🏠", gradient: ["#60a5fa", "#818cf8"] },
+  Carrito: { icon: "🛒", gradient: ["#4ade80", "#34d399"] },
+  LDC:     { icon: "📖", gradient: ["#c084fc", "#818cf8"] },
+  Visitas: { icon: "🚶", gradient: ["#fb923c", "#f59e0b"] },
+  Estudio: { icon: "📚", gradient: ["#f472b6", "#e879f9"] },
 };
 
 function getGreeting(): string {
@@ -58,6 +59,7 @@ function getWeekDates(): Date[] {
 
 function AppContent({ setup, saveSetup }: AppContentProps) {
   const t = useT();
+  const { isDark, toggle: toggleDark } = useDarkMode();
   const [activeTab, setActiveTab] = useState<Tab>("timer");
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryMode, setSummaryMode] = useState<"mensual" | "anual">("mensual");
@@ -89,7 +91,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             if ("Notification" in window && Notification.permission === "granted") {
               new Notification("⏰ Evento en curso sin fichaje", {
                 body: `${event.category} — No estás fichando. ¡Inicia el fichaje!`,
-                icon: "/placeholder.svg",
               });
             }
           }
@@ -107,17 +108,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const weekDates = getWeekDates();
   const DAY_NAMES = ["LUN", "MAR", "MIÉ", "JUE", "VIE"];
 
-  const PEEK_CATEGORY_META: Record<Category, { icon: string; gradient: [string, string] }> = {
-    Predi:   { icon: "🏠", gradient: ["#60a5fa", "#818cf8"] },
-    Carrito: { icon: "🛒", gradient: ["#4ade80", "#34d399"] },
-    LDC:     { icon: "📖", gradient: ["#c084fc", "#818cf8"] },
-    Visitas: { icon: "🚶", gradient: ["#fb923c", "#f59e0b"] },
-    Estudio: { icon: "📚", gradient: ["#f472b6", "#e879f9"] },
-  };
-
   const recentEntries = tracker.entries
     .filter((e) => e.endTime !== null)
-    .slice(-3)
+    .slice(-2)
     .reverse();
 
   const navigate = (tab: Tab) => {
@@ -142,10 +135,19 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 >
                   {userName.charAt(0).toUpperCase()}
                 </button>
-                <div>
+                <div className="flex-1">
                   <p className="text-sm text-muted-foreground font-medium">{getGreeting()}</p>
                   <h1 className="text-xl font-bold text-foreground leading-tight">{userName}</h1>
                 </div>
+                <button
+                  onClick={toggleDark}
+                  className="w-9 h-9 rounded-full bg-muted flex items-center justify-center transition-colors active:opacity-70"
+                  aria-label="Cambiar modo"
+                >
+                  {isDark
+                    ? <Sun className="w-4 h-4 text-yellow-400" />
+                    : <Moon className="w-4 h-4 text-muted-foreground" />}
+                </button>
               </div>
             </div>
 
@@ -239,9 +241,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   {recentEntries.length === 0 ? (
                     <p className="text-xs text-muted-foreground py-2">Sin actividad reciente</p>
                   ) : (
-                    recentEntries.slice(0, 2).map((entry) => {
+                    recentEntries.map((entry) => {
                       if (!entry.endTime) return null;
-                      const m = PEEK_CATEGORY_META[entry.category as Category];
+                      const m = CATEGORY_META[entry.category as Category];
                       const ms = Math.max(0, (entry.endTime.getTime() - entry.startTime.getTime()));
                       const hrs = Math.floor(ms / 3_600_000);
                       const mins = Math.floor((ms % 3_600_000) / 60_000);
@@ -287,13 +289,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   </div>
 
                   {summaryMode === "mensual" && (() => {
-                    const CATEGORY_META: Record<Category, { icon: string; gradient: [string, string] }> = {
-                      Predi:   { icon: "🏠", gradient: ["#60a5fa", "#818cf8"] },
-                      Carrito: { icon: "🛒", gradient: ["#4ade80", "#34d399"] },
-                      LDC:     { icon: "📖", gradient: ["#c084fc", "#818cf8"] },
-                      Visitas: { icon: "🚶", gradient: ["#fb923c", "#f59e0b"] },
-                      Estudio: { icon: "📚", gradient: ["#f472b6", "#e879f9"] },
-                    };
                     const now = new Date();
                     const monthEntries = tracker.entries.filter((e) =>
                       e.startTime.getFullYear() === now.getFullYear() &&
@@ -376,13 +371,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   })()}
 
                   {summaryMode === "anual" && (() => {
-                    const CATEGORY_META: Record<Category, { icon: string; gradient: [string, string] }> = {
-                      Predi:   { icon: "🏠", gradient: ["#60a5fa", "#818cf8"] },
-                      Carrito: { icon: "🛒", gradient: ["#4ade80", "#34d399"] },
-                      LDC:     { icon: "📖", gradient: ["#c084fc", "#818cf8"] },
-                      Visitas: { icon: "🚶", gradient: ["#fb923c", "#f59e0b"] },
-                      Estudio: { icon: "📚", gradient: ["#f472b6", "#e879f9"] },
-                    };
                     const MONTH_NAMES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
                     const now = new Date();
                     const year = now.getFullYear();
@@ -595,10 +583,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               onUnarchiveContact={estudios.unarchiveContact}
               onAddSession={estudios.addSession}
               onUpdateSession={estudios.updateSession}
-              onGenerateScheduled={estudios.generateScheduledSessions}
               onDeleteSession={estudios.deleteSession}
               onCompleteSession={estudios.completeSession}
-              onToggleActive={estudios.toggleActive}
             />
           </>
         )}
@@ -622,6 +608,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               onClearAll={handleClearAll}
               setup={setup}
               onSaveSetup={saveSetup}
+              isDark={isDark}
+              onToggleDark={toggleDark}
             />
           </>
         )}

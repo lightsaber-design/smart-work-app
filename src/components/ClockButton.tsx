@@ -1,4 +1,4 @@
-import { Pause, Play, Square, BookOpen, X, Clock } from "lucide-react";
+import { Pause, Play, BookOpen, X, Clock } from "lucide-react";
 import { formatDuration, WorkCategory } from "@/hooks/useTimeTracker";
 import { CalendarEvent } from "@/hooks/useCalendarEvents";
 import { EstudioContact, EstudioSession, SessionFile } from "@/hooks/useEstudios";
@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useT } from "@/lib/LanguageContext";
 
 function getCurrentTimeStr(): string {
@@ -46,6 +46,8 @@ const CATEGORY_META: Record<WorkCategory, { icon: string; gradient: [string, str
 
 const RING_RADIUS = 108;
 const CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+const SEC_RADIUS = 96;
+const SEC_CIRCUMFERENCE = 2 * Math.PI * SEC_RADIUS;
 
 type SessionData = { time: string; files: SessionFile[] };
 type PendingPrompt = {
@@ -71,7 +73,6 @@ interface ClockButtonProps {
     contactId: string,
     data?: { time?: string; lesson?: string; notes?: string; files?: SessionFile[]; forceNew?: boolean }
   ) => void;
-  // Para la ultima actividad.
   entries?: { category: WorkCategory; startTime: Date; endTime: Date | null }[];
 }
 
@@ -105,6 +106,18 @@ export function ClockButton({
   const [customTimeStr, setCustomTimeStr] = useState(getCurrentTimeStr());
   const [selectedEstudioId, setSelectedEstudioId] = useState<string>("");
   const [pendingPrompt, setPendingPrompt] = useState<PendingPrompt | null>(null);
+  const [wallTime, setWallTime] = useState(getCurrentTimeStr());
+  const [seconds, setSeconds] = useState(new Date().getSeconds());
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Update wall clock every second
+  useEffect(() => {
+    tickRef.current = setInterval(() => {
+      setWallTime(getCurrentTimeStr());
+      setSeconds(new Date().getSeconds());
+    }, 1000);
+    return () => { if (tickRef.current) clearInterval(tickRef.current); };
+  }, []);
 
   const activeStudios = useMemo(() => estudios.filter((e) => e.active), [estudios]);
   const categories = useMemo(
@@ -175,10 +188,19 @@ export function ClockButton({
   const meta = CATEGORY_META[currentCategory];
   const showEstudioPicker = currentCategory === "Estudio" && activeStudios.length > 0;
 
-  // Ring progress: fraction of current hour elapsed
+  // Hour ring progress (fraction of current hour elapsed)
   const elapsedMs = elapsed * 1000;
-  const progress = elapsedMs > 0 ? (elapsedMs % 3_600_000) / 3_600_000 : 0;
-  const dashOffset = CIRCUMFERENCE * (1 - progress);
+  const hourProgress = elapsedMs > 0 ? (elapsedMs % 3_600_000) / 3_600_000 : 0;
+  const dashOffset = CIRCUMFERENCE * (1 - hourProgress);
+
+  // Seconds ring
+  const secProgress = seconds / 60;
+  const secDashOffset = SEC_CIRCUMFERENCE * (1 - secProgress);
+
+  // Elapsed breakdown
+  const elapsedHrs = Math.floor(elapsedMs / 3_600_000);
+  const elapsedMins = Math.floor((elapsedMs % 3_600_000) / 60_000);
+  const elapsedSecs = Math.floor((elapsedMs % 60_000) / 1_000);
 
   return (
     <>
@@ -186,64 +208,123 @@ export function ClockButton({
 
         {/* ── Circular timer ── */}
         <div
-          className="relative flex items-center justify-center rounded-full shadow-2xl"
+          className={`relative flex items-center justify-center rounded-full transition-shadow duration-700 ${
+            isRunning ? "shadow-[0_0_60px_16px_rgba(0,0,0,0.08)]" : "shadow-2xl"
+          }`}
           style={{
-            width: 256,
-            height: 256,
-            background: `radial-gradient(circle at 40% 35%, ${meta.gradient[0]}33, transparent 60%), radial-gradient(circle at 70% 70%, ${meta.gradient[1]}22, transparent 60%), var(--card)`,
+            width: 264,
+            height: 264,
+            background: `radial-gradient(circle at 40% 35%, ${meta.gradient[0]}22, transparent 60%), radial-gradient(circle at 70% 70%, ${meta.gradient[1]}18, transparent 60%), var(--card)`,
+            boxShadow: isRunning
+              ? `0 0 0 1px ${meta.ring}30, 0 0 40px 8px ${meta.ring}18, 0 8px 32px rgba(0,0,0,0.1)`
+              : "0 4px 24px rgba(0,0,0,0.08)",
           }}
         >
-          {/* SVG ring */}
+          {/* SVG rings */}
           <svg
             className="absolute inset-0 -rotate-90"
-            width="256"
-            height="256"
-            viewBox="0 0 256 256"
+            width="264"
+            height="264"
+            viewBox="0 0 264 264"
           >
-            {/* track */}
-            <circle
-              cx="128"
-              cy="128"
-              r={RING_RADIUS}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="6"
-              className="text-border opacity-30"
+            {/* Outer track */}
+            <circle cx="132" cy="132" r={RING_RADIUS} fill="none"
+              stroke="currentColor" strokeWidth="5"
+              className="text-border opacity-25"
             />
-            {/* progress */}
+            {/* Outer progress (hours) */}
             {elapsedMs > 0 && (
-              <circle
-                cx="128"
-                cy="128"
-                r={RING_RADIUS}
-                fill="none"
-                stroke={meta.ring}
-                strokeWidth="6"
+              <circle cx="132" cy="132" r={RING_RADIUS} fill="none"
+                stroke={meta.ring} strokeWidth="5"
                 strokeLinecap="round"
                 strokeDasharray={CIRCUMFERENCE}
                 strokeDashoffset={dashOffset}
                 style={{ transition: "stroke-dashoffset 1s linear" }}
               />
             )}
+            {/* Inner seconds ring (only when running) */}
+            {isRunning && (
+              <>
+                <circle cx="132" cy="132" r={SEC_RADIUS} fill="none"
+                  stroke={meta.ring} strokeWidth="2"
+                  className="opacity-15"
+                  strokeDasharray={SEC_CIRCUMFERENCE}
+                  strokeDashoffset="0"
+                />
+                <circle cx="132" cy="132" r={SEC_RADIUS} fill="none"
+                  stroke={meta.ring} strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeDasharray={SEC_CIRCUMFERENCE}
+                  strokeDashoffset={secDashOffset}
+                  style={{ transition: "stroke-dashoffset 0.95s linear" }}
+                />
+              </>
+            )}
           </svg>
 
           {/* Inner content */}
-          <div className="flex flex-col items-center gap-2 z-10">
-            <p className="text-sm font-semibold text-muted-foreground tracking-wide">{currentCategory}</p>
-            <p className="text-4xl font-bold tabular-nums text-foreground leading-none">
-              {isRunning ? formatDuration(elapsedMs).slice(0, 5) : "00:00"}
-            </p>
+          <div className="flex flex-col items-center gap-1.5 z-10 select-none">
+            {isRunning ? (
+              <>
+                {/* Running: category badge */}
+                <div
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white text-[10px] font-bold tracking-wide"
+                  style={{ background: `linear-gradient(135deg, ${meta.gradient[0]}, ${meta.gradient[1]})` }}
+                >
+                  <span>{meta.icon}</span>
+                  <span>{currentCategory}</span>
+                </div>
 
-            {/* Play / Pause button */}
-            <button
-              onClick={handleAction}
-              className="mt-2 w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-95 shadow"
-              style={{ background: `linear-gradient(135deg, ${meta.gradient[0]}, ${meta.gradient[1]})` }}
-            >
-              {isRunning
-                ? <Pause className="w-4 h-4 text-white fill-white" />
-                : <Play className="w-4 h-4 text-white fill-white ml-0.5" />}
-            </button>
+                {/* Elapsed time — big */}
+                <div className="flex items-end gap-0.5 leading-none mt-0.5">
+                  {elapsedHrs > 0 && (
+                    <>
+                      <span className="text-4xl font-black tabular-nums text-foreground">{elapsedHrs}</span>
+                      <span className="text-base font-bold text-muted-foreground mb-0.5">h</span>
+                    </>
+                  )}
+                  <span className="text-4xl font-black tabular-nums text-foreground ml-0.5">
+                    {String(elapsedMins).padStart(elapsedHrs > 0 ? 2 : 1, "0")}
+                  </span>
+                  <span className="text-base font-bold text-muted-foreground mb-0.5">m</span>
+                  <span className="text-2xl font-bold tabular-nums text-muted-foreground ml-0.5 mb-px">
+                    {String(elapsedSecs).padStart(2, "0")}
+                  </span>
+                  <span className="text-xs font-bold text-muted-foreground mb-0.5">s</span>
+                </div>
+
+                {/* Pause button */}
+                <button
+                  onClick={handleAction}
+                  className="mt-2 w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-lg"
+                  style={{ background: `linear-gradient(135deg, ${meta.gradient[0]}, ${meta.gradient[1]})` }}
+                >
+                  <Pause className="w-5 h-5 text-white fill-white" />
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Idle: wall clock */}
+                <p className="text-[11px] font-semibold text-muted-foreground tracking-widest uppercase">
+                  {new Date().toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })}
+                </p>
+                <p className="text-[42px] font-black tabular-nums text-foreground leading-none tracking-tight">
+                  {wallTime}
+                </p>
+                <p className="text-[11px] text-muted-foreground font-medium">
+                  {currentCategory} · Toca para iniciar
+                </p>
+
+                {/* Play button */}
+                <button
+                  onClick={handleAction}
+                  className="mt-2 w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-lg"
+                  style={{ background: `linear-gradient(135deg, ${meta.gradient[0]}, ${meta.gradient[1]})` }}
+                >
+                  <Play className="w-5 h-5 text-white fill-white ml-0.5" />
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -260,11 +341,11 @@ export function ClockButton({
                   if (cat !== "Estudio") setSelectedEstudioId("");
                   if (isRunning && activeEntryId) onUpdateCategory(cat);
                 }}
-                className="flex flex-col items-center gap-1.5"
+                className="flex flex-col items-center gap-1.5 cursor-pointer"
               >
                 <div
                   className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl transition-all shadow-sm ${
-                    isActive ? "scale-110 shadow-md" : "opacity-60"
+                    isActive ? "scale-110 shadow-md" : "opacity-50"
                   }`}
                   style={isActive
                     ? { background: `linear-gradient(135deg, ${m.gradient[0]}, ${m.gradient[1]})` }
@@ -313,7 +394,7 @@ export function ClockButton({
         <div className="flex flex-col items-center gap-2 mt-4">
           <button
             onClick={handleToggleEdit}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
           >
             <Clock className="w-3 h-3" />
             {editingTime ? t("timer_cancel") : isRunning ? t("timer_edit_start") : t("timer_forgot")}
@@ -327,7 +408,7 @@ export function ClockButton({
                 className="text-center text-sm font-medium bg-muted border border-border rounded-xl px-3 py-1.5 text-foreground"
               />
               {isRunning && (
-                <button onClick={handleSaveStartTime} className="text-xs font-medium text-primary hover:underline">
+                <button onClick={handleSaveStartTime} className="text-xs font-medium text-primary hover:underline cursor-pointer">
                   {t("timer_save")}
                 </button>
               )}
@@ -353,20 +434,20 @@ export function ClockButton({
                   </span>
                 </p>
               </div>
-              <button onClick={() => setPendingPrompt(null)} className="flex-shrink-0 mt-0.5">
+              <button onClick={() => setPendingPrompt(null)} className="flex-shrink-0 mt-0.5 cursor-pointer">
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => { onEstudioSession?.(pendingPrompt.contactId, pendingPrompt.sessionData); setPendingPrompt(null); }}
-                className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+                className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold cursor-pointer"
               >
                 Sí
               </button>
               <button
                 onClick={() => { onEstudioSession?.(pendingPrompt.contactId, { ...pendingPrompt.sessionData, forceNew: true }); setPendingPrompt(null); }}
-                className="flex-1 py-2 rounded-xl bg-muted text-foreground text-sm font-medium"
+                className="flex-1 py-2 rounded-xl bg-muted text-foreground text-sm font-medium cursor-pointer"
               >
                 No, sesión nueva
               </button>

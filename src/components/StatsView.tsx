@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { CalendarEvent, EventCategory } from "@/hooks/useCalendarEvents";
-import { TimeEntry, formatDuration } from "@/hooks/useTimeTracker";
+import { TimeEntry } from "@/hooks/useTimeTracker";
 import { useT } from "@/lib/LanguageContext";
+import { Flame, CalendarDays, CheckCircle2 } from "lucide-react";
 
 interface StatsViewProps {
   entries: TimeEntry[];
@@ -27,6 +28,23 @@ function msToLabel(ms: number): string {
   if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
   if (hrs > 0) return `${hrs}h`;
   return `${mins}m`;
+}
+
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function computeStreak(entries: TimeEntry[]): number {
+  const days = new Set(entries.filter((e) => e.endTime).map((e) => dateKey(e.startTime)));
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    if (days.has(dateKey(d))) streak++;
+    else if (i > 0) break;
+  }
+  return streak;
 }
 
 export function StatsView({ entries, allEntries, monthTotal, calendarEvents }: StatsViewProps) {
@@ -55,10 +73,19 @@ export function StatsView({ entries, allEntries, monthTotal, calendarEvents }: S
   const totalCompletedMs = Object.values(completedHoursByCategory).reduce((a, b) => a + b, 0);
   const maxCompletedMs = Math.max(...Object.values(completedHoursByCategory), 1);
 
+  // Active days this month (from tracker entries)
+  const monthEntries = allEntries.filter(
+    (e) => e.startTime.getFullYear() === now.getFullYear() && e.startTime.getMonth() === now.getMonth()
+  );
+  const activeDaysMonth = new Set(monthEntries.filter((e) => e.endTime).map((e) => dateKey(e.startTime))).size;
+
+  // Streak
+  const streak = computeStreak(allEntries);
+
   // ── ANUAL (año sep–ago) ───────────────────────────────────────────────────
   const serviceYearStart = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-  const serviceYearFrom = new Date(serviceYearStart, 8, 1); // 1 sep
-  const serviceYearTo   = new Date(serviceYearStart + 1, 8, 1); // 1 sep siguiente (exclusivo)
+  const serviceYearFrom = new Date(serviceYearStart, 8, 1);
+  const serviceYearTo   = new Date(serviceYearStart + 1, 8, 1);
   const serviceYearLabel = `Sep ${serviceYearStart} – Ago ${serviceYearStart + 1}`;
 
   const yearEntries = allEntries.filter(
@@ -68,7 +95,6 @@ export function StatsView({ entries, allEntries, monthTotal, calendarEvents }: S
   const yearTotalMs = yearEntries.reduce((acc, e) =>
     acc + Math.max(0, (e.endTime ?? new Date()).getTime() - e.startTime.getTime()), 0);
 
-  // 12 meses empezando en septiembre: sep oct nov dic ene feb mar abr may jun jul ago
   const monthBars = Array.from({ length: 12 }, (_, i) => {
     const calMonth = (8 + i) % 12;
     const calYear  = calMonth >= 8 ? serviceYearStart : serviceYearStart + 1;
@@ -92,9 +118,10 @@ export function StatsView({ entries, allEntries, monthTotal, calendarEvents }: S
     (e) => e.completed && e.date >= serviceYearFrom && e.date < serviceYearTo
   );
   const yearCompletedCount = yearCompletedEvents.length;
+  const activeDaysYear = new Set(yearEntries.filter((e) => e.endTime).map((e) => dateKey(e.startTime))).size;
 
   return (
-    <div className="px-4 space-y-5 pb-24">
+    <div className="px-4 space-y-4 pb-24">
 
       {/* Mode switcher */}
       <div className="flex rounded-2xl bg-muted p-1 gap-1 mt-2">
@@ -114,6 +141,31 @@ export function StatsView({ entries, allEntries, monthTotal, calendarEvents }: S
       {/* ── MENSUAL ── */}
       {mode === "mensual" && (
         <>
+          {/* Quick stats row */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-2xl bg-card border border-border shadow-sm px-3 py-3 flex flex-col items-center gap-1.5">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #60a5fa30, #818cf830)" }}>
+                <CalendarDays className="w-4 h-4 text-blue-500" />
+              </div>
+              <p className="text-xl font-black tabular-nums text-foreground">{activeDaysMonth}</p>
+              <p className="text-[10px] text-muted-foreground text-center leading-tight">Días<br/>activos</p>
+            </div>
+            <div className="rounded-2xl bg-card border border-border shadow-sm px-3 py-3 flex flex-col items-center gap-1.5">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #fb923c30, #f59e0b30)" }}>
+                <Flame className="w-4 h-4 text-orange-500" />
+              </div>
+              <p className="text-xl font-black tabular-nums text-foreground">{streak}</p>
+              <p className="text-[10px] text-muted-foreground text-center leading-tight">Racha<br/>actual</p>
+            </div>
+            <div className="rounded-2xl bg-card border border-border shadow-sm px-3 py-3 flex flex-col items-center gap-1.5">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #4ade8030, #34d39930)" }}>
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+              </div>
+              <p className="text-xl font-black tabular-nums text-foreground">{monthCompletedEvents.length}</p>
+              <p className="text-[10px] text-muted-foreground text-center leading-tight">Eventos<br/>completados</p>
+            </div>
+          </div>
+
           {/* Resumen total mes */}
           <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4 flex items-center justify-between">
             <div>
@@ -121,11 +173,9 @@ export function StatsView({ entries, allEntries, monthTotal, calendarEvents }: S
                 {now.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
               </p>
               <p className="text-2xl font-bold text-foreground tabular-nums">
-                {msToLabel(totalCompletedMs)}
+                {totalCompletedMs > 0 ? msToLabel(totalCompletedMs) : "–"}
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {monthCompletedEvents.length} eventos completados
-              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">tiempo en eventos</p>
             </div>
             <div className="text-3xl">📋</div>
           </div>
@@ -141,6 +191,7 @@ export function StatsView({ entries, allEntries, monthTotal, calendarEvents }: S
                   const ms = completedHoursByCategory[cat] || 0;
                   const count = completedCountByCategory[cat] || 0;
                   const m = CATEGORY_META[cat];
+                  const pct = Math.round((ms / maxCompletedMs) * 100);
                   return (
                     <div key={cat} className="flex items-center gap-3">
                       <div
@@ -154,17 +205,17 @@ export function StatsView({ entries, allEntries, monthTotal, calendarEvents }: S
                           <p className="text-[13px] font-semibold text-foreground">{cat}</p>
                           <p className="text-[11px] text-muted-foreground">{count} {count === 1 ? t("stats_event") : t("stats_events")}</p>
                         </div>
-                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-2 rounded-full bg-muted overflow-hidden">
                           <div
-                            className="h-full rounded-full"
+                            className="h-full rounded-full transition-all duration-500"
                             style={{
-                              width: `${(ms / maxCompletedMs) * 100}%`,
+                              width: `${pct}%`,
                               background: `linear-gradient(90deg, ${m.gradient[0]}, ${m.gradient[1]})`,
                             }}
                           />
                         </div>
                       </div>
-                      <span className="text-[13px] font-bold text-foreground flex-shrink-0 w-10 text-right">{msToLabel(ms)}</span>
+                      <span className="text-[13px] font-bold text-foreground flex-shrink-0 w-12 text-right">{msToLabel(ms)}</span>
                     </div>
                   );
                 })}
@@ -177,11 +228,36 @@ export function StatsView({ entries, allEntries, monthTotal, calendarEvents }: S
       {/* ── ANUAL ── */}
       {mode === "anual" && (
         <>
+          {/* Quick stats row */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-2xl bg-card border border-border shadow-sm px-3 py-3 flex flex-col items-center gap-1.5">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #60a5fa30, #818cf830)" }}>
+                <CalendarDays className="w-4 h-4 text-blue-500" />
+              </div>
+              <p className="text-xl font-black tabular-nums text-foreground">{activeDaysYear}</p>
+              <p className="text-[10px] text-muted-foreground text-center leading-tight">Días<br/>activos</p>
+            </div>
+            <div className="rounded-2xl bg-card border border-border shadow-sm px-3 py-3 flex flex-col items-center gap-1.5">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #fb923c30, #f59e0b30)" }}>
+                <Flame className="w-4 h-4 text-orange-500" />
+              </div>
+              <p className="text-xl font-black tabular-nums text-foreground">{streak}</p>
+              <p className="text-[10px] text-muted-foreground text-center leading-tight">Racha<br/>actual</p>
+            </div>
+            <div className="rounded-2xl bg-card border border-border shadow-sm px-3 py-3 flex flex-col items-center gap-1.5">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #4ade8030, #34d39930)" }}>
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+              </div>
+              <p className="text-xl font-black tabular-nums text-foreground">{yearCompletedCount}</p>
+              <p className="text-[10px] text-muted-foreground text-center leading-tight">Eventos<br/>completados</p>
+            </div>
+          </div>
+
           {/* Resumen total año */}
           <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">Total {serviceYearLabel}</p>
-              <p className="text-2xl font-bold text-foreground tabular-nums">{msToLabel(yearTotalMs)}</p>
+              <p className="text-2xl font-bold text-foreground tabular-nums">{yearTotalMs > 0 ? msToLabel(yearTotalMs) : "–"}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{yearCompletedCount} eventos completados</p>
             </div>
             <div className="text-3xl">📅</div>
@@ -190,12 +266,17 @@ export function StatsView({ entries, allEntries, monthTotal, calendarEvents }: S
           {/* Barras por mes */}
           <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4">
             <h3 className="text-sm font-bold text-foreground mb-4">Por mes</h3>
-            <div className="flex items-end gap-1.5 h-28">
+            <div className="flex items-end gap-1.5 h-32">
               {monthBars.map(({ month, ms, isCurrentMonth }) => {
-                const barH = ms > 0 ? Math.max(6, (ms / maxMonthMs) * 88) : 4;
+                const barH = ms > 0 ? Math.max(8, (ms / maxMonthMs) * 96) : 4;
                 const hrs = Math.floor(ms / 3_600_000);
                 return (
-                  <div key={month} className="flex-1 flex flex-col items-center gap-1.5">
+                  <div key={month} className="flex-1 flex flex-col items-center gap-1">
+                    {ms > 0 && (
+                      <span className={`text-[8px] font-bold tabular-nums ${isCurrentMonth ? "text-primary" : "text-muted-foreground"}`}>
+                        {hrs > 0 ? `${hrs}h` : ""}
+                      </span>
+                    )}
                     <div
                       className="w-full rounded-t-lg transition-all"
                       style={{
@@ -203,10 +284,10 @@ export function StatsView({ entries, allEntries, monthTotal, calendarEvents }: S
                         background: ms > 0
                           ? isCurrentMonth
                             ? "linear-gradient(180deg, #818cf8, #60a5fa)"
-                            : "linear-gradient(180deg, #818cf820, #60a5fa20)"
+                            : "linear-gradient(180deg, #818cf840, #60a5fa40)"
                           : undefined,
                         backgroundColor: ms === 0 ? "hsl(var(--muted))" : undefined,
-                        opacity: ms === 0 ? 0.4 : 1,
+                        opacity: ms === 0 ? 0.35 : 1,
                       }}
                       title={`${MONTH_NAMES[month]}: ${hrs}h`}
                     />
@@ -228,6 +309,7 @@ export function StatsView({ entries, allEntries, monthTotal, calendarEvents }: S
               <div className="space-y-4">
                 {yearCatRows.map(({ cat, ms }) => {
                   const m = CATEGORY_META[cat];
+                  const pct = Math.round((ms / maxYearCatMs) * 100);
                   return (
                     <div key={cat} className="flex items-center gap-3">
                       <div
@@ -238,17 +320,17 @@ export function StatsView({ entries, allEntries, monthTotal, calendarEvents }: S
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-semibold text-foreground mb-1.5">{cat}</p>
-                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-2 rounded-full bg-muted overflow-hidden">
                           <div
-                            className="h-full rounded-full"
+                            className="h-full rounded-full transition-all duration-500"
                             style={{
-                              width: `${(ms / maxYearCatMs) * 100}%`,
+                              width: `${pct}%`,
                               background: `linear-gradient(90deg, ${m.gradient[0]}, ${m.gradient[1]})`,
                             }}
                           />
                         </div>
                       </div>
-                      <span className="text-[13px] font-bold text-foreground flex-shrink-0 w-10 text-right">{msToLabel(ms)}</span>
+                      <span className="text-[13px] font-bold text-foreground flex-shrink-0 w-12 text-right">{msToLabel(ms)}</span>
                     </div>
                   );
                 })}
