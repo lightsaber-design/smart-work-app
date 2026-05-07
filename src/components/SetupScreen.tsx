@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { SetupData } from "@/hooks/useSetup";
 import { CitySearch } from "@/components/CitySearch";
+import { PrecursorHoursConfig } from "@/components/PrecursorHoursConfig";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { MapPin, BookOpen, Clock, User } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { MapPin, Clock, User } from "lucide-react";
 import { LANGUAGES, Lang, detectLanguage } from "@/lib/i18n";
 import { useT } from "@/lib/LanguageContext";
 
@@ -18,8 +17,7 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
   const t = useT();
   const [name, setName] = useState("");
   const [city, setCity] = useState<{ name: string; lat: number; lng: number } | null>(null);
-  const [isPrecursor, setIsPrecursor] = useState(false);
-  const [hasBibleStudies, setHasBibleStudies] = useState(false);
+  const [precursorHours, setPrecursorHours] = useState<number | null>(null);
   const [selectedLang, setSelectedLang] = useState<Lang>(detectLanguage());
 
   const handleLangSelect = (lang: Lang) => {
@@ -28,7 +26,7 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
   };
 
   const handleSubmit = () => {
-    onComplete({ name: name.trim() || undefined, city, isPrecursor, hasBibleStudies, language: selectedLang });
+    onComplete({ name: name.trim() || undefined, city, precursorHours, hasBibleStudies: false, language: selectedLang });
   };
 
   return (
@@ -42,9 +40,7 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
             </div>
           </div>
           <h1 className="text-2xl font-bold text-foreground">{t('setup_welcome')}</h1>
-          <p className="text-sm text-muted-foreground">
-            {t('setup_subtitle')}
-          </p>
+          <p className="text-sm text-muted-foreground">{t('setup_subtitle')}</p>
         </div>
 
         {/* Language selector */}
@@ -72,9 +68,10 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
         <div className="rounded-xl bg-card border border-border p-5 space-y-3">
           <div className="flex items-center gap-2">
             <User className="w-4 h-4 text-primary" />
-            <h2 className="text-sm font-semibold text-foreground">Tu nombre</h2>
+            <h2 className="text-sm font-semibold text-foreground">{t('setup_name')}</h2>
           </div>
-          <Input
+          <input
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Ej: Marco, Ana..."
@@ -87,54 +84,24 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
             <MapPin className="w-4 h-4 text-primary" />
             <h2 className="text-sm font-semibold text-foreground">{t('setup_where')}</h2>
           </div>
-          <CitySearch
-            value={city ?? undefined}
-            onChange={setCity}
-            placeholder={t('setup_city_placeholder')}
-          />
-          {city && (
-            <p className="text-xs text-muted-foreground">
-              📍 {city.name}
-            </p>
-          )}
+          <CitySearch value={city ?? undefined} onChange={setCity} placeholder={t('setup_city_placeholder')} />
+          {city && <p className="text-xs text-muted-foreground">📍 {city.name}</p>}
         </div>
 
-        {/* Precursor */}
-        <div className="rounded-xl bg-card border border-border p-5">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label className="text-sm font-semibold text-foreground">{t('setup_precursor')}</Label>
-              <p className="text-xs text-muted-foreground">
-                {t('setup_precursor_hint')}
-              </p>
-            </div>
-            <Switch checked={isPrecursor} onCheckedChange={setIsPrecursor} />
+        {/* Precursor hours */}
+        <div className="rounded-xl bg-card border border-border p-5 space-y-3">
+          <div className="space-y-1">
+            <Label className="text-sm font-semibold text-foreground">{t('setup_precursor')}</Label>
+            <p className="text-xs text-muted-foreground">{t('setup_precursor_hint')}</p>
           </div>
-        </div>
-
-        {/* Bible Studies */}
-        <div className="rounded-xl bg-card border border-border p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <BookOpen className="w-4 h-4 text-primary flex-shrink-0" />
-              <div className="space-y-1">
-                <Label className="text-sm font-semibold text-foreground">{t('setup_bible')}</Label>
-                <p className="text-xs text-muted-foreground">
-                  {t('setup_bible_hint')}
-                </p>
-              </div>
-            </div>
-            <Switch checked={hasBibleStudies} onCheckedChange={setHasBibleStudies} />
-          </div>
+          <PrecursorHoursConfig value={precursorHours} onChange={setPrecursorHours} />
         </div>
 
         <Button onClick={handleSubmit} className="w-full" size="lg">
           {t('setup_start')}
         </Button>
 
-        <p className="text-center text-xs text-muted-foreground">
-          {t('setup_change_later')}
-        </p>
+        <p className="text-center text-xs text-muted-foreground">{t('setup_change_later')}</p>
       </div>
     </div>
   );

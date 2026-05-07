@@ -38,10 +38,10 @@ const ALL_CATEGORIES: WorkCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "E
 
 const CATEGORY_META: Record<WorkCategory, { icon: string; gradient: [string, string]; ring: string }> = {
   Predi:   { icon: "🏠", gradient: ["#60a5fa", "#818cf8"], ring: "#818cf8" },
-  Carrito: { icon: "🛒", gradient: ["#4ade80", "#34d399"], ring: "#34d399" },
-  LDC:     { icon: "📖", gradient: ["#c084fc", "#818cf8"], ring: "#a855f7" },
+  Carrito: { icon: "🪧", gradient: ["#4ade80", "#34d399"], ring: "#34d399" },
+  LDC:     { icon: "🛠️", gradient: ["#c084fc", "#818cf8"], ring: "#a855f7" },
   Visitas: { icon: "🚶", gradient: ["#fb923c", "#f59e0b"], ring: "#f97316" },
-  Estudio: { icon: "📚", gradient: ["#f472b6", "#e879f9"], ring: "#ec4899" },
+  Estudio: { icon: "📖", gradient: ["#f472b6", "#e879f9"], ring: "#ec4899" },
 };
 
 const RING_RADIUS = 108;

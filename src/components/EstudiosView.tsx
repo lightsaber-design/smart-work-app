@@ -575,30 +575,6 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
 
       <div className="px-4 pt-4 space-y-6">
 
-        {/* ── Schedule banner ── */}
-        {contact.schedule && (
-          <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <RefreshCw className="w-4 h-4 text-primary" />
-              <div>
-                <p className="text-xs font-semibold text-primary">
-                  {FREQ_LABELS[contact.schedule.frequency]} · {DAY_NAMES[contact.schedule.dayOfWeek]} · {contact.schedule.time}
-                </p>
-                {contact.schedule.lesson && (
-                  <p className="text-xs text-muted-foreground">{contact.schedule.lesson}</p>
-                )}
-              </div>
-            </div>
-            <div className="space-y-0.5">
-              {getNextOccurrences(contact.schedule, 3).map((d, i) => (
-                <p key={i} className="text-xs text-muted-foreground capitalize">
-                  • {d.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })} · {contact.schedule.time}
-                </p>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* ── Próximas sesiones ── */}
         <div>
           <div className="flex items-center gap-2 mb-3">
@@ -655,6 +631,30 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
             </div>
           )}
         </div>
+
+        {/* ── Schedule banner ── */}
+        {contact.schedule && (
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-primary" />
+              <div>
+                <p className="text-xs font-semibold text-primary">
+                  {FREQ_LABELS[contact.schedule.frequency]} · {DAY_NAMES[contact.schedule.dayOfWeek]} · {contact.schedule.time}
+                </p>
+                {contact.schedule.lesson && (
+                  <p className="text-xs text-muted-foreground">{contact.schedule.lesson}</p>
+                )}
+              </div>
+            </div>
+            <div className="space-y-0.5">
+              {getNextOccurrences(contact.schedule, 3).map((d, i) => (
+                <p key={i} className="text-xs text-muted-foreground capitalize">
+                  • {d.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })} · {contact.schedule.time}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Historial ── */}
         <div>

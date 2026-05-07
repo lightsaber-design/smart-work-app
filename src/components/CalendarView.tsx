@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
 import { EstudioContact } from "@/hooks/useEstudios";
 import {
   Plus, Trash2, BellOff, MapPin, Repeat, Clock, CheckCircle2,
-  Circle, Pencil, ChevronLeft, ChevronRight, BookOpen,
+  Circle, Pencil, ChevronLeft, ChevronRight, BookOpen, Star,
 } from "lucide-react";
+import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,15 +21,7 @@ import { LocationPicker } from "@/components/LocationPicker";
 import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { useT } from "@/lib/LanguageContext";
 
-const CATEGORIES: EventCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
-
-const CATEGORY_STYLE: Record<EventCategory, { card: string; border: string; dot: string; dotColor: string; accent: string }> = {
-  Predi:   { card: "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/50",    border: "border-blue-200 dark:border-blue-800/50",   dot: "bg-blue-500",   dotColor: "#3b82f6", accent: "#3b82f6" },
-  Carrito: { card: "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800/50",  border: "border-green-200 dark:border-green-800/50",  dot: "bg-green-500",  dotColor: "#22c55e", accent: "#22c55e" },
-  LDC:     { card: "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800/50", border: "border-purple-200 dark:border-purple-800/50", dot: "bg-purple-500", dotColor: "#a855f7", accent: "#a855f7" },
-  Visitas: { card: "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800/50", border: "border-orange-200 dark:border-orange-800/50", dot: "bg-orange-500", dotColor: "#f97316", accent: "#f97316" },
-  Estudio: { card: "bg-pink-50 dark:bg-pink-950/30 border-pink-200 dark:border-pink-800/50",    border: "border-pink-200 dark:border-pink-800/50",   dot: "bg-pink-500",   dotColor: "#ec4899", accent: "#ec4899" },
-};
+import { CATEGORY_LIST as CATEGORIES, CATEGORY_STYLE } from "@/lib/categories";
 
 type CalendarMode = "daily" | "monthly";
 
@@ -45,6 +38,9 @@ interface CalendarViewProps {
   favoritePlaces: FavoritePlace[];
   defaultCenter?: { lat: number; lng: number };
   estudiosContacts?: EstudioContact[];
+  precursorHours?: number | null;
+  specialCampaignGoals?: Record<string, CampaignGoal>;
+  onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
 }
 
 const DAY_NAMES_SHORT = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
@@ -387,6 +383,9 @@ export function CalendarView({
   favoritePlaces,
   defaultCenter,
   estudiosContacts = [],
+  precursorHours = null,
+  specialCampaignGoals = {},
+  onSetSpecialCampaign,
 }: CalendarViewProps) {
   const t = useT();
   const [mode, setMode] = useState<CalendarMode>("daily");
@@ -425,6 +424,14 @@ export function CalendarView({
   monthBase.setDate(1);
   monthBase.setMonth(monthBase.getMonth() + monthOffset);
   const monthLabel = monthBase.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+
+  // Computed once; shared by the precursor banner, campaign toggle, and hours-grid total.
+  const daysInMonth = new Date(monthBase.getFullYear(), monthBase.getMonth() + 1, 0).getDate();
+  const monthTotalMs = Array.from({ length: daysInMonth }, (_, i) => {
+    const d = new Date(monthBase.getFullYear(), monthBase.getMonth(), i + 1);
+    return dayTotalFromEvents(getEventsForDate(d)).ms;
+  }).reduce((a, b) => a + b, 0);
+  const monthTotalHrs = monthTotalMs / 3_600_000;
 
   const openEdit = (event: CalendarEvent) => {
     setEditEvent(event);
@@ -672,6 +679,98 @@ export function CalendarView({
               </div>
             </div>
 
+            {/* ── Banner precursor ── */}
+            {precursorHours !== null && (() => {
+              const progress = Math.min(1, monthTotalHrs / precursorHours);
+              const remaining = Math.max(0, precursorHours - monthTotalHrs);
+              const done = progress >= 1;
+              return (
+                <div className={`mb-4 rounded-2xl border px-3 py-2.5 space-y-2 ${
+                  done
+                    ? "border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800/40"
+                    : "border-primary/20 bg-primary/5 dark:bg-primary/10"
+                }`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className={`w-3.5 h-3.5 ${done ? "text-green-500" : "text-primary"}`} />
+                      <span className={`text-xs font-semibold ${done ? "text-green-700 dark:text-green-400" : "text-primary"}`}>
+                        Meta precursor · {precursorHours}h/mes
+                      </span>
+                    </div>
+                    <span className={`text-xs font-bold ${done ? "text-green-600 dark:text-green-400" : "text-primary"}`}>
+                      {done ? "✓ Completado" : `Faltan ${remaining.toFixed(1)}h`}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[10px] ${done ? "text-green-600 dark:text-green-400" : "text-primary/70"}`}>
+                        {monthTotalHrs.toFixed(1)}h de {precursorHours}h
+                      </span>
+                      <span className={`text-[10px] font-semibold ${done ? "text-green-700 dark:text-green-400" : "text-primary"}`}>
+                        {Math.round(progress * 100)}%
+                      </span>
+                    </div>
+                    <div className={`h-1.5 rounded-full overflow-hidden ${done ? "bg-green-200 dark:bg-green-800/40" : "bg-primary/20"}`}>
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${done ? "bg-green-500" : "bg-primary"}`}
+                        style={{ width: `${progress * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Campaña especial toggle (solo si no es precursor) ── */}
+            {precursorHours === null && onSetSpecialCampaign && (() => {
+              const key = monthKey(monthBase);
+              const activeGoal = specialCampaignGoals[key] ?? null;
+              const progress = activeGoal ? Math.min(1, monthTotalHrs / activeGoal) : 0;
+              return (
+                <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800/40 px-3 py-2.5 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Star className="w-3.5 h-3.5 text-amber-500" />
+                      <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">Campaña especial</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {([null, 15, 30] as const).map((opt) => (
+                        <button
+                          key={String(opt)}
+                          onClick={() => onSetSpecialCampaign(key, opt as CampaignGoal | null)}
+                          className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold border transition-colors ${
+                            activeGoal === opt
+                              ? "bg-amber-500 text-white border-amber-500"
+                              : "bg-card text-muted-foreground border-border hover:border-amber-300"
+                          }`}
+                        >
+                          {opt === null ? "Off" : `${opt}h`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {activeGoal && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                          {monthTotalHrs.toFixed(1)}h de {activeGoal}h
+                        </span>
+                        <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                          {Math.round(progress * 100)}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-amber-200 dark:bg-amber-800/40 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-amber-500 transition-all duration-500"
+                          style={{ width: `${progress * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
           </div>
 
           <div className="px-4">
@@ -683,11 +782,6 @@ export function CalendarView({
                   onSelectDate={(d) => { setSelectedDate(d); setMode("daily"); }}
                 />
                 {(() => {
-                  const daysInMonth = new Date(monthBase.getFullYear(), monthBase.getMonth() + 1, 0).getDate();
-                  const monthTotalMs = Array.from({ length: daysInMonth }, (_, i) => {
-                    const d = new Date(monthBase.getFullYear(), monthBase.getMonth(), i + 1);
-                    return dayTotalFromEvents(getEventsForDate(d)).ms;
-                  }).reduce((a, b) => a + b, 0);
                   if (monthTotalMs === 0) return null;
                   const mHrs = Math.floor(monthTotalMs / 3_600_000);
                   const mMins = Math.floor((monthTotalMs % 3_600_000) / 60_000);

@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Trash2, MapPin, BookOpen, User, Globe, Moon } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import { Trash2, MapPin, User, Globe, Moon } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { CitySearch } from "@/components/CitySearch";
+import { PrecursorHoursConfig } from "@/components/PrecursorHoursConfig";
 import { SetupData } from "@/hooks/useSetup";
 import { useT } from "@/lib/LanguageContext";
 import { LANGUAGES, Lang } from "@/lib/i18n";
@@ -27,16 +28,18 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
     setEditingCity(false);
   };
 
-  const currentLang = setup.language ?? 'es';
+  const currentLang = (setup.language ?? "es") as Lang;
 
   return (
     <div className="px-4 space-y-4 pb-24">
+      {/* Profile */}
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border space-y-4">
         <div className="flex items-center gap-2">
           <User className="w-4 h-4 text-primary" />
           <h3 className="text-sm font-semibold text-foreground">{t('set_profile')}</h3>
         </div>
 
+        {/* City */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label className="flex items-center gap-1.5 text-sm">
@@ -67,26 +70,17 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
           )}
         </div>
 
-        <div className="flex items-center justify-between pt-1">
+        {/* Precursor hours */}
+        <div className="space-y-2 pt-1">
           <Label className="text-sm text-foreground">{t('set_precursor')}</Label>
-          <Switch
-            checked={setup.isPrecursor}
-            onCheckedChange={(v) => onSaveSetup({ isPrecursor: v })}
-          />
-        </div>
-
-        <div className="flex items-center justify-between">
-          <Label className="flex items-center gap-1.5 text-sm text-foreground">
-            <BookOpen className="w-3.5 h-3.5 text-muted-foreground" />
-            {t('set_bible')}
-          </Label>
-          <Switch
-            checked={setup.hasBibleStudies}
-            onCheckedChange={(v) => onSaveSetup({ hasBibleStudies: v })}
+          <PrecursorHoursConfig
+            value={setup.precursorHours}
+            onChange={(v) => onSaveSetup({ precursorHours: v })}
           />
         </div>
       </div>
 
+      {/* Language */}
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border space-y-3">
         <div className="flex items-center gap-2">
           <Globe className="w-4 h-4 text-primary" />
@@ -110,6 +104,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
         </div>
       </div>
 
+      {/* Dark mode */}
       {onToggleDark !== undefined && (
         <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
           <div className="flex items-center justify-between">
@@ -122,6 +117,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
         </div>
       )}
 
+      {/* Data */}
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           {t('set_data')}
@@ -138,6 +134,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
         </button>
       </div>
 
+      {/* About */}
       <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">
           {t('set_about')}

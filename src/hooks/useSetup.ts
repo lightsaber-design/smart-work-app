@@ -4,7 +4,7 @@ import { Lang, detectLanguage } from "@/lib/i18n";
 export interface SetupData {
   name?: string;
   city: { name: string; lat: number; lng: number } | null;
-  isPrecursor: boolean;
+  precursorHours: number | null;
   hasBibleStudies: boolean;
   completed: boolean;
   language?: Lang;
@@ -12,7 +12,7 @@ export interface SetupData {
 
 const DEFAULT: SetupData = {
   city: null,
-  isPrecursor: false,
+  precursorHours: null,
   hasBibleStudies: false,
   completed: false,
   language: detectLanguage(),
@@ -39,7 +39,9 @@ function parseStoredSetup(value: unknown): SetupData {
   return {
     name: typeof value.name === "string" ? value.name : undefined,
     city: parseStoredCity(value.city),
-    isPrecursor: typeof value.isPrecursor === "boolean" ? value.isPrecursor : DEFAULT.isPrecursor,
+    precursorHours: typeof value.precursorHours === "number"
+      ? value.precursorHours
+      : (value.isPrecursor === true ? 30 : DEFAULT.precursorHours),
     hasBibleStudies: typeof value.hasBibleStudies === "boolean" ? value.hasBibleStudies : DEFAULT.hasBibleStudies,
     completed: typeof value.completed === "boolean" ? value.completed : DEFAULT.completed,
     language: isLanguage(value.language) ? value.language : DEFAULT.language,

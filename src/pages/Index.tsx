@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { useTimeTracker } from "@/hooks/useTimeTracker";
-import { useCalendarEvents } from "@/hooks/useCalendarEvents";
+import { useCalendarEvents, EventCategory } from "@/hooks/useCalendarEvents";
 import { useFavoritePlaces } from "@/hooks/useFavoritePlaces";
 import { useSetup, SetupData } from "@/hooks/useSetup";
 import { ClockButton } from "@/components/ClockButton";
@@ -20,24 +20,16 @@ import { EstudiosView } from "@/components/EstudiosView";
 import { useEstudios } from "@/hooks/useEstudios";
 import { MissedStudyBanner } from "@/components/MissedStudyBanner";
 import { useDarkMode } from "@/hooks/useDarkMode";
+import { useSpecialCampaign } from "@/hooks/useSpecialCampaign";
+import { CATEGORY_META, CATEGORY_STYLE } from "@/lib/categories";
 
 type Tab = AppTab;
+type Category = EventCategory;
 
 interface AppContentProps {
   setup: SetupData;
   saveSetup: (data: Partial<SetupData>) => void;
 }
-
-const CATEGORIES = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"] as const;
-type Category = typeof CATEGORIES[number];
-
-const CATEGORY_META: Record<Category, { icon: string; gradient: [string, string] }> = {
-  Predi:   { icon: "🏠", gradient: ["#60a5fa", "#818cf8"] },
-  Carrito: { icon: "🛒", gradient: ["#4ade80", "#34d399"] },
-  LDC:     { icon: "📖", gradient: ["#c084fc", "#818cf8"] },
-  Visitas: { icon: "🚶", gradient: ["#fb923c", "#f59e0b"] },
-  Estudio: { icon: "📚", gradient: ["#f472b6", "#e879f9"] },
-};
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -46,28 +38,18 @@ function getGreeting(): string {
   return "Buenas noches 🌙";
 }
 
-function getWeekDates(): Date[] {
-  const today = new Date();
-  const dow = today.getDay();
-  const offset = dow === 0 ? -6 : 1 - dow;
-  return Array.from({ length: 5 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() + offset + i);
-    return d;
-  });
-}
 
 function AppContent({ setup, saveSetup }: AppContentProps) {
   const t = useT();
   const { isDark, toggle: toggleDark } = useDarkMode();
   const [activeTab, setActiveTab] = useState<Tab>("timer");
   const [summaryOpen, setSummaryOpen] = useState(false);
-  const [summaryMode, setSummaryMode] = useState<"mensual" | "anual">("mensual");
   const [menuOpen, setMenuOpen] = useState(false);
   const tracker = useTimeTracker();
   const calendar = useCalendarEvents();
   const favorites = useFavoritePlaces();
   const estudios = useEstudios();
+  const campaign = useSpecialCampaign();
   const { events: calendarEvents, markNotified } = calendar;
 
   useScrollLock(menuOpen || summaryOpen);
@@ -104,14 +86,31 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   }, [calendarEvents, tracker.isRunning, markNotified]);
 
   const userName = setup.name || setup.city?.name || "Amigo";
-  const todayEvents = calendar.getEventsForDate(new Date());
-  const weekDates = getWeekDates();
-  const DAY_NAMES = ["LUN", "MAR", "MIÉ", "JUE", "VIE"];
 
-  const recentEntries = tracker.entries
-    .filter((e) => e.endTime !== null)
-    .slice(-2)
-    .reverse();
+  // Today's calendar events sorted chronologically
+  const todayEvents = calendar
+    .getEventsForDate(new Date())
+    .slice()
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  // Peek height: handle (28px) + header (44px) + up to 3 event rows (60px each) + bottom pad (12px)
+  const peekEventRows = Math.min(todayEvents.length, 3);
+  const peekH = todayEvents.length === 0
+    ? 84                                       // handle + "Sin actividad" text
+    : 28 + 44 + peekEventRows * 60 + 12;
+
+  // Swipe-to-open/close
+  const dragStartY = useRef<number | null>(null);
+  const handleSheetTouchStart = (e: React.TouchEvent) => {
+    dragStartY.current = e.touches[0].clientY;
+  };
+  const handleSheetTouchEnd = (e: React.TouchEvent) => {
+    if (dragStartY.current === null) return;
+    const delta = e.changedTouches[0].clientY - dragStartY.current;
+    dragStartY.current = null;
+    if (delta < -40) setSummaryOpen(true);
+    if (delta >  40) setSummaryOpen(false);
+  };
 
   const navigate = (tab: Tab) => {
     setActiveTab(tab);
@@ -198,285 +197,98 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               onClick={() => setSummaryOpen(false)}
             />
 
-            {/* Summary bottom sheet — always peeks */}
+            {/* ── Summary bottom sheet ── */}
             <div
-              className={`absolute left-0 right-0 bottom-16 z-30 transition-transform duration-300 ease-out ${
-                summaryOpen ? "translate-y-0" : "translate-y-[calc(100%-152px)]"
-              }`}
+              className="absolute left-0 right-0 bottom-16 z-30 transition-transform duration-300 ease-out"
+              style={{ transform: summaryOpen ? "translateY(0)" : `translateY(calc(100% - ${peekH}px))` }}
+              onTouchStart={handleSheetTouchStart}
+              onTouchEnd={handleSheetTouchEnd}
             >
-              <div className="relative bg-card shadow-[0_-8px_40px_rgba(0,0,0,0.12)]" style={{ borderRadius: summaryOpen ? "28px 28px 0 0" : "0" }}>
-
-                {/* SVG concave corners — only when peeking */}
-                {!summaryOpen && (
-                  <svg
-                    className="absolute top-0 left-0 w-full pointer-events-none z-10"
-                    height="28"
-                    viewBox="0 0 400 28"
-                    preserveAspectRatio="none"
-                  >
-                    {/* top-left concave corner */}
-                    <path d="M 0 0 L 28 0 Q 0 0 0 28 Z" style={{ fill: "hsl(var(--background))" }} />
-                    {/* top-right concave corner */}
-                    <path d="M 400 0 L 372 0 Q 400 0 400 28 Z" style={{ fill: "hsl(var(--background))" }} />
-                  </svg>
-                )}
-
-                {/* ── Peek area: handle + "Última actividad" + recent entries ── */}
+              <div
+                className="bg-card shadow-[0_-8px_40px_rgba(0,0,0,0.15)]"
+                style={{ borderRadius: "28px 28px 0 0" }}
+              >
+                {/* ── Handle (tap to toggle) ── */}
                 <button
                   onClick={() => setSummaryOpen((v) => !v)}
-                  className="w-full flex flex-col items-center pt-3 pb-0"
+                  className="w-full flex flex-col items-center pt-3 pb-2"
+                  aria-label={summaryOpen ? "Cerrar resumen" : "Abrir resumen"}
                 >
                   <div className="w-10 h-1 rounded-full bg-border" />
                 </button>
+
+                {/* ── Peek: header + today's events ── */}
                 <div
-                  className="px-4 pt-3 pb-1 flex items-center justify-between cursor-pointer"
+                  className="px-4 flex items-center justify-between mb-2 cursor-pointer"
                   onClick={() => setSummaryOpen((v) => !v)}
                 >
-                  <h3 className="text-sm font-bold text-foreground">Última actividad</h3>
+                  <p className="text-sm font-bold text-foreground">
+                    Hoy
+                    {todayEvents.length > 0 && (
+                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                        · {todayEvents.length} evento{todayEvents.length !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </p>
                   <ChevronUp
                     className={`w-4 h-4 text-muted-foreground transition-transform duration-300 ${summaryOpen ? "rotate-180" : ""}`}
                   />
                 </div>
-                <div className="px-4 pt-1 pb-3 space-y-1.5">
-                  {recentEntries.length === 0 ? (
-                    <p className="text-xs text-muted-foreground py-2">Sin actividad reciente</p>
-                  ) : (
-                    recentEntries.map((entry) => {
-                      if (!entry.endTime) return null;
-                      const m = CATEGORY_META[entry.category as Category];
-                      const ms = Math.max(0, (entry.endTime.getTime() - entry.startTime.getTime()));
-                      const hrs = Math.floor(ms / 3_600_000);
-                      const mins = Math.floor((ms % 3_600_000) / 60_000);
-                      const label = hrs > 0 ? `${hrs}h${mins > 0 ? ` ${mins}m` : ""}` : `${mins}m`;
-                      const timeStr = `${String(entry.startTime.getHours()).padStart(2, "0")}:${String(entry.startTime.getMinutes()).padStart(2, "0")}`;
+
+                {todayEvents.length === 0 ? (
+                  <p className="px-4 pb-4 text-xs text-muted-foreground">Sin actividad hoy</p>
+                ) : (
+                  <div className="px-4 pb-3 space-y-2">
+                    {todayEvents.map((event) => {
+                      const style = CATEGORY_STYLE[event.category as Category];
+                      const meta  = CATEGORY_META[event.category as Category];
+                      const timeStr = `${String(event.date.getHours()).padStart(2, "0")}:${String(event.date.getMinutes()).padStart(2, "0")}`;
+                      let duration: string | null = null;
+                      if (event.endTime) {
+                        const [h, m] = event.endTime.split(":").map(Number);
+                        const end = new Date(event.date); end.setHours(h, m, 0, 0);
+                        const diff = end.getTime() - event.date.getTime();
+                        if (diff > 0) {
+                          const dh = Math.floor(diff / 3_600_000);
+                          const dm = Math.floor((diff % 3_600_000) / 60_000);
+                          duration = dh > 0 ? `${dh}h ${dm}m` : `${dm}m`;
+                        }
+                      }
                       return (
-                        <div key={entry.id} className="flex items-center gap-3 py-1">
-                          <div
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0"
-                            style={{ background: `linear-gradient(135deg, ${m.gradient[0]}30, ${m.gradient[1]}30)` }}
-                          >
-                            {m.icon}
+                        <div
+                          key={event.id}
+                          className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 ${style.card} ${style.border}`}
+                        >
+                          {/* Category dot + time */}
+                          <div className="flex flex-col items-center gap-0.5 w-10 flex-shrink-0">
+                            <span className={`w-2 h-2 rounded-full ${style.dot}`} />
+                            <span className="text-[10px] text-muted-foreground tabular-nums">{timeStr}</span>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[13px] font-semibold text-foreground">{entry.category}</p>
-                            <p className="text-[11px] text-muted-foreground">{timeStr}</p>
-                          </div>
-                          <span className="text-[13px] font-bold text-foreground flex-shrink-0">{label}</span>
+                          {/* Icon */}
+                          <span className="text-xl">{meta.icon}</span>
+                          {/* Name */}
+                          <p className="flex-1 text-[13px] font-semibold text-foreground">{event.category}</p>
+                          {/* Right side: duration or check */}
+                          {event.completed
+                            ? <span className="text-xs font-bold text-green-600 dark:text-green-400">✓</span>
+                            : duration && <span className="text-[12px] text-muted-foreground tabular-nums">{duration}</span>
+                          }
                         </div>
                       );
-                    })
-                  )}
-                </div>
-
-                {/* ── Divider ── */}
-                <div className="h-px bg-border mx-4" />
-
-                {/* ── Full content (visible only when expanded) ── */}
-                <div className="px-4 pt-4 pb-8 space-y-5 max-h-[55vh] overflow-y-auto">
-                  {/* Mode switcher */}
-                  <div className="flex rounded-2xl bg-muted p-1 gap-1">
-                    {(["mensual", "anual"] as const).map((m) => (
-                      <button
-                        key={m}
-                        onClick={() => setSummaryMode(m)}
-                        className={`flex-1 py-2 text-xs font-semibold rounded-xl transition-all capitalize ${
-                          summaryMode === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
-                        }`}
-                      >
-                        {m === "mensual" ? "Mensual" : "Anual"}
-                      </button>
-                    ))}
+                    })}
                   </div>
+                )}
 
-                  {summaryMode === "mensual" && (() => {
-                    const now = new Date();
-                    const monthEntries = tracker.entries.filter((e) =>
-                      e.startTime.getFullYear() === now.getFullYear() &&
-                      e.startTime.getMonth() === now.getMonth()
-                    );
-                    const activityRows = CATEGORIES.map((cat) => {
-                      const ms = monthEntries
-                        .filter((e) => e.category === cat)
-                        .reduce((acc, e) => acc + Math.max(0, (e.endTime ?? new Date()).getTime() - e.startTime.getTime()), 0);
-                      return { cat, ms };
-                    }).filter((r) => r.ms > 0);
-                    const maxMs = Math.max(...activityRows.map((r) => r.ms), 1);
-                    const monthName = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
-
-                    return (
-                      <>
-                        <DaySummary todayTotal={tracker.todayTotal} monthTotal={tracker.monthTotal} />
-
-                        <div className="flex justify-between">
-                          {weekDates.map((d, i) => {
-                            const isToday = d.toDateString() === new Date().toDateString();
-                            const hasEvents = calendar.events.some((e) => e.date.toDateString() === d.toDateString());
-                            return (
-                              <button
-                                key={i}
-                                onClick={() => { setSummaryOpen(false); setActiveTab("calendar"); }}
-                                className={`flex flex-col items-center gap-1 w-11 py-2 rounded-xl transition-colors ${
-                                  isToday ? "bg-primary" : "hover:bg-muted"
-                                }`}
-                              >
-                                <span className={`text-[9px] font-semibold ${isToday ? "text-primary-foreground" : "text-muted-foreground"}`}>
-                                  {DAY_NAMES[i]}
-                                </span>
-                                <span className={`text-sm font-bold ${isToday ? "text-primary-foreground" : "text-foreground"}`}>
-                                  {d.getDate()}
-                                </span>
-                                {hasEvents && !isToday && <span className="w-1 h-1 rounded-full bg-primary/60" />}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <div>
-                          <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-base font-bold text-foreground capitalize">{monthName}</h2>
-                            <button onClick={() => { setSummaryOpen(false); setActiveTab("stats"); }} className="text-xs font-medium text-primary">
-                              Ver todo →
-                            </button>
-                          </div>
-                          {activityRows.length === 0 ? (
-                            <p className="text-sm text-muted-foreground text-center py-4">Sin actividad este mes</p>
-                          ) : (
-                            <div className="space-y-4">
-                              {activityRows.map(({ cat, ms }) => {
-                                const m = CATEGORY_META[cat];
-                                const hrs = Math.floor(ms / 3_600_000);
-                                const mins = Math.floor((ms % 3_600_000) / 60_000);
-                                const label = hrs > 0 ? `${hrs}h` : `${mins}m`;
-                                return (
-                                  <div key={cat} className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                                      style={{ background: `linear-gradient(135deg, ${m.gradient[0]}30, ${m.gradient[1]}30)` }}>
-                                      {m.icon}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-[13px] font-semibold text-foreground mb-1.5">{cat}</p>
-                                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                                        <div className="h-full rounded-full" style={{ width: `${(ms / maxMs) * 100}%`, background: `linear-gradient(90deg, ${m.gradient[0]}, ${m.gradient[1]})` }} />
-                                      </div>
-                                    </div>
-                                    <span className="text-[13px] font-bold text-foreground flex-shrink-0 w-8 text-right">{label}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    );
-                  })()}
-
-                  {summaryMode === "anual" && (() => {
-                    const MONTH_NAMES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-                    const now = new Date();
-                    const year = now.getFullYear();
-                    const yearEntries = tracker.entries.filter((e) => e.startTime.getFullYear() === year);
-
-                    // Total anual en horas
-                    const yearTotalMs = yearEntries.reduce((acc, e) =>
-                      acc + Math.max(0, (e.endTime ?? new Date()).getTime() - e.startTime.getTime()), 0);
-                    const yearHrs = Math.floor(yearTotalMs / 3_600_000);
-                    const yearMins = Math.floor((yearTotalMs % 3_600_000) / 60_000);
-
-                    // Por mes
-                    const monthBars = Array.from({ length: 12 }, (_, i) => {
-                      const ms = yearEntries
-                        .filter((e) => e.startTime.getMonth() === i)
-                        .reduce((acc, e) => acc + Math.max(0, (e.endTime ?? new Date()).getTime() - e.startTime.getTime()), 0);
-                      return { month: i, ms };
-                    });
-                    const maxMonthMs = Math.max(...monthBars.map((b) => b.ms), 1);
-
-                    // Por categoría anual
-                    const catRows = CATEGORIES.map((cat) => {
-                      const ms = yearEntries
-                        .filter((e) => e.category === cat)
-                        .reduce((acc, e) => acc + Math.max(0, (e.endTime ?? new Date()).getTime() - e.startTime.getTime()), 0);
-                      return { cat, ms };
-                    }).filter((r) => r.ms > 0);
-                    const maxCatMs = Math.max(...catRows.map((r) => r.ms), 1);
-
-                    return (
-                      <>
-                        {/* Total anual */}
-                        <div className="rounded-2xl bg-primary/10 px-4 py-4 flex items-center justify-between">
-                          <div>
-                            <p className="text-xs text-muted-foreground mb-0.5">Total {year}</p>
-                            <p className="text-2xl font-bold text-foreground tabular-nums">
-                              {yearHrs}h {yearMins}m
-                            </p>
-                          </div>
-                          <div className="text-3xl">📅</div>
-                        </div>
-
-                        {/* Barras por mes */}
-                        <div>
-                          <h2 className="text-base font-bold text-foreground mb-3">Por mes</h2>
-                          <div className="flex items-end gap-1.5 h-24">
-                            {monthBars.map(({ month, ms }) => {
-                              const isCurrentMonth = month === now.getMonth();
-                              const height = ms > 0 ? Math.max(8, (ms / maxMonthMs) * 80) : 4;
-                              const hrs = Math.floor(ms / 3_600_000);
-                              return (
-                                <div key={month} className="flex-1 flex flex-col items-center gap-1">
-                                  <div
-                                    className={`w-full rounded-t-md transition-all ${isCurrentMonth ? "bg-primary" : "bg-primary/30"}`}
-                                    style={{ height }}
-                                    title={`${MONTH_NAMES[month]}: ${hrs}h`}
-                                  />
-                                  <span className={`text-[8px] font-medium ${isCurrentMonth ? "text-primary" : "text-muted-foreground"}`}>
-                                    {MONTH_NAMES[month]}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* Por categoría */}
-                        <div>
-                          <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-base font-bold text-foreground">Por actividad</h2>
-                            <button onClick={() => { setSummaryOpen(false); setActiveTab("stats"); }} className="text-xs font-medium text-primary">
-                              Ver todo →
-                            </button>
-                          </div>
-                          {catRows.length === 0 ? (
-                            <p className="text-sm text-muted-foreground text-center py-4">Sin actividad este año</p>
-                          ) : (
-                            <div className="space-y-4">
-                              {catRows.map(({ cat, ms }) => {
-                                const m = CATEGORY_META[cat];
-                                const hrs = Math.floor(ms / 3_600_000);
-                                const mins = Math.floor((ms % 3_600_000) / 60_000);
-                                const label = hrs > 0 ? `${hrs}h` : `${mins}m`;
-                                return (
-                                  <div key={cat} className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                                      style={{ background: `linear-gradient(135deg, ${m.gradient[0]}30, ${m.gradient[1]}30)` }}>
-                                      {m.icon}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-[13px] font-semibold text-foreground mb-1.5">{cat}</p>
-                                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                                        <div className="h-full rounded-full" style={{ width: `${(ms / maxCatMs) * 100}%`, background: `linear-gradient(90deg, ${m.gradient[0]}, ${m.gradient[1]})` }} />
-                                      </div>
-                                    </div>
-                                    <span className="text-[13px] font-bold text-foreground flex-shrink-0 w-8 text-right">{label}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    );
-                  })()}
+                {/* ── Expanded area: totals ── */}
+                <div
+                  className={`overflow-hidden transition-all duration-300 ${summaryOpen ? "max-h-64 opacity-100" : "max-h-0 opacity-0"}`}
+                >
+                  <div className="h-px bg-border mx-4" />
+                  <div className="px-4 pt-4 pb-8">
+                    <DaySummary todayTotal={tracker.todayTotal} monthTotal={tracker.monthTotal} />
+                  </div>
                 </div>
+
               </div>
             </div>
           </div>
@@ -532,6 +344,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               favoritePlaces={favorites.places}
               defaultCenter={defaultCenter}
               estudiosContacts={estudios.contacts}
+              precursorHours={setup.precursorHours}
+              specialCampaignGoals={campaign.goals}
+              onSetSpecialCampaign={campaign.setGoal}
             />
           </>
         )}
@@ -555,6 +370,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               allEntries={tracker.entries}
               monthTotal={tracker.monthTotal}
               calendarEvents={calendar.events}
+              precursorHours={setup.precursorHours}
+              specialCampaignGoals={campaign.goals}
+              onSetSpecialCampaign={campaign.setGoal}
             />
           </>
         )}
