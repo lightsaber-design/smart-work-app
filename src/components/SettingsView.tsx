@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Trash2, MapPin, User, Globe, Moon } from "lucide-react";
+import { Trash2, MapPin, User, Globe, Moon, FileJson, FolderOpen } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -8,6 +8,7 @@ import { PrecursorHoursConfig } from "@/components/PrecursorHoursConfig";
 import { SetupData } from "@/hooks/useSetup";
 import { useT } from "@/lib/LanguageContext";
 import { LANGUAGES, Lang } from "@/lib/i18n";
+import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 
 interface SettingsViewProps {
   onClearAll: () => void;
@@ -20,6 +21,7 @@ interface SettingsViewProps {
 
 export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDark, onToggleDark }: SettingsViewProps) {
   const t = useT();
+  const storage = useJsonStorageStatus();
   const [editingCity, setEditingCity] = useState(false);
   const [cityDraft, setCityDraft] = useState(setup.city ?? undefined);
 
@@ -118,10 +120,26 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
       )}
 
       {/* Data */}
-      <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
+      <div className="rounded-xl bg-card p-5 shadow-sm border border-border space-y-3">
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           {t('set_data')}
         </h3>
+        <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-3">
+          <div className="flex items-center gap-2">
+            <FileJson className="h-4 w-4 text-primary" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">JSON data file</p>
+              <p className="text-xs text-muted-foreground truncate">{storage.fileName ?? "No file connected"}</p>
+            </div>
+          </div>
+          <button
+            onClick={storage.openFile}
+            className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+          >
+            <FolderOpen className="w-4 h-4" />
+            Open another JSON file
+          </button>
+        </div>
         <p className="text-sm text-muted-foreground mb-4">
           {t('set_records', { count: entryCount })}
         </p>

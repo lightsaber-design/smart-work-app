@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { generateId } from "@/lib/uuid";
+import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 
 export interface GeoLocation {
   lat: number;
@@ -54,19 +55,7 @@ function parseStoredEntry(value: unknown): TimeEntry | null {
 }
 
 export function useTimeTracker() {
-  const [entries, setEntries] = useState<TimeEntry[]>(() => {
-    try {
-      const saved = localStorage.getItem("time-entries");
-      if (saved) {
-        const parsed = JSON.parse(saved) as unknown;
-        if (!Array.isArray(parsed)) throw new Error("bad format");
-        return parsed.map(parseStoredEntry).filter((entry): entry is TimeEntry => entry !== null);
-      }
-    } catch {
-      localStorage.removeItem("time-entries");
-    }
-    return [];
-  });
+  const [entries, setEntries] = useState<TimeEntry[]>([]);
 
   const activeEntry = entries.find((e) => e.endTime === null);
   const [isRunning, setIsRunning] = useState(() => entries.some((e) => e.endTime === null));
@@ -76,12 +65,21 @@ export function useTimeTracker() {
   });
 
   useEffect(() => {
-    try {
-      localStorage.setItem("time-entries", JSON.stringify(entries));
-    } catch (e) {
-      console.error("Error guardando entradas:", e);
-    }
-  }, [entries]);
+    readJsonValue<unknown[]>("time-entries", [])
+      .then((value) => {
+        if (!Array.isArray(value)) throw new Error("bad format");
+        const parsed = value.map(parseStoredEntry).filter((entry): entry is TimeEntry => entry !== null);
+        setEntries(parsed);
+        const active = parsed.find((e) => e.endTime === null);
+        setIsRunning(Boolean(active));
+        setElapsed(active ? Math.floor((Date.now() - active.startTime.getTime()) / 1000) : 0);
+      })
+      .catch((error) => console.error("Error loading entries:", error));
+  }, []);
+
+  const persistEntries = useCallback((updated: TimeEntry[]) => {
+    void writeJsonValue("time-entries", updated).catch((error) => console.error("Error saving entries:", error));
+  }, []);
 
   useEffect(() => {
     if (!isRunning || !activeEntry) return;
@@ -112,54 +110,70 @@ export function useTimeTracker() {
         endLocation: null,
         linkedEventId,
       };
-      setEntries((prev) => [entry, ...prev]);
+      setEntries((prev) => {
+        const updated = [entry, ...prev];
+        persistEntries(updated);
+        return updated;
+      });
       setIsRunning(true);
       setElapsed(Math.floor((Date.now() - startTime.getTime()) / 1000));
     },
-    []
+    [persistEntries]
   );
 
   const clockOut = useCallback(
     async (onUpdateEvent?: (id: string, endTime: string) => void, customTime?: Date) => {
       const end = customTime ?? new Date();
       const endTimeStr = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
-      setEntries((prev) =>
-        prev.map((e) => {
+      setEntries((prev) => {
+        const updated = prev.map((e) => {
           if (e.endTime !== null) return e;
           if (e.linkedEventId) {
             onUpdateEvent?.(e.linkedEventId, endTimeStr);
           }
           return { ...e, endTime: end };
-        })
-      );
+        });
+        persistEntries(updated);
+        return updated;
+      });
       setIsRunning(false);
       setElapsed(0);
     },
-    []
+    [persistEntries]
   );
 
   const updateStartTime = useCallback((id: string, startTime: Date) => {
-    setEntries((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, startTime } : e))
-    );
+    setEntries((prev) => {
+      const updated = prev.map((e) => (e.id === id ? { ...e, startTime } : e));
+      persistEntries(updated);
+      return updated;
+    });
     setElapsed(Math.floor((Date.now() - startTime.getTime()) / 1000));
-  }, []);
+  }, [persistEntries]);
 
   const updateDescription = useCallback((id: string, description: string) => {
-    setEntries((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, description } : e))
-    );
-  }, []);
+    setEntries((prev) => {
+      const updated = prev.map((e) => (e.id === id ? { ...e, description } : e));
+      persistEntries(updated);
+      return updated;
+    });
+  }, [persistEntries]);
 
   const updateCategory = useCallback((id: string, category: WorkCategory) => {
-    setEntries((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, category } : e))
-    );
-  }, []);
+    setEntries((prev) => {
+      const updated = prev.map((e) => (e.id === id ? { ...e, category } : e));
+      persistEntries(updated);
+      return updated;
+    });
+  }, [persistEntries]);
 
   const deleteEntry = useCallback((id: string) => {
-    setEntries((prev) => prev.filter((e) => e.id !== id));
-  }, []);
+    setEntries((prev) => {
+      const updated = prev.filter((e) => e.id !== id);
+      persistEntries(updated);
+      return updated;
+    });
+  }, [persistEntries]);
 
   const todayEntries = entries.filter((e) => {
     const today = new Date();

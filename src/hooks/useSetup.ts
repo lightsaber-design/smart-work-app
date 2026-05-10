@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Lang, detectLanguage } from "@/lib/i18n";
+import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 
 export interface SetupData {
   name?: string;
@@ -48,32 +49,30 @@ function parseStoredSetup(value: unknown): SetupData {
   };
 }
 
-function load(): SetupData {
-  try {
-    const saved = localStorage.getItem("setup");
-    return saved ? parseStoredSetup(JSON.parse(saved) as unknown) : DEFAULT;
-  } catch {
-    localStorage.removeItem("setup");
-    return DEFAULT;
-  }
-}
-
 export function useSetup() {
-  const [setup, setSetup] = useState<SetupData>(load);
+  const [setup, setSetup] = useState<SetupData>(DEFAULT);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    readJsonValue("setup", DEFAULT)
+      .then((value) => setSetup(parseStoredSetup(value)))
+      .catch((error) => console.error("Failed to load setup data:", error))
+      .finally(() => setLoading(false));
+  }, []);
 
   const saveSetup = useCallback((data: Partial<SetupData>) => {
     setSetup((prev) => {
       const updated = { ...prev, ...data };
-      try { localStorage.setItem("setup", JSON.stringify(updated)); } catch { /* ignorar */ }
+      void writeJsonValue("setup", updated).catch((error) => console.error("Failed to persist setup data:", error, updated));
       return updated;
     });
   }, []);
 
   const completeSetup = useCallback((data: Omit<SetupData, "completed">) => {
     const updated = { ...data, completed: true };
-    try { localStorage.setItem("setup", JSON.stringify(updated)); } catch { /* ignorar */ }
     setSetup(updated);
+    void writeJsonValue("setup", updated).catch((error) => console.error("Failed to persist setup data:", error, updated));
   }, []);
 
-  return { setup, saveSetup, completeSetup };
+  return { setup, loading, saveSetup, completeSetup };
 }

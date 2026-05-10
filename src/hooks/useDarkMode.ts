@@ -1,22 +1,28 @@
 import { useState, useEffect } from "react";
+import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 
 export function useDarkMode() {
+  const [loaded, setLoaded] = useState(false);
   const [isDark, setIsDark] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem("darkMode");
-      if (stored !== null) return stored === "true";
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
-    } catch {
-      return false;
-    }
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
+
+  useEffect(() => {
+    readJsonValue<boolean | null>("darkMode", null)
+      .then((stored) => {
+        if (typeof stored === "boolean") setIsDark(stored);
+      })
+      .catch((error) => console.error("Error loading dark mode:", error))
+      .finally(() => setLoaded(true));
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
     if (isDark) root.classList.add("dark");
     else root.classList.remove("dark");
-    try { localStorage.setItem("darkMode", String(isDark)); } catch { /* ignorar */ }
-  }, [isDark]);
+    if (!loaded) return;
+    void writeJsonValue("darkMode", isDark).catch((error) => console.error("Error saving dark mode:", error));
+  }, [isDark, loaded]);
 
   const toggle = () => setIsDark((v) => !v);
 

@@ -23,6 +23,9 @@ import { useT } from "@/lib/LanguageContext";
 
 import { CATEGORY_LIST as CATEGORIES, CATEGORY_STYLE } from "@/lib/categories";
 
+const SHEET_POSITION_CLASS = "bottom-16";
+const SHEET_MAX_HEIGHT_CLASS = "max-h-[80vh]";
+
 type CalendarMode = "daily" | "monthly";
 
 interface CalendarViewProps {
@@ -102,7 +105,13 @@ function EventCard({
   onDelete: () => void;
   compact?: boolean;
 }) {
-  const style = CATEGORY_STYLE[event.category] ?? { card: "bg-muted border-border", border: "border-border", dot: "bg-primary", dotColor: "hsl(var(--primary))" };
+  const style = CATEGORY_STYLE[event.category] ?? {
+    card: "bg-muted border-border",
+    border: "border-border",
+    dot: "bg-primary",
+    dotColor: "hsl(var(--primary))",
+    accent: "hsl(var(--primary))",
+  };
   const duration = computeDuration(event);
   const timeLabel = `${formatEventTime(event.date)}${event.endTime ? ` – ${event.endTime}` : ""}${duration ? ` · ${duration}` : ""}`;
 
@@ -467,7 +476,8 @@ export function CalendarView({
         : selectedFavoriteId
         ? favoritePlaces.find((p) => p.id === selectedFavoriteId)?.location
         : undefined;
-    onAddEvent({ date, endTime: endTime || undefined, category, reminderMinutesBefore: parseInt(reminder) || 15, location: eventLocation, recurrence });
+    const reminderMinutesBefore = isAddingPastNoRepeat ? 0 : parseInt(reminder) || 15;
+    onAddEvent({ date, endTime: endTime || undefined, category, reminderMinutesBefore, location: eventLocation, recurrence });
     setTime("09:00"); setEndTime(""); setCategory("Predi"); setReminder("15");
     setLocation(undefined); setLocationMode("none"); setSelectedFavoriteId(""); setRecurrence("none");
     setDialogOpen(false);
@@ -842,11 +852,11 @@ export function CalendarView({
         onClick={() => setDialogOpen(false)}
       />
       <div
-        className={`fixed left-0 right-0 bottom-16 max-w-md mx-auto z-40 transition-transform duration-300 ease-out ${
+        className={`fixed left-0 right-0 ${SHEET_POSITION_CLASS} max-w-md mx-auto z-40 transition-transform duration-300 ease-out ${
           dialogOpen ? "translate-y-0" : "translate-y-full"
         }`}
       >
-        <div className="bg-card rounded-t-3xl border-t border-x border-border shadow-2xl max-h-[80vh] flex flex-col">
+        <div className={`bg-card rounded-t-3xl border-t border-x border-border shadow-2xl ${SHEET_MAX_HEIGHT_CLASS} flex flex-col`}>
           <button onClick={() => setDialogOpen(false)} className="w-full flex flex-col items-center pt-3 pb-2 flex-shrink-0">
             <div className="w-10 h-1 rounded-full bg-border" />
           </button>
@@ -935,11 +945,11 @@ export function CalendarView({
         onClick={() => setEditEvent(null)}
       />
       <div
-        className={`fixed left-0 right-0 bottom-0 max-w-md mx-auto z-40 transition-transform duration-300 ease-out ${
+        className={`fixed left-0 right-0 ${SHEET_POSITION_CLASS} max-w-md mx-auto z-40 transition-transform duration-300 ease-out ${
           editEvent ? "translate-y-0" : "translate-y-full"
         }`}
       >
-        <div className="bg-card rounded-t-3xl border-t border-x border-border shadow-2xl max-h-[90vh] flex flex-col">
+        <div className={`bg-card rounded-t-3xl border-t border-x border-border shadow-2xl ${SHEET_MAX_HEIGHT_CLASS} flex flex-col`}>
           <button onClick={() => setEditEvent(null)} className="w-full flex flex-col items-center pt-3 pb-2 flex-shrink-0">
             <div className="w-10 h-1 rounded-full bg-border" />
           </button>

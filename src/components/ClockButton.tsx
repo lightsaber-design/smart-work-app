@@ -73,7 +73,6 @@ interface ClockButtonProps {
     contactId: string,
     data?: { time?: string; lesson?: string; notes?: string; files?: SessionFile[]; forceNew?: boolean }
   ) => void;
-  entries?: { category: WorkCategory; startTime: Date; endTime: Date | null }[];
 }
 
 function detectCategoryFromEvents(events: CalendarEvent[]): WorkCategory | null {
@@ -97,7 +96,7 @@ function detectCategoryFromEvents(events: CalendarEvent[]): WorkCategory | null 
 export function ClockButton({
   isRunning, elapsed, onClockIn, onClockOut, onUpdateCategory, onUpdateStartTime,
   calendarEvents, activeCategory, activeEntryId, activeEntryStartTime,
-  estudios = [], onEstudioSession, entries = [],
+  estudios = [], onEstudioSession,
 }: ClockButtonProps) {
   const t = useT();
   const detected = detectCategoryFromEvents(calendarEvents);

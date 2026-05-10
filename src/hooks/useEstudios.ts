@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { generateId } from "@/lib/uuid";
+import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 
 export interface SessionFile {
   id: string;
@@ -64,6 +65,13 @@ function parseStoredSchedule(value: unknown): ContactSchedule | undefined {
   };
 }
 
+function parseStoredFile(value: unknown): SessionFile | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.id !== "string" || typeof value.name !== "string") return null;
+  if (typeof value.type !== "string" || typeof value.size !== "number" || !Number.isFinite(value.size)) return null;
+  return { id: value.id, name: value.name, type: value.type, size: value.size };
+}
+
 function parseStoredSession(value: unknown): EstudioSession | null {
   if (!isRecord(value)) return null;
 
@@ -73,7 +81,9 @@ function parseStoredSession(value: unknown): EstudioSession | null {
     time: typeof value.time === "string" ? value.time : now(),
     lesson: typeof value.lesson === "string" ? value.lesson : undefined,
     notes: typeof value.notes === "string" ? value.notes : undefined,
-    files: Array.isArray(value.files) ? (value.files as SessionFile[]) : [],
+    files: Array.isArray(value.files)
+      ? value.files.map(parseStoredFile).filter((file): file is SessionFile => file !== null)
+      : [],
     pending: typeof value.pending === "boolean" ? value.pending : undefined,
   };
 }
@@ -136,7 +146,7 @@ export function getNextOccurrences(schedule: ContactSchedule, count: number): Da
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   const dayDiff = (schedule.dayOfWeek - start.getDay() + 7) % 7;
-  // If today is the target day but it's already past the session time, start next week
+  // Si hoy es el dia objetivo pero la hora ya paso, empieza la semana siguiente.
   const candidateToday = new Date(start);
   candidateToday.setHours(h, m, 0, 0);
   const skipToday = dayDiff === 0 && candidateToday <= new Date();
@@ -159,32 +169,26 @@ function now(): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function load(): EstudioContact[] {
-  try {
-    const saved = localStorage.getItem("estudios");
-    if (!saved) return [];
-    const parsed = JSON.parse(saved) as unknown;
-    if (!Array.isArray(parsed)) throw new Error("bad format");
-    const contacts = parsed.map(parseStoredContact).filter((contact): contact is EstudioContact => contact !== null);
-    const filled = contacts.map(fillPendingSessions);
-    if (JSON.stringify(contacts) !== JSON.stringify(filled)) persist(filled);
-    return filled;
-  } catch {
-    localStorage.removeItem("estudios");
-    return [];
-  }
-}
-
-function persist(contacts: EstudioContact[]) {
-  try {
-    localStorage.setItem("estudios", JSON.stringify(contacts));
-  } catch (e) {
-    console.error("Error guardando estudios:", e);
-  }
-}
-
 export function useEstudios() {
-  const [contacts, setContacts] = useState<EstudioContact[]>(load);
+  const [contacts, setContacts] = useState<EstudioContact[]>([]);
+
+  const persist = useCallback((updated: EstudioContact[]) => {
+    void writeJsonValue("estudios", updated).catch((error) => console.error("Error saving studies:", error));
+  }, []);
+
+  useEffect(() => {
+    readJsonValue<unknown[]>("estudios", [])
+      .then((value) => {
+        if (!Array.isArray(value)) throw new Error("bad format");
+        const parsed = value.map(parseStoredContact).filter((contact): contact is EstudioContact => contact !== null);
+        const filled = parsed.map(fillPendingSessions);
+        setContacts(filled);
+        if (JSON.stringify(parsed) !== JSON.stringify(filled)) {
+          void writeJsonValue("estudios", filled).catch((error) => console.error("Error saving studies:", error));
+        }
+      })
+      .catch((error) => console.error("Error loading studies:", error));
+  }, [persist]);
 
   const addContact = useCallback((data: ContactFormData) => {
     setContacts((prev) => {
@@ -203,7 +207,7 @@ export function useEstudios() {
       persist(updated);
       return updated;
     });
-  }, []);
+  }, [persist]);
 
   const updateContact = useCallback((id: string, data: ContactFormData) => {
     setContacts((prev) => {
@@ -222,7 +226,7 @@ export function useEstudios() {
       persist(updated);
       return updated;
     });
-  }, []);
+  }, [persist]);
 
   const deleteContact = useCallback((id: string) => {
     setContacts((prev) => {
@@ -230,7 +234,7 @@ export function useEstudios() {
       persist(updated);
       return updated;
     });
-  }, []);
+  }, [persist]);
 
   const archiveContact = useCallback((id: string) => {
     setContacts((prev) => {
@@ -240,7 +244,7 @@ export function useEstudios() {
       persist(updated);
       return updated;
     });
-  }, []);
+  }, [persist]);
 
   const unarchiveContact = useCallback((id: string) => {
     setContacts((prev) => {
@@ -250,7 +254,7 @@ export function useEstudios() {
       persist(updated);
       return updated;
     });
-  }, []);
+  }, [persist]);
 
   const addSession = useCallback((
     contactId: string,
@@ -302,7 +306,7 @@ export function useEstudios() {
       persist(updated);
       return updated;
     });
-  }, []);
+  }, [persist]);
 
 
 
@@ -316,7 +320,7 @@ export function useEstudios() {
       persist(updated);
       return updated;
     });
-  }, []);
+  }, [persist]);
 
   const updateSession = useCallback((
     contactId: string,
@@ -348,7 +352,7 @@ export function useEstudios() {
       persist(updated);
       return updated;
     });
-  }, []);
+  }, [persist]);
 
   const completeSession = useCallback((contactId: string, sessionId: string) => {
     setContacts((prev) => {
@@ -365,7 +369,7 @@ export function useEstudios() {
       persist(updated);
       return updated;
     });
-  }, []);
+  }, [persist]);
 
 
   return {

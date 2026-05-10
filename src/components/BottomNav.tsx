@@ -2,10 +2,11 @@ import { BarChart3, CalendarDays, Clock } from "lucide-react";
 import { useT } from "@/lib/LanguageContext";
 
 export type AppTab = "timer" | "map" | "calendar" | "stats" | "settings" | "estudios";
+type BottomNavTab = Extract<AppTab, "timer" | "calendar" | "stats">;
 
 interface BottomNavProps {
   activeTab: AppTab;
-  onTabChange: (tab: AppTab) => void;
+  onTabChange: (tab: BottomNavTab) => void;
   isRunning?: boolean;
 }
 

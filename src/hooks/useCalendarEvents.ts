@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { generateId } from "@/lib/uuid";
+import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 
 export type EventCategory = "Predi" | "Carrito" | "LDC" | "Visitas" | "Estudio";
 export type RecurrenceType = "none" | "weekly" | "monthly";
@@ -106,31 +107,24 @@ function generateRecurringEvents(params: AddEventParams, count: number): Calenda
 }
 
 export function useCalendarEvents() {
-  const [events, setEvents] = useState<CalendarEvent[]>(() => {
-    try {
-      const saved = localStorage.getItem("calendar-events");
-      if (saved) {
-        const parsed = JSON.parse(saved) as unknown;
-        if (!Array.isArray(parsed)) throw new Error("bad format");
-        return parsed.map(parseStoredEvent).filter((event): event is CalendarEvent => event !== null);
-      }
-    } catch {
-      localStorage.removeItem("calendar-events");
-    }
-    return [];
-  });
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
 
   useEffect(() => {
-    try {
-      const persisted: PersistedCalendarEvent[] = events.map((event) => ({
-        ...event,
-        date: event.date.toISOString(),
-      }));
-      localStorage.setItem("calendar-events", JSON.stringify(persisted));
-    } catch (e) {
-      console.error("Error guardando eventos:", e);
-    }
-  }, [events]);
+    readJsonValue<unknown[]>("calendar-events", [])
+      .then((value) => {
+        if (!Array.isArray(value)) throw new Error("bad format");
+        setEvents(value.map(parseStoredEvent).filter((event): event is CalendarEvent => event !== null));
+      })
+      .catch((error) => console.error("Error loading events:", error));
+  }, []);
+
+  const persistEvents = useCallback((updated: CalendarEvent[]) => {
+    const persisted: PersistedCalendarEvent[] = updated.map((event) => ({
+      ...event,
+      date: event.date.toISOString(),
+    }));
+    void writeJsonValue("calendar-events", persisted).catch((error) => console.error("Error saving events:", error));
+  }, []);
 
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
@@ -139,13 +133,21 @@ export function useCalendarEvents() {
   }, []);
 
   const markNotified = useCallback((id: string) => {
-    setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, notified: true } : e)));
-  }, []);
+    setEvents((prev) => {
+      const updated = prev.map((e) => (e.id === id ? { ...e, notified: true } : e));
+      persistEvents(updated);
+      return updated;
+    });
+  }, [persistEvents]);
 
   const addEvent = useCallback((params: AddEventParams) => {
     if (params.recurrence !== "none") {
       const recurring = generateRecurringEvents(params, 12);
-      setEvents((prev) => [...prev, ...recurring].sort((a, b) => a.date.getTime() - b.date.getTime()));
+      setEvents((prev) => {
+        const updated = [...prev, ...recurring].sort((a, b) => a.date.getTime() - b.date.getTime());
+        persistEvents(updated);
+        return updated;
+      });
     } else {
       const event: CalendarEvent = {
         id: generateId(),
@@ -158,9 +160,13 @@ export function useCalendarEvents() {
         recurrence: "none",
         completed: false,
       };
-      setEvents((prev) => [...prev, event].sort((a, b) => a.date.getTime() - b.date.getTime()));
+      setEvents((prev) => {
+        const updated = [...prev, event].sort((a, b) => a.date.getTime() - b.date.getTime());
+        persistEvents(updated);
+        return updated;
+      });
     }
-  }, []);
+  }, [persistEvents]);
 
   const addCompletedEventNow = useCallback(
     (params: { date: Date; category: EventCategory; location?: { lat: number; lng: number } }) => {
@@ -176,10 +182,14 @@ export function useCalendarEvents() {
         recurrence: "none",
         completed: true,
       };
-      setEvents((prev) => [...prev, event].sort((a, b) => a.date.getTime() - b.date.getTime()));
+      setEvents((prev) => {
+        const updated = [...prev, event].sort((a, b) => a.date.getTime() - b.date.getTime());
+        persistEvents(updated);
+        return updated;
+      });
       return id;
     },
-    []
+    [persistEvents]
   );
 
   const deleteEvent = useCallback((id: string) => {
@@ -188,11 +198,15 @@ export function useCalendarEvents() {
       if (!event) return prev;
       if (event.recurrence !== "none") {
         const parentId = event.parentId || event.id;
-        return prev.filter((e) => e.id !== parentId && e.parentId !== parentId);
+        const updated = prev.filter((e) => e.id !== parentId && e.parentId !== parentId);
+        persistEvents(updated);
+        return updated;
       }
-      return prev.filter((e) => e.id !== id);
+      const updated = prev.filter((e) => e.id !== id);
+      persistEvents(updated);
+      return updated;
     });
-  }, []);
+  }, [persistEvents]);
 
   const getEventsForDate = useCallback(
     (date: Date) =>
@@ -206,23 +220,27 @@ export function useCalendarEvents() {
   );
 
   const toggleEventCompleted = useCallback((id: string) => {
-    setEvents((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, completed: !e.completed } : e))
-    );
-  }, []);
+    setEvents((prev) => {
+      const updated = prev.map((e) => (e.id === id ? { ...e, completed: !e.completed } : e));
+      persistEvents(updated);
+      return updated;
+    });
+  }, [persistEvents]);
 
   const updateEvent = useCallback(
     (
       id: string,
       updates: { date?: Date; endTime?: string; category?: EventCategory; reminderMinutesBefore?: number }
     ) => {
-      setEvents((prev) =>
-        prev
+      setEvents((prev) => {
+        const updated = prev
           .map((e) => (e.id === id ? { ...e, ...updates, notified: false } : e))
-          .sort((a, b) => a.date.getTime() - b.date.getTime())
-      );
+          .sort((a, b) => a.date.getTime() - b.date.getTime());
+        persistEvents(updated);
+        return updated;
+      });
     },
-    []
+    [persistEvents]
   );
 
   return { events, addEvent, addCompletedEventNow, deleteEvent, getEventsForDate, toggleEventCompleted, updateEvent, markNotified };

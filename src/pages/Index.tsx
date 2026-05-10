@@ -22,6 +22,8 @@ import { MissedStudyBanner } from "@/components/MissedStudyBanner";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { useSpecialCampaign } from "@/hooks/useSpecialCampaign";
 import { CATEGORY_META, CATEGORY_STYLE } from "@/lib/categories";
+import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
+import { removeJsonValue } from "@/lib/jsonFileStorage";
 
 type Tab = AppTab;
 type Category = EventCategory;
@@ -55,8 +57,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   useScrollLock(menuOpen || summaryOpen);
 
   const handleClearAll = () => {
-    try { localStorage.removeItem("time-entries"); } catch { /* ignorar */ }
-    window.location.reload();
+    void removeJsonValue("time-entries").finally(() => window.location.reload());
   };
 
   const activeEntry = tracker.entries.find((e) => e.endTime === null);
@@ -185,7 +186,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 activeEntryStartTime={activeEntry?.startTime}
                 estudios={estudios.contacts.filter((c) => c.active)}
                 onEstudioSession={estudios.addSession}
-                entries={tracker.entries}
               />
             </div>
 
@@ -240,8 +240,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 ) : (
                   <div className="px-4 pb-3 space-y-2">
                     {todayEvents.map((event) => {
-                      const style = CATEGORY_STYLE[event.category as Category];
-                      const meta  = CATEGORY_META[event.category as Category];
+                      const style = CATEGORY_STYLE[event.category];
+                      const meta = CATEGORY_META[event.category];
                       const timeStr = `${String(event.date.getHours()).padStart(2, "0")}:${String(event.date.getMinutes()).padStart(2, "0")}`;
                       let duration: string | null = null;
                       if (event.endTime) {
@@ -497,9 +497,55 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 }
 
 const Index = () => {
-  const { setup, completeSetup, saveSetup } = useSetup();
+  const storage = useJsonStorageStatus();
+  const { setup, loading: setupLoading, completeSetup, saveSetup } = useSetup();
   const [setupLang, setSetupLang] = useState<Lang>(detectLanguage);
   const lang = setup.completed ? (setup.language ?? detectLanguage()) : setupLang;
+
+  if (!storage.supported) {
+    return (
+      <div className="min-h-screen bg-background text-foreground max-w-md mx-auto flex flex-col items-center justify-center px-6 text-center gap-4">
+        <h1 className="text-xl font-bold">JSON file storage required</h1>
+        <p className="text-sm text-muted-foreground">
+          Use Chrome or Edge to save app data directly in a permanent JSON file.
+        </p>
+      </div>
+    );
+  }
+
+  if (!storage.ready || setupLoading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground max-w-md mx-auto flex items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading data...</p>
+      </div>
+    );
+  }
+
+  if (!storage.connected) {
+    return (
+      <div className="min-h-screen bg-background text-foreground max-w-md mx-auto flex flex-col items-center justify-center px-6 text-center gap-4">
+        <h1 className="text-xl font-bold">Connect your data file</h1>
+        <p className="text-sm text-muted-foreground">
+          Create or open a JSON file. The app will save your data there instead of browser storage.
+        </p>
+        <div className="w-full space-y-2">
+          <button
+            onClick={storage.createFile}
+            className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground"
+          >
+            Create JSON file
+          </button>
+          <button
+            onClick={storage.openFile}
+            className="w-full rounded-xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground"
+          >
+            Open existing JSON
+          </button>
+        </div>
+        {storage.error && <p className="text-xs text-destructive">{storage.error}</p>}
+      </div>
+    );
+  }
 
   if (!setup.completed) {
     return (

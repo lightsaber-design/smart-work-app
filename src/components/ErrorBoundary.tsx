@@ -16,20 +16,26 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.error) {
+      const showDetails = import.meta.env.DEV;
+
       return (
         <div className="min-h-screen flex flex-col items-center justify-center px-6 gap-4 bg-background text-foreground">
-          <p className="text-lg font-bold text-destructive">Error en la app</p>
+          <p className="text-lg font-bold text-destructive">Something went wrong</p>
           <p className="text-sm text-muted-foreground text-center break-all">
-            {this.state.error.message}
+            Please reload the app and try again.
           </p>
-          <pre className="text-[10px] text-muted-foreground bg-muted rounded-xl p-3 w-full overflow-x-auto whitespace-pre-wrap break-all max-h-60 overflow-y-auto">
-            {this.state.error.stack}
-          </pre>
+          {showDetails && (
+            <pre className="text-[10px] text-muted-foreground bg-muted rounded-xl p-3 w-full overflow-x-auto whitespace-pre-wrap break-all max-h-60 overflow-y-auto">
+              {this.state.error.message}
+              {"\n\n"}
+              {this.state.error.stack}
+            </pre>
+          )}
           <button
-            onClick={() => this.setState({ error: null })}
+            onClick={() => window.location.reload()}
             className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
           >
-            Reintentar
+            Reload
           </button>
         </div>
       );

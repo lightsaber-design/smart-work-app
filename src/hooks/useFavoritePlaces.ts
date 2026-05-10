@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { generateId } from "@/lib/uuid";
+import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 
 export interface FavoritePlace {
   id: string;
@@ -25,35 +26,33 @@ function parseStoredPlace(value: unknown): FavoritePlace | null {
 }
 
 export function useFavoritePlaces() {
-  const [places, setPlaces] = useState<FavoritePlace[]>(() => {
-    try {
-      const saved = localStorage.getItem("favorite-places");
-      if (!saved) return [];
-      const parsed = JSON.parse(saved) as unknown;
-      if (!Array.isArray(parsed)) throw new Error("bad format");
-      return parsed.map(parseStoredPlace).filter((place): place is FavoritePlace => place !== null);
-    } catch {
-      localStorage.removeItem("favorite-places");
-      return [];
-    }
-  });
+  const [places, setPlaces] = useState<FavoritePlace[]>([]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem("favorite-places", JSON.stringify(places));
-    } catch (e) {
-      console.error("Error guardando lugares:", e);
-    }
-  }, [places]);
+    readJsonValue<unknown[]>("favorite-places", [])
+      .then((value) => {
+        if (!Array.isArray(value)) throw new Error("bad format");
+        setPlaces(value.map(parseStoredPlace).filter((place): place is FavoritePlace => place !== null));
+      })
+      .catch((error) => console.error("Error loading favorite places:", error));
+  }, []);
 
   const addPlace = useCallback((name: string, location: { lat: number; lng: number }) => {
     const trimmedName = name.trim();
     if (!trimmedName || !Number.isFinite(location.lat) || !Number.isFinite(location.lng)) return;
-    setPlaces((prev) => [...prev, { id: generateId(), name: trimmedName, location }]);
+    setPlaces((prev) => {
+      const updated = [...prev, { id: generateId(), name: trimmedName, location }];
+      void writeJsonValue("favorite-places", updated).catch((error) => console.error("Error saving favorite places:", error));
+      return updated;
+    });
   }, []);
 
   const deletePlace = useCallback((id: string) => {
-    setPlaces((prev) => prev.filter((p) => p.id !== id));
+    setPlaces((prev) => {
+      const updated = prev.filter((p) => p.id !== id);
+      void writeJsonValue("favorite-places", updated).catch((error) => console.error("Error saving favorite places:", error));
+      return updated;
+    });
   }, []);
 
   return { places, addPlace, deletePlace };

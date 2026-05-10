@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { generateId } from "@/lib/uuid";
+import { lockScroll, unlockScroll } from "@/hooks/useScrollLock";
 import {
   BookOpen, Plus, Trash2, CheckCircle2, MapPin, Clock,
   Paperclip, X, FileText, Image, File,
@@ -125,9 +126,8 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
   const [schedLesson, setSchedLesson] = useState(contact?.schedule?.lesson ?? "");
 
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    lockScroll();
+    return unlockScroll;
   }, []);
 
   const handleSave = () => {
@@ -278,9 +278,8 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    lockScroll();
+    return unlockScroll;
   }, []);
 
   const handleSave = async () => {
@@ -366,7 +365,7 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
                         const url = await getFileURL(f.id);
                         if (url) {
                           window.open(url, "_blank");
-                          setTimeout(() => URL.revokeObjectURL(url), 10_000);
+                          setTimeout(() => URL.revokeObjectURL(url), 300_000);
                         }
                       }}
                     >
