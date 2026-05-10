@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { CitySearch } from "@/components/CitySearch";
 import { PrecursorHoursConfig } from "@/components/PrecursorHoursConfig";
+import { TravelTimeConfig } from "@/components/TravelTimeConfig";
 import { SetupData } from "@/hooks/useSetup";
 import { useT } from "@/lib/LanguageContext";
 import { LANGUAGES, Lang } from "@/lib/i18n";
@@ -78,6 +79,15 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
           <PrecursorHoursConfig
             value={setup.precursorHours}
             onChange={(v) => onSaveSetup({ precursorHours: v })}
+          />
+        </div>
+
+        {/* Tiempo de trayecto */}
+        <div className="space-y-2 pt-1">
+          <TravelTimeConfig
+            enabled={setup.travelTimeEnabled}
+            minutes={setup.travelTimeMinutes}
+            onChange={(value) => onSaveSetup({ travelTimeEnabled: value.enabled, travelTimeMinutes: value.minutes })}
           />
         </div>
       </div>

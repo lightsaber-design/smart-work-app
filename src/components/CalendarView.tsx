@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
 import { EstudioContact } from "@/hooks/useEstudios";
@@ -20,6 +20,7 @@ import {
 import { LocationPicker } from "@/components/LocationPicker";
 import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { useT } from "@/lib/LanguageContext";
+import { getTravelReminderMinutes, type TravelReminderSettings } from "@/lib/eventReminders";
 
 import { CATEGORY_LIST as CATEGORIES, CATEGORY_STYLE } from "@/lib/categories";
 
@@ -42,12 +43,17 @@ interface CalendarViewProps {
   defaultCenter?: { lat: number; lng: number };
   estudiosContacts?: EstudioContact[];
   precursorHours?: number | null;
+  travelReminder?: TravelReminderSettings;
   specialCampaignGoals?: Record<string, CampaignGoal>;
   onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
 }
 
 const DAY_NAMES_SHORT = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
-const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); // 7 AM – 9 PM
+const TIMELINE_START_HOUR = 7;
+const TIMELINE_END_HOUR = 22;
+const HOUR_HEIGHT = 64;
+const HOURS = Array.from({ length: TIMELINE_END_HOUR - TIMELINE_START_HOUR }, (_, i) => i + TIMELINE_START_HOUR);
+const TIMELINE_HEIGHT = (TIMELINE_END_HOUR - TIMELINE_START_HOUR) * HOUR_HEIGHT;
 
 function formatHour(h: number) {
   if (h === 12) return "12 PM";
@@ -91,6 +97,22 @@ function dayTotalFromEvents(dayEvents: CalendarEvent[]): { ms: number; hrs: numb
   return { ms, hrs: Math.floor(ms / 3600000), mins: Math.floor((ms % 3600000) / 60000) };
 }
 
+function minutesFromTimelineStart(date: Date): number {
+  return (date.getHours() - TIMELINE_START_HOUR) * 60 + date.getMinutes();
+}
+
+function eventEndDate(event: CalendarEvent): Date {
+  if (!event.endTime) return new Date(event.date.getTime() + 60 * 60_000);
+  const [h, m] = event.endTime.split(":").map(Number);
+  const end = new Date(event.date);
+  end.setHours(h, m, 0, 0);
+  return end.getTime() > event.date.getTime() ? end : new Date(event.date.getTime() + 60 * 60_000);
+}
+
+function timelineTopFromMinutes(minutes: number): number {
+  return (minutes / 60) * HOUR_HEIGHT;
+}
+
 // ── Event card: dos cajas apiladas ────────────────────────────────────────
 function EventCard({
   event,
@@ -98,12 +120,14 @@ function EventCard({
   onEdit,
   onDelete,
   compact = false,
+  fill = false,
 }: {
   event: CalendarEvent;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
   compact?: boolean;
+  fill?: boolean;
 }) {
   const style = CATEGORY_STYLE[event.category] ?? {
     card: "bg-muted border-border",
@@ -133,7 +157,7 @@ function EventCard({
   }
 
   return (
-    <div className={`mb-2 rounded-2xl overflow-hidden border shadow-sm ${style.card} ${style.border} ${event.completed ? "opacity-60" : ""}`}
+    <div className={`${fill ? "h-full" : "mb-2"} rounded-2xl overflow-hidden border shadow-sm ${style.card} ${style.border} ${event.completed ? "opacity-60" : ""}`}
       style={{ borderLeftWidth: 3, borderLeftColor: style.accent }}
     >
       {/* Row 1: toggle + name + actions */}
@@ -393,6 +417,7 @@ export function CalendarView({
   defaultCenter,
   estudiosContacts = [],
   precursorHours = null,
+  travelReminder = { enabled: false, minutes: 0 },
   specialCampaignGoals = {},
   onSetSpecialCampaign,
 }: CalendarViewProps) {
@@ -411,6 +436,7 @@ export function CalendarView({
   const [recurrence, setRecurrence] = useState<RecurrenceType>("none");
   const [locationMode, setLocationMode] = useState<"none" | "custom">("none");
   const [selectedFavoriteId, setSelectedFavoriteId] = useState<string>("");
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
 
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
   const [editTime, setEditTime] = useState("09:00");
@@ -427,7 +453,18 @@ export function CalendarView({
   const selectedEvents = getEventsForDate(selectedDate).sort(
     (a, b) => a.date.getTime() - b.date.getTime()
   );
+  const selectedStudySessions = estudiosContacts
+    .flatMap((c) =>
+      (c.sessions ?? [])
+        .filter((s) => s.pending && new Date(s.date).toDateString() === selectedDate.toDateString())
+        .map((s) => ({ ...s, contactName: c.name }))
+    )
+    .sort((a, b) => a.time.localeCompare(b.time));
   const { hrs: dayTotalHrs, mins: dayTotalMins, ms: dayTotalMs } = dayTotalFromEvents(selectedEvents);
+  const isSelectedToday = selectedDate.toDateString() === new Date().toDateString();
+  const nowMinutes = isSelectedToday ? minutesFromTimelineStart(new Date()) : null;
+  const nowTop = nowMinutes == null ? null : timelineTopFromMinutes(Math.max(0, Math.min((TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60, nowMinutes)));
+  const firstSelectedEventMs = selectedEvents[0]?.date.getTime() ?? null;
 
   const monthBase = new Date();
   monthBase.setDate(1);
@@ -441,6 +478,10 @@ export function CalendarView({
     return dayTotalFromEvents(getEventsForDate(d)).ms;
   }).reduce((a, b) => a + b, 0);
   const monthTotalHrs = monthTotalMs / 3_600_000;
+  const previewDate = new Date(selectedDate);
+  const [previewHours, previewMinutes] = time.split(":").map(Number);
+  previewDate.setHours(previewHours, previewMinutes, 0, 0);
+  const travelReminderPreview = getTravelReminderMinutes(previewDate, events, travelReminder);
 
   const openEdit = (event: CalendarEvent) => {
     setEditEvent(event);
@@ -476,7 +517,12 @@ export function CalendarView({
         : selectedFavoriteId
         ? favoritePlaces.find((p) => p.id === selectedFavoriteId)?.location
         : undefined;
-    const reminderMinutesBefore = isAddingPastNoRepeat ? 0 : parseInt(reminder) || 15;
+    const manualReminder = parseInt(reminder) || 15;
+    const reminderMinutesBefore = isAddingPastNoRepeat
+      ? 0
+      : travelReminder.enabled
+      ? getTravelReminderMinutes(date, events, travelReminder)
+      : manualReminder;
     onAddEvent({ date, endTime: endTime || undefined, category, reminderMinutesBefore, location: eventLocation, recurrence });
     setTime("09:00"); setEndTime(""); setCategory("Predi"); setReminder("15");
     setLocation(undefined); setLocationMode("none"); setSelectedFavoriteId(""); setRecurrence("none");
@@ -491,6 +537,17 @@ export function CalendarView({
       : "unsupported";
 
   const dailyWeekDates = getWeekDates(selectedDate);
+
+  useEffect(() => {
+    if (mode !== "daily" || !timelineScrollRef.current) return;
+    const targetMinutes = isSelectedToday
+      ? minutesFromTimelineStart(new Date())
+      : firstSelectedEventMs != null
+      ? minutesFromTimelineStart(new Date(firstSelectedEventMs))
+      : 0;
+    const top = Math.max(0, timelineTopFromMinutes(targetMinutes) - 120);
+    timelineScrollRef.current.scrollTo({ top, behavior: "smooth" });
+  }, [mode, selectedDate, isSelectedToday, firstSelectedEventMs]);
 
   return (
     <div className="flex flex-col pb-24">
@@ -607,50 +664,82 @@ export function CalendarView({
             </div>
 
           {/* Timeline */}
-          <div className="">
-            {HOURS.map((hour) => {
-              const hourEvents = selectedEvents.filter((e) => e.date.getHours() === hour);
-              const hourEstudios = estudiosContacts
-                .flatMap((c) =>
-                  (c.sessions ?? [])
-                    .filter((s) => s.pending && new Date(s.date).toDateString() === selectedDate.toDateString())
-                    .map((s) => ({ ...s, contactName: c.name }))
-                )
-                .filter((s) => parseInt(s.time.split(":")[0]) === hour);
-              return (
-                <div key={hour} className="flex gap-3">
-                  <div className="w-12 text-right flex-shrink-0 pt-1">
-                    <span className="text-[11px] text-muted-foreground">{formatHour(hour)}</span>
+          <div ref={timelineScrollRef} className="max-h-[58vh] overflow-y-auto pr-1">
+            <div className="flex gap-3">
+              <div className="w-12 flex-shrink-0 relative" style={{ height: TIMELINE_HEIGHT }}>
+                {HOURS.map((hour) => (
+                  <div
+                    key={hour}
+                    className="absolute right-0 -translate-y-1/2 text-[11px] text-muted-foreground"
+                    style={{ top: timelineTopFromMinutes((hour - TIMELINE_START_HOUR) * 60) }}
+                  >
+                    {formatHour(hour)}
                   </div>
-                  <div className="flex-1 border-l border-border/40 pl-4 pb-3 min-h-[52px]">
-                    {hourEvents.map((event) => (
+                ))}
+              </div>
+              <div className="relative flex-1 border-l border-border/40" style={{ height: TIMELINE_HEIGHT }}>
+                {HOURS.map((hour) => (
+                  <div
+                    key={hour}
+                    className="absolute left-0 right-0 border-t border-border/30"
+                    style={{ top: timelineTopFromMinutes((hour - TIMELINE_START_HOUR) * 60) }}
+                  />
+                ))}
+
+                {nowTop != null && nowTop >= 0 && nowTop <= TIMELINE_HEIGHT && (
+                  <div className="absolute left-0 right-0 z-20 flex items-center" style={{ top: nowTop }}>
+                    <span className="h-2.5 w-2.5 -ml-[5px] rounded-full bg-red-500 shadow-sm" />
+                    <span className="h-px flex-1 bg-red-500/70" />
+                    <span className="ml-2 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                      Now
+                    </span>
+                  </div>
+                )}
+
+                {selectedEvents.map((event) => {
+                  const startMinutes = minutesFromTimelineStart(event.date);
+                  const endMinutes = minutesFromTimelineStart(eventEndDate(event));
+                  const totalTimelineMinutes = (TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60;
+                  if (endMinutes <= 0 || startMinutes >= totalTimelineMinutes) return null;
+                  const top = timelineTopFromMinutes(Math.max(0, startMinutes));
+                  const bottom = timelineTopFromMinutes(Math.min(totalTimelineMinutes, endMinutes));
+                  const height = Math.max(44, bottom - top);
+                  return (
+                    <div key={event.id} className="absolute left-4 right-0 z-10" style={{ top, height }}>
                       <EventCard
-                        key={event.id}
                         event={event}
                         onToggle={() => onToggleCompleted(event.id)}
                         onEdit={() => openEdit(event)}
                         onDelete={() => onDeleteEvent(event.id)}
+                        fill
                       />
-                    ))}
-                    {hourEstudios.map((s) => (
-                      <div key={s.id} className="mb-2">
-                        {/* Caja 1: nombre */}
-                        <div className="rounded-t-2xl rounded-b-none border-x border-t border-pink-200 bg-pink-50 px-3 py-2.5 flex items-center gap-2">
-                          <BookOpen className="w-3.5 h-3.5 text-pink-500 flex-shrink-0" />
-                          <span className="text-[12px] font-semibold text-pink-700 truncate">{s.contactName}</span>
-                          {s.lesson && <span className="text-[10px] text-pink-500 truncate flex-1">{s.lesson}</span>}
-                        </div>
-                        {/* Caja 2: hora */}
-                        <div className="rounded-t-none rounded-b-2xl border-x border-b border-t-0 border-pink-200 bg-background/60 px-3 py-1.5 flex items-center gap-1.5">
-                          <Clock className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                          <span className="text-[11px] text-muted-foreground">{s.time}</span>
-                        </div>
+                    </div>
+                  );
+                })}
+
+                {selectedStudySessions.map((s) => {
+                  const [h, m] = s.time.split(":").map(Number);
+                  const minutes = (h - TIMELINE_START_HOUR) * 60 + m;
+                  if (minutes < 0 || minutes > (TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60) return null;
+                  const top = timelineTopFromMinutes(minutes);
+                  return (
+                    <div key={s.id} className="absolute left-4 right-0 z-10" style={{ top }}>
+                      {/* Caja 1: nombre */}
+                      <div className="rounded-t-2xl rounded-b-none border-x border-t border-pink-200 bg-pink-50 px-3 py-2.5 flex items-center gap-2">
+                        <BookOpen className="w-3.5 h-3.5 text-pink-500 flex-shrink-0" />
+                        <span className="text-[12px] font-semibold text-pink-700 truncate">{s.contactName}</span>
+                        {s.lesson && <span className="text-[10px] text-pink-500 truncate flex-1">{s.lesson}</span>}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+                      {/* Caja 2: hora */}
+                      <div className="rounded-t-none rounded-b-2xl border-x border-b border-t-0 border-pink-200 bg-background/60 px-3 py-1.5 flex items-center gap-1.5">
+                        <Clock className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                        <span className="text-[11px] text-muted-foreground">{s.time}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
           </div>{/* /container 2 */}
         </>
@@ -898,16 +987,27 @@ export function CalendarView({
             {!isAddingPastNoRepeat && (
               <div className="space-y-2">
                 <Label>{t("cal_reminder")}</Label>
-                <Select value={reminder} onValueChange={setReminder}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">{t("cal_min_before", { n: 5 })}</SelectItem>
-                    <SelectItem value="10">{t("cal_min_before", { n: 10 })}</SelectItem>
-                    <SelectItem value="15">{t("cal_min_before", { n: 15 })}</SelectItem>
-                    <SelectItem value="30">{t("cal_min_before", { n: 30 })}</SelectItem>
-                    <SelectItem value="60">{t("cal_1h_before")}</SelectItem>
-                  </SelectContent>
-                </Select>
+                {travelReminder.enabled ? (
+                  <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+                    <p className="text-sm font-medium text-foreground">
+                      {travelReminderPreview > 0 ? `${travelReminderPreview} minutes before` : "At start time"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Adjusted from travel time so it stays after the previous event.
+                    </p>
+                  </div>
+                ) : (
+                  <Select value={reminder} onValueChange={setReminder}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">{t("cal_min_before", { n: 5 })}</SelectItem>
+                      <SelectItem value="10">{t("cal_min_before", { n: 10 })}</SelectItem>
+                      <SelectItem value="15">{t("cal_min_before", { n: 15 })}</SelectItem>
+                      <SelectItem value="30">{t("cal_min_before", { n: 30 })}</SelectItem>
+                      <SelectItem value="60">{t("cal_1h_before")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             )}
             <div className="space-y-2">

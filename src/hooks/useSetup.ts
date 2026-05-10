@@ -6,6 +6,8 @@ export interface SetupData {
   name?: string;
   city: { name: string; lat: number; lng: number } | null;
   precursorHours: number | null;
+  travelTimeEnabled: boolean;
+  travelTimeMinutes: number;
   hasBibleStudies: boolean;
   completed: boolean;
   language?: Lang;
@@ -14,6 +16,8 @@ export interface SetupData {
 const DEFAULT: SetupData = {
   city: null,
   precursorHours: null,
+  travelTimeEnabled: false,
+  travelTimeMinutes: 0,
   hasBibleStudies: false,
   completed: false,
   language: detectLanguage(),
@@ -36,6 +40,9 @@ function parseStoredCity(value: unknown): SetupData["city"] {
 
 function parseStoredSetup(value: unknown): SetupData {
   if (!isRecord(value)) return DEFAULT;
+  const travelTimeMinutes = typeof value.travelTimeMinutes === "number" && Number.isFinite(value.travelTimeMinutes)
+    ? Math.min(180, Math.max(0, Math.round(value.travelTimeMinutes)))
+    : DEFAULT.travelTimeMinutes;
 
   return {
     name: typeof value.name === "string" ? value.name : undefined,
@@ -43,6 +50,8 @@ function parseStoredSetup(value: unknown): SetupData {
     precursorHours: typeof value.precursorHours === "number"
       ? value.precursorHours
       : (value.isPrecursor === true ? 30 : DEFAULT.precursorHours),
+    travelTimeEnabled: typeof value.travelTimeEnabled === "boolean" ? value.travelTimeEnabled : DEFAULT.travelTimeEnabled,
+    travelTimeMinutes,
     hasBibleStudies: typeof value.hasBibleStudies === "boolean" ? value.hasBibleStudies : DEFAULT.hasBibleStudies,
     completed: typeof value.completed === "boolean" ? value.completed : DEFAULT.completed,
     language: isLanguage(value.language) ? value.language : DEFAULT.language,

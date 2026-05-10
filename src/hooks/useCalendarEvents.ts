@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { generateId } from "@/lib/uuid";
 import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
+import { clampReminderMinutes } from "@/lib/eventReminders";
 
 export type EventCategory = "Predi" | "Carrito" | "LDC" | "Visitas" | "Estudio";
 export type RecurrenceType = "none" | "weekly" | "monthly";
@@ -52,7 +53,7 @@ function parseStoredEvent(value: unknown): CalendarEvent | null {
   const recurrence = isRecurrenceType(value.recurrence) ? value.recurrence : "none";
   const reminder =
     typeof value.reminderMinutesBefore === "number" && Number.isFinite(value.reminderMinutesBefore)
-      ? value.reminderMinutesBefore
+      ? clampReminderMinutes(value.reminderMinutesBefore)
       : 15;
   const location =
     isRecord(value.location) &&

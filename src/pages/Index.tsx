@@ -24,6 +24,8 @@ import { useSpecialCampaign } from "@/hooks/useSpecialCampaign";
 import { CATEGORY_META, CATEGORY_STYLE } from "@/lib/categories";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 import { removeJsonValue } from "@/lib/jsonFileStorage";
+import { shouldNotifyEvent } from "@/lib/eventReminders";
+import { findActiveScheduledEvent, getEventEndDate, shouldShowTimerOverrunPrompt } from "@/lib/timerOverrun";
 
 type Tab = AppTab;
 type Category = EventCategory;
@@ -47,6 +49,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const [activeTab, setActiveTab] = useState<Tab>("timer");
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [timerOverrunDismissedId, setTimerOverrunDismissedId] = useState<string | null>(null);
+  const [timerOverrunSnoozes, setTimerOverrunSnoozes] = useState<Record<string, number>>({});
+  const [timerOverrunSnoozeTime, setTimerOverrunSnoozeTime] = useState("15:00");
+  const [timerOverrunNotifiedId, setTimerOverrunNotifiedId] = useState<string | null>(null);
   const tracker = useTimeTracker();
   const calendar = useCalendarEvents();
   const favorites = useFavoritePlaces();
@@ -62,18 +68,41 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
   const activeEntry = tracker.entries.find((e) => e.endTime === null);
   const defaultCenter = setup.city ?? undefined;
+  const activeScheduledEvent = findActiveScheduledEvent(activeEntry, calendarEvents);
+  const showTimerOverrunPrompt =
+    tracker.isRunning &&
+    activeScheduledEvent?.id !== timerOverrunDismissedId &&
+    shouldShowTimerOverrunPrompt(
+      new Date(),
+      activeScheduledEvent,
+      setup.travelTimeEnabled ? setup.travelTimeMinutes : 0,
+      activeScheduledEvent ? timerOverrunSnoozes[activeScheduledEvent.id] : undefined
+    );
+
+  const stopActiveTimer = () => {
+    tracker.clockOut((eventId, endTime) => calendar.updateEvent(eventId, { endTime }));
+    setTimerOverrunDismissedId(activeScheduledEvent?.id ?? null);
+  };
+
+  const postponeTimerOverrunPrompt = () => {
+    if (!activeScheduledEvent) return;
+    const [hours, minutes] = timerOverrunSnoozeTime.split(":").map(Number);
+    const next = new Date();
+    next.setHours(hours, minutes, 0, 0);
+    if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1);
+    setTimerOverrunSnoozes((prev) => ({ ...prev, [activeScheduledEvent.id]: next.getTime() }));
+    setTimerOverrunNotifiedId(null);
+  };
 
   useEffect(() => {
     const check = () => {
       const now = Date.now();
       calendarEvents.forEach((event) => {
-        if (event.notified || event.completed) return;
-        const start = event.date.getTime();
-        if (now >= start && now < start + 60_000) {
+        if (shouldNotifyEvent(now, event)) {
           if (!tracker.isRunning) {
             if ("Notification" in window && Notification.permission === "granted") {
-              new Notification("⏰ Evento en curso sin fichaje", {
-                body: `${event.category} — No estás fichando. ¡Inicia el fichaje!`,
+              new Notification("⏰ Upcoming event", {
+                body: `${event.category} starts soon. Start tracking when needed.`,
               });
             }
           }
@@ -85,6 +114,16 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     const interval = setInterval(check, 30_000);
     return () => clearInterval(interval);
   }, [calendarEvents, tracker.isRunning, markNotified]);
+
+  useEffect(() => {
+    if (!showTimerOverrunPrompt || !activeScheduledEvent || timerOverrunNotifiedId === activeScheduledEvent.id) return;
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("⏰ Timer still running", {
+        body: `${activeScheduledEvent.category} has passed its scheduled end time. Stop it or postpone the reminder.`,
+      });
+    }
+    setTimerOverrunNotifiedId(activeScheduledEvent.id);
+  }, [activeScheduledEvent, showTimerOverrunPrompt, timerOverrunNotifiedId]);
 
   const userName = setup.name || setup.city?.name || "Amigo";
 
@@ -345,6 +384,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               defaultCenter={defaultCenter}
               estudiosContacts={estudios.contacts}
               precursorHours={setup.precursorHours}
+              travelReminder={{
+                enabled: setup.travelTimeEnabled,
+                minutes: setup.travelTimeMinutes,
+              }}
               specialCampaignGoals={campaign.goals}
               onSetSpecialCampaign={campaign.setGoal}
             />
@@ -438,6 +481,51 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         onComplete={estudios.completeSession}
         onReschedule={estudios.updateSession}
       />
+
+      {showTimerOverrunPrompt && activeScheduledEvent && (() => {
+        const end = getEventEndDate(activeScheduledEvent);
+        const endLabel = end?.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) ?? "";
+        return (
+          <div className="fixed bottom-24 left-0 right-0 px-4 max-w-md mx-auto z-50">
+            <div className="rounded-2xl border border-amber-500/30 bg-card p-4 shadow-xl">
+              <div className="mb-3">
+                <p className="text-sm font-bold text-foreground">Timer still running</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {activeScheduledEvent.category} was scheduled to finish at {endLabel}. Do you want to stop the timer or be reminded later?
+                </p>
+              </div>
+              <div className="grid grid-cols-[1fr_auto] gap-2 mb-2">
+                <input
+                  type="time"
+                  value={timerOverrunSnoozeTime}
+                  onChange={(event) => setTimerOverrunSnoozeTime(event.target.value)}
+                  className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
+                />
+                <button
+                  onClick={postponeTimerOverrunPrompt}
+                  className="rounded-xl bg-muted px-3 py-2 text-sm font-semibold text-foreground"
+                >
+                  Postpone
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={stopActiveTimer}
+                  className="rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
+                >
+                  Stop timer
+                </button>
+                <button
+                  onClick={() => setTimerOverrunDismissedId(activeScheduledEvent.id)}
+                  className="rounded-xl border border-border px-3 py-2 text-sm font-semibold text-foreground"
+                >
+                  Keep running
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <BottomNav
         activeTab={activeTab}

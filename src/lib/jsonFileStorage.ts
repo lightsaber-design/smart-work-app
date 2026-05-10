@@ -5,6 +5,7 @@ type StorageKey =
   | "estudios"
   | "favorite-places"
   | "specialCampaign"
+  | "monthly-report-carryover"
   | "darkMode"
   | "excludedCategories";
 
@@ -121,6 +122,7 @@ function readLegacyBrowserData(): AppData {
     estudios: "estudios",
     "favorite-places": "favorite-places",
     specialCampaign: "specialCampaign",
+    "monthly-report-carryover": "monthly-report-carryover",
     darkMode: "darkMode",
     excludedCategories: "excludedCategories",
   };
@@ -139,6 +141,7 @@ function clearLegacyBrowserData() {
     "estudios",
     "favorite-places",
     "specialCampaign",
+    "monthly-report-carryover",
     "darkMode",
     "excludedCategories",
   ].forEach((key) => localStorage.removeItem(key));

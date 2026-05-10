@@ -3,7 +3,9 @@ import { CalendarEvent, EventCategory } from "@/hooks/useCalendarEvents";
 import { TimeEntry } from "@/hooks/useTimeTracker";
 import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { useCategoryFilter } from "@/hooks/useCategoryFilter";
+import { useMonthlyReportCarryover } from "@/hooks/useMonthlyReportCarryover";
 import { CATEGORY_LIST, CATEGORY_META } from "@/lib/categories";
+import { calculateMonthlyReport } from "@/lib/monthlyReport";
 import { msToLabel } from "@/lib/time";
 import { useT } from "@/lib/LanguageContext";
 import { CheckCircle2, Pencil, Check, Send } from "lucide-react";
@@ -34,6 +36,7 @@ export function StatsView({
   const [mode, setMode] = useState<"mensual" | "anual">("mensual");
   const [editing, setEditing] = useState(false);
   const { excluded, toggle, isIncluded } = useCategoryFilter();
+  const { carryover, saveMonthlyReport } = useMonthlyReportCarryover();
   const now = new Date();
 
   // ── MENSUAL ──────────────────────────────────────────────────────────────
@@ -58,6 +61,13 @@ export function StatsView({
     );
 
   const maxCompletedMs = Math.max(...Object.values(completedMsByCategory), 1);
+  const includedCategories = CATEGORY_LIST.filter((c) => isIncluded(c as EventCategory));
+  const monthlyCategoryTotals = includedCategories.map((cat) => ({
+    cat,
+    ms: completedMsByCategory[cat] ?? 0,
+  }));
+  const monthlyFilteredMs = monthlyCategoryTotals.reduce((sum, item) => sum + item.ms, 0);
+  const monthlyReport = calculateMonthlyReport(monthlyFilteredMs, now, carryover);
 
 
   // ── ANUAL (año sep–ago) ───────────────────────────────────────────────────
@@ -103,6 +113,11 @@ export function StatsView({
     { yearMsByCategory: {} as Record<string, number>, yearCountByCategory: {} as Record<string, number> }
   );
   const maxYearCatMs = Math.max(...CATEGORY_LIST.map((c) => yearMsByCategory[c] ?? 0), 1);
+  const yearlyCategoryTotals = includedCategories.map((cat) => ({
+    cat,
+    ms: yearMsByCategory[cat] ?? 0,
+  }));
+  const yearFilteredMs = yearlyCategoryTotals.reduce((sum, item) => sum + item.ms, 0);
 
   return (
     <div className="px-4 space-y-4 pb-24">
@@ -128,9 +143,9 @@ export function StatsView({
           {/* Precursor progress banner */}
           {precursorHours != null && (() => {
             const goalMs = precursorHours * 3_600_000;
-            const pct = Math.min(100, Math.round((monthTotal / goalMs) * 100));
-            const remaining = Math.max(0, goalMs - monthTotal);
-            const done = monthTotal >= goalMs;
+            const pct = Math.min(100, Math.round((monthlyFilteredMs / goalMs) * 100));
+            const remaining = Math.max(0, goalMs - monthlyFilteredMs);
+            const done = monthlyFilteredMs >= goalMs;
             return (
               <div className={`rounded-2xl px-5 py-4 border ${done ? "bg-green-500/10 border-green-500/20" : "bg-blue-500/10 border-blue-500/20"}`}>
                 <div className="flex items-center justify-between mb-2">
@@ -145,7 +160,7 @@ export function StatsView({
                   <div className={`h-full rounded-full transition-all ${done ? "bg-green-500" : "bg-blue-500"}`} style={{ width: `${pct}%` }} />
                 </div>
                 <p className={`text-xs mt-1.5 ${done ? "text-green-600/70 dark:text-green-400/70" : "text-blue-600/70 dark:text-blue-400/70"}`}>
-                  {msToLabel(monthTotal)} de {precursorHours}h
+                  {msToLabel(monthlyFilteredMs)} de {precursorHours}h
                 </p>
               </div>
             );
@@ -156,7 +171,7 @@ export function StatsView({
             const currentKey = monthKey(now);
             const campaignGoal = specialCampaignGoals?.[currentKey] ?? null;
             const goalMs = campaignGoal ? campaignGoal * 3_600_000 : 0;
-            const pct = campaignGoal ? Math.min(100, Math.round((monthTotal / goalMs) * 100)) : 0;
+            const pct = campaignGoal ? Math.min(100, Math.round((monthlyFilteredMs / goalMs) * 100)) : 0;
             return (
               <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 px-5 py-4">
                 <div className="flex items-center gap-2 mb-3">
@@ -183,7 +198,7 @@ export function StatsView({
                     <div className="h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden mb-1.5">
                       <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${pct}%` }} />
                     </div>
-                    <p className="text-xs text-amber-700/70 dark:text-amber-400/70">{msToLabel(monthTotal)} de {campaignGoal}h</p>
+                    <p className="text-xs text-amber-700/70 dark:text-amber-400/70">{msToLabel(monthlyFilteredMs)} de {campaignGoal}h</p>
                   </>
                 )}
               </div>
@@ -203,21 +218,28 @@ export function StatsView({
 
           {/* Resumen total mes (filtered) */}
           {(() => {
-            const filteredMs = CATEGORY_LIST
-              .filter((c) => isIncluded(c as EventCategory))
-              .reduce((sum, c) => sum + (completedMsByCategory[c] ?? 0), 0);
             const hasExclusions = excluded.size > 0;
             return (
               <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4 flex items-center justify-between">
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground mb-0.5 capitalize">
                     {now.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
                     {hasExclusions && <span className="ml-1 text-primary/70">· filtrado</span>}
                   </p>
                   <p className="text-2xl font-bold text-foreground tabular-nums">
-                    {filteredMs > 0 ? msToLabel(filteredMs) : "–"}
+                    {monthlyFilteredMs > 0 ? msToLabel(monthlyFilteredMs) : "–"}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">tiempo en eventos</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">time in events</p>
+                  <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                    <p>
+                      Report to send: <span className="font-semibold text-foreground tabular-nums">{monthlyReport.reportedHours}h</span>
+                    </p>
+                    {(monthlyReport.carriedInMinutes > 0 || monthlyReport.carriedOutMinutes > 0) && (
+                      <p>
+                        Carryover: +{monthlyReport.carriedInMinutes}m in · {monthlyReport.carriedOutMinutes}m saved
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="text-3xl">📋</div>
               </div>
@@ -290,20 +312,33 @@ export function StatsView({
                   </div>
                 );
               })}
+              <div className="flex items-center justify-between border-t border-border pt-3">
+                <span className="text-[13px] font-bold text-foreground">Selected total</span>
+                <span className="text-[13px] font-bold text-foreground tabular-nums">
+                  {monthlyFilteredMs > 0 ? msToLabel(monthlyFilteredMs) : "0m"}
+                </span>
+              </div>
             </div>
           </div>
 
           {/* Enviar Informe mensual */}
           {(() => {
-            const filteredMs = CATEGORY_LIST
-              .filter((c) => isIncluded(c as EventCategory))
-              .reduce((sum, c) => sum + (completedMsByCategory[c] ?? 0), 0);
             const estudiosCount = completedCountByCategory["Estudio"] ?? 0;
             const monthLabel = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
-            const msg = `📊 Informe ${monthLabel}\n⏱️ Horas: ${filteredMs > 0 ? msToLabel(filteredMs) : "0m"}\n📖 Estudios: ${estudiosCount}`;
+            const categoryLines = monthlyCategoryTotals.map(({ cat, ms }) => `${cat}: ${ms > 0 ? msToLabel(ms) : "0m"}`);
+            const msg = [
+              `📊 Informe ${monthLabel}`,
+              ...categoryLines,
+              `Total: ${monthlyFilteredMs > 0 ? msToLabel(monthlyFilteredMs) : "0m"}`,
+              `⏱️ Horas a enviar: ${monthlyReport.reportedHours}h`,
+              `📖 Estudios: ${estudiosCount}`,
+            ].join("\n");
             return (
               <button
-                onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank")}
+                onClick={() => {
+                  saveMonthlyReport(monthlyReport);
+                  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+                }}
                 className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold text-sm transition-colors shadow-sm"
               >
                 <Send className="w-4 h-4" />
@@ -356,13 +391,10 @@ export function StatsView({
 
           {/* Resumen total año (filtered) */}
           {(() => {
-            const yearFilteredMs = CATEGORY_LIST
-              .filter((c) => isIncluded(c as EventCategory))
-              .reduce((sum, c) => sum + (yearMsByCategory[c] ?? 0), 0);
             const hasExclusions = excluded.size > 0;
             return (
               <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4 flex items-center justify-between">
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground mb-0.5">
                     Total {serviceYearLabel}
                     {hasExclusions && <span className="ml-1 text-primary/70">· filtrado</span>}
@@ -370,7 +402,7 @@ export function StatsView({
                   <p className="text-2xl font-bold text-foreground tabular-nums">
                     {yearFilteredMs > 0 ? msToLabel(yearFilteredMs) : "–"}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{yearCompletedEvents.length} eventos completados</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{yearCompletedEvents.length} completed events</p>
                 </div>
                 <div className="text-3xl">📅</div>
               </div>
@@ -480,16 +512,25 @@ export function StatsView({
                   </div>
                 );
               })}
+              <div className="flex items-center justify-between border-t border-border pt-3">
+                <span className="text-[13px] font-bold text-foreground">Selected total</span>
+                <span className="text-[13px] font-bold text-foreground tabular-nums">
+                  {yearFilteredMs > 0 ? msToLabel(yearFilteredMs) : "0m"}
+                </span>
+              </div>
             </div>
           </div>
 
           {/* Enviar Informe anual */}
           {(() => {
-            const yearFilteredMs = CATEGORY_LIST
-              .filter((c) => isIncluded(c as EventCategory))
-              .reduce((sum, c) => sum + (yearMsByCategory[c] ?? 0), 0);
             const estudiosCount = yearCountByCategory["Estudio"] ?? 0;
-            const msg = `📊 Informe Anual ${serviceYearLabel}\n⏱️ Horas: ${yearFilteredMs > 0 ? msToLabel(yearFilteredMs) : "0m"}\n📖 Estudios: ${estudiosCount}`;
+            const categoryLines = yearlyCategoryTotals.map(({ cat, ms }) => `${cat}: ${ms > 0 ? msToLabel(ms) : "0m"}`);
+            const msg = [
+              `📊 Informe Anual ${serviceYearLabel}`,
+              ...categoryLines,
+              `Total: ${yearFilteredMs > 0 ? msToLabel(yearFilteredMs) : "0m"}`,
+              `📖 Estudios: ${estudiosCount}`,
+            ].join("\n");
             return (
               <button
                 onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank")}

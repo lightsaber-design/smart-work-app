@@ -2,6 +2,7 @@ import { useState } from "react";
 import { SetupData } from "@/hooks/useSetup";
 import { CitySearch } from "@/components/CitySearch";
 import { PrecursorHoursConfig } from "@/components/PrecursorHoursConfig";
+import { TravelTimeConfig } from "@/components/TravelTimeConfig";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { MapPin, Clock, User } from "lucide-react";
@@ -18,6 +19,8 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
   const [name, setName] = useState("");
   const [city, setCity] = useState<{ name: string; lat: number; lng: number } | null>(null);
   const [precursorHours, setPrecursorHours] = useState<number | null>(null);
+  const [travelTimeEnabled, setTravelTimeEnabled] = useState(false);
+  const [travelTimeMinutes, setTravelTimeMinutes] = useState(30);
   const [selectedLang, setSelectedLang] = useState<Lang>(detectLanguage());
 
   const handleLangSelect = (lang: Lang) => {
@@ -26,7 +29,15 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
   };
 
   const handleSubmit = () => {
-    onComplete({ name: name.trim() || undefined, city, precursorHours, hasBibleStudies: false, language: selectedLang });
+    onComplete({
+      name: name.trim() || undefined,
+      city,
+      precursorHours,
+      travelTimeEnabled,
+      travelTimeMinutes,
+      hasBibleStudies: false,
+      language: selectedLang,
+    });
   };
 
   return (
@@ -95,6 +106,18 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
             <p className="text-xs text-muted-foreground">{t('setup_precursor_hint')}</p>
           </div>
           <PrecursorHoursConfig value={precursorHours} onChange={setPrecursorHours} />
+        </div>
+
+        {/* Tiempo de trayecto */}
+        <div className="rounded-xl bg-card border border-border p-5">
+          <TravelTimeConfig
+            enabled={travelTimeEnabled}
+            minutes={travelTimeMinutes}
+            onChange={(value) => {
+              setTravelTimeEnabled(value.enabled);
+              setTravelTimeMinutes(value.minutes);
+            }}
+          />
         </div>
 
         <Button onClick={handleSubmit} className="w-full" size="lg">
