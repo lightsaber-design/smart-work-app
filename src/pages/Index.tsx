@@ -502,47 +502,10 @@ const Index = () => {
   const [setupLang, setSetupLang] = useState<Lang>(detectLanguage);
   const lang = setup.completed ? (setup.language ?? detectLanguage()) : setupLang;
 
-  if (!storage.supported) {
-    return (
-      <div className="min-h-screen bg-background text-foreground max-w-md mx-auto flex flex-col items-center justify-center px-6 text-center gap-4">
-        <h1 className="text-xl font-bold">JSON file storage required</h1>
-        <p className="text-sm text-muted-foreground">
-          Use Chrome or Edge to save app data directly in a permanent JSON file.
-        </p>
-      </div>
-    );
-  }
-
   if (!storage.ready || setupLoading) {
     return (
       <div className="min-h-screen bg-background text-foreground max-w-md mx-auto flex items-center justify-center">
         <p className="text-sm text-muted-foreground">Loading data...</p>
-      </div>
-    );
-  }
-
-  if (!storage.connected) {
-    return (
-      <div className="min-h-screen bg-background text-foreground max-w-md mx-auto flex flex-col items-center justify-center px-6 text-center gap-4">
-        <h1 className="text-xl font-bold">Connect your data file</h1>
-        <p className="text-sm text-muted-foreground">
-          Create or open a JSON file. The app will save your data there instead of browser storage.
-        </p>
-        <div className="w-full space-y-2">
-          <button
-            onClick={storage.createFile}
-            className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground"
-          >
-            Create JSON file
-          </button>
-          <button
-            onClick={storage.openFile}
-            className="w-full rounded-xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground"
-          >
-            Open existing JSON
-          </button>
-        </div>
-        {storage.error && <p className="text-xs text-destructive">{storage.error}</p>}
       </div>
     );
   }

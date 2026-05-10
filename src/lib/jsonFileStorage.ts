@@ -177,6 +177,7 @@ export function subscribeJsonStorage(listener: () => void) {
 export async function initializeJsonStorage() {
   if (readyPromise) return readyPromise;
   readyPromise = (async () => {
+    dataCache = readLegacyBrowserData();
     const handle = await getStoredHandle();
     if (!handle || !(await ensurePermission(handle))) return;
     handleCache = handle;
@@ -226,6 +227,11 @@ export async function readJsonValue<T>(key: StorageKey, fallback: T): Promise<T>
 export async function writeJsonValue(key: StorageKey, value: unknown) {
   await initializeJsonStorage();
   dataCache = { ...dataCache, [key]: value };
+  if (!handleCache) {
+    localStorage.setItem(key, key === "darkMode" ? String(value) : JSON.stringify(value));
+    notify();
+    return;
+  }
   await writeFile();
 }
 
@@ -234,5 +240,10 @@ export async function removeJsonValue(key: StorageKey) {
   const next = { ...dataCache };
   delete next[key];
   dataCache = next;
+  if (!handleCache) {
+    localStorage.removeItem(key);
+    notify();
+    return;
+  }
   await writeFile();
 }

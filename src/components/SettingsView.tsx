@@ -128,17 +128,23 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
           <div className="flex items-center gap-2">
             <FileJson className="h-4 w-4 text-primary" />
             <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">JSON data file</p>
-              <p className="text-xs text-muted-foreground truncate">{storage.fileName ?? "No file connected"}</p>
+              <p className="text-sm font-medium text-foreground">
+                {storage.connected ? "JSON data file" : "Local browser storage"}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {storage.fileName ?? "Data is saved on this device"}
+              </p>
             </div>
           </div>
-          <button
-            onClick={storage.openFile}
-            className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-          >
-            <FolderOpen className="w-4 h-4" />
-            Open another JSON file
-          </button>
+          {storage.supported && (
+            <button
+              onClick={storage.connected ? storage.openFile : storage.createFile}
+              className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+            >
+              <FolderOpen className="w-4 h-4" />
+              {storage.connected ? "Open another JSON file" : "Save data to a JSON file"}
+            </button>
+          )}
         </div>
         <p className="text-sm text-muted-foreground mb-4">
           {t('set_records', { count: entryCount })}
