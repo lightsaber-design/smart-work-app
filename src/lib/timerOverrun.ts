@@ -2,6 +2,8 @@ import type { CalendarEvent } from "@/hooks/useCalendarEvents";
 import type { TimeEntry } from "@/hooks/useTimeTracker";
 import { clampReminderMinutes } from "@/lib/eventReminders";
 
+const DEFAULT_EVENT_DURATION_MINUTES = 60;
+
 export function getEventEndDate(event: CalendarEvent): Date | null {
   if (!event.endTime) return null;
   const [hours, minutes] = event.endTime.split(":").map(Number);
@@ -15,13 +17,34 @@ function isSameDay(a: Date, b: Date) {
   return a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
 }
 
+function getEstimatedEventEndDate(event: CalendarEvent): Date {
+  return getEventEndDate(event) ?? new Date(event.date.getTime() + DEFAULT_EVENT_DURATION_MINUTES * 60_000);
+}
+
+export function findScheduledEventForTimerStart(
+  startTime: Date,
+  category: CalendarEvent["category"],
+  events: CalendarEvent[]
+): CalendarEvent | null {
+  return events
+    .filter((event) => {
+      const end = getEstimatedEventEndDate(event);
+      if (event.completed || event.category !== category) return false;
+      if (!isSameDay(event.date, startTime)) return false;
+      return startTime.getTime() >= event.date.getTime() - 15 * 60_000 && startTime.getTime() <= end.getTime();
+    })
+    .sort((a, b) => Math.abs(a.date.getTime() - startTime.getTime()) - Math.abs(b.date.getTime() - startTime.getTime()))[0] ?? null;
+}
+
 export function findActiveScheduledEvent(activeEntry: TimeEntry | undefined, events: CalendarEvent[]): CalendarEvent | null {
   if (!activeEntry || activeEntry.endTime) return null;
 
   return events
     .filter((event) => {
-      const end = getEventEndDate(event);
-      if (!end || event.completed || event.category !== activeEntry.category) return false;
+      const isLinkedEvent = activeEntry.linkedEventId === event.id;
+      const end = getEstimatedEventEndDate(event);
+      if (!isLinkedEvent && event.completed) return false;
+      if (event.category !== activeEntry.category) return false;
       if (!isSameDay(event.date, activeEntry.startTime)) return false;
       return activeEntry.startTime.getTime() >= event.date.getTime() - 15 * 60_000 && activeEntry.startTime.getTime() <= end.getTime();
     })
@@ -36,8 +59,7 @@ export function shouldShowTimerOverrunPrompt(
 ): boolean {
   if (!event) return false;
   if (snoozedUntilMs && now.getTime() < snoozedUntilMs) return false;
-  const end = getEventEndDate(event);
-  if (!end) return false;
+  const end = getEstimatedEventEndDate(event);
   const dueMs = end.getTime() + clampReminderMinutes(travelTimeMinutes) * 60_000;
   return now.getTime() >= dueMs;
 }

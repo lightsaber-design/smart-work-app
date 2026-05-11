@@ -34,7 +34,8 @@ export function CitySearch({ value, onChange, placeholder = "Buscar ciudad..." }
       setLoading(true);
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&addressdetails=1`
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&addressdetails=1`,
+          { referrerPolicy: "no-referrer" }
         );
         const data: CityResult[] = await res.json();
         setSuggestions(data);

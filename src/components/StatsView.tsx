@@ -5,10 +5,11 @@ import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { useCategoryFilter } from "@/hooks/useCategoryFilter";
 import { useMonthlyReportCarryover } from "@/hooks/useMonthlyReportCarryover";
 import { CATEGORY_LIST, CATEGORY_META } from "@/lib/categories";
+import { applyMonthlyLdcCap } from "@/lib/ldcCap";
 import { calculateMonthlyReport } from "@/lib/monthlyReport";
 import { msToLabel } from "@/lib/time";
 import { useT } from "@/lib/LanguageContext";
-import { CheckCircle2, Pencil, Check, Send } from "lucide-react";
+import { Pencil, Check, Send } from "lucide-react";
 
 interface StatsViewProps {
   entries: TimeEntry[];
@@ -66,7 +67,12 @@ export function StatsView({
     cat,
     ms: completedMsByCategory[cat] ?? 0,
   }));
-  const monthlyFilteredMs = monthlyCategoryTotals.reduce((sum, item) => sum + item.ms, 0);
+  const monthlyCappedCategoryTotals = applyMonthlyLdcCap(monthlyCategoryTotals);
+  const monthlyFilteredMs = monthlyCappedCategoryTotals.reduce((sum, item) => sum + item.ms, 0);
+  const monthlyRawFilteredMs = monthlyCategoryTotals.reduce((sum, item) => sum + item.ms, 0);
+  const monthlyLdcRawMs = monthlyCategoryTotals.find((item) => item.cat === "LDC")?.ms ?? 0;
+  const monthlyLdcCountedMs = monthlyCappedCategoryTotals.find((item) => item.cat === "LDC")?.ms ?? 0;
+  const isMonthlyLdcCapped = monthlyLdcRawMs > monthlyLdcCountedMs;
   const monthlyReport = calculateMonthlyReport(monthlyFilteredMs, now, carryover);
 
 
@@ -140,31 +146,6 @@ export function StatsView({
       {/* ── MENSUAL ── */}
       {mode === "mensual" && (
         <>
-          {/* Precursor progress banner */}
-          {precursorHours != null && (() => {
-            const goalMs = precursorHours * 3_600_000;
-            const pct = Math.min(100, Math.round((monthlyFilteredMs / goalMs) * 100));
-            const remaining = Math.max(0, goalMs - monthlyFilteredMs);
-            const done = monthlyFilteredMs >= goalMs;
-            return (
-              <div className={`rounded-2xl px-5 py-4 border ${done ? "bg-green-500/10 border-green-500/20" : "bg-blue-500/10 border-blue-500/20"}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <p className={`text-xs font-semibold ${done ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>
-                    ⭐ Meta precursor · {precursorHours}h/mes
-                  </p>
-                  <span className={`text-xs font-bold ${done ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>
-                    {done ? "✓ Completado" : `Faltan ${msToLabel(remaining)}`}
-                  </span>
-                </div>
-                <div className="h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-                  <div className={`h-full rounded-full transition-all ${done ? "bg-green-500" : "bg-blue-500"}`} style={{ width: `${pct}%` }} />
-                </div>
-                <p className={`text-xs mt-1.5 ${done ? "text-green-600/70 dark:text-green-400/70" : "text-blue-600/70 dark:text-blue-400/70"}`}>
-                  {msToLabel(monthlyFilteredMs)} de {precursorHours}h
-                </p>
-              </div>
-            );
-          })()}
 
           {/* Campaign special toggle (only when not a precursor) */}
           {precursorHours === null && (() => {
@@ -205,43 +186,66 @@ export function StatsView({
             );
           })()}
 
-          {/* Quick stats */}
-          <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-3 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, #4ade8030, #34d39930)" }}>
-              <CheckCircle2 className="w-4 h-4 text-green-500" />
-            </div>
-            <div>
-              <p className="text-xl font-black tabular-nums text-foreground leading-none">{monthCompletedEvents.length}</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Eventos completados este mes</p>
-            </div>
-          </div>
 
           {/* Resumen total mes (filtered) */}
           {(() => {
             const hasExclusions = excluded.size > 0;
+            const goalMs = precursorHours != null ? precursorHours * 3_600_000 : 0;
+            const goalPct = goalMs > 0 ? Math.min(100, Math.round((monthlyFilteredMs / goalMs) * 100)) : 0;
+            const goalRemaining = goalMs > 0 ? Math.max(0, goalMs - monthlyFilteredMs) : 0;
+            const goalDone = goalMs > 0 && monthlyFilteredMs >= goalMs;
             return (
-              <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4 flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-muted-foreground mb-0.5 capitalize">
-                    {now.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
-                    {hasExclusions && <span className="ml-1 text-primary/70">· filtrado</span>}
-                  </p>
-                  <p className="text-2xl font-bold text-foreground tabular-nums">
-                    {monthlyFilteredMs > 0 ? msToLabel(monthlyFilteredMs) : "–"}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">time in events</p>
-                  <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-                    <p>
-                      Report to send: <span className="font-semibold text-foreground tabular-nums">{monthlyReport.reportedHours}h</span>
+              <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground mb-0.5 capitalize">
+                      {now.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
+                      {hasExclusions && <span className="ml-1 text-primary/70">· filtrado</span>}
                     </p>
-                    {(monthlyReport.carriedInMinutes > 0 || monthlyReport.carriedOutMinutes > 0) && (
-                      <p>
-                        Carryover: +{monthlyReport.carriedInMinutes}m in · {monthlyReport.carriedOutMinutes}m saved
+                    <p className="text-2xl font-bold text-foreground tabular-nums">
+                      {monthlyFilteredMs > 0 ? msToLabel(monthlyFilteredMs) : "–"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">time in events</p>
+                    {isMonthlyLdcCapped && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        LDC counted as {msToLabel(monthlyLdcCountedMs)} of {msToLabel(monthlyLdcRawMs)} real hours.
+                        Real selected total: {msToLabel(monthlyRawFilteredMs)}.
                       </p>
                     )}
+                    <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                      <p>
+                        Report to send: <span className="font-semibold text-foreground tabular-nums">{monthlyReport.reportedHours}h</span>
+                      </p>
+                      {(monthlyReport.carriedInMinutes > 0 || monthlyReport.carriedOutMinutes > 0) && (
+                        <p>
+                          Carryover: +{monthlyReport.carriedInMinutes}m in · {monthlyReport.carriedOutMinutes}m saved
+                        </p>
+                      )}
+                    </div>
                   </div>
+                  <div className="text-3xl">📋</div>
                 </div>
-                <div className="text-3xl">📋</div>
+                {precursorHours != null && (
+                  <div className="mt-4 border-t border-border pt-3">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <p className={`text-xs font-semibold ${goalDone ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>
+                        Meta precursor · {precursorHours}h/mes
+                      </p>
+                      <span className={`text-xs font-bold ${goalDone ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>
+                        {goalDone ? "Completado" : `Faltan ${msToLabel(goalRemaining)}`}
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${goalDone ? "bg-green-500" : "bg-blue-500"}`}
+                        style={{ width: `${goalPct}%` }}
+                      />
+                    </div>
+                    <p className={`text-xs mt-1.5 ${goalDone ? "text-green-600/70 dark:text-green-400/70" : "text-blue-600/70 dark:text-blue-400/70"}`}>
+                      {msToLabel(monthlyFilteredMs)} de {precursorHours}h
+                    </p>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -264,7 +268,9 @@ export function StatsView({
             </div>
             <div className="space-y-3">
               {CATEGORY_LIST.map((cat) => {
-                const ms = completedMsByCategory[cat] ?? 0;
+                const rawMs = completedMsByCategory[cat] ?? 0;
+                const cappedMs = monthlyCappedCategoryTotals.find((item) => item.cat === cat)?.ms ?? 0;
+                const ms = cat === "LDC" ? cappedMs : rawMs;
                 const count = completedCountByCategory[cat] ?? 0;
                 const m = CATEGORY_META[cat];
                 const included = isIncluded(cat as EventCategory);
@@ -295,7 +301,12 @@ export function StatsView({
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between mb-1.5">
                         <p className="text-[13px] font-semibold text-foreground">{cat}</p>
-                        {ms > 0 && <p className="text-[11px] text-muted-foreground">{count} {count === 1 ? t("stats_event") : t("stats_events")}</p>}
+                        {rawMs > 0 && (
+                          <p className="text-[11px] text-muted-foreground">
+                            {count} {count === 1 ? t("stats_event") : t("stats_events")}
+                            {cat === "LDC" && isMonthlyLdcCapped ? ` · ${msToLabel(rawMs)} real` : ""}
+                          </p>
+                        )}
                       </div>
                       <div className="h-2 rounded-full bg-muted overflow-hidden">
                         {ms > 0 && (
@@ -306,7 +317,7 @@ export function StatsView({
                         )}
                       </div>
                     </div>
-                    <span className="text-[13px] font-bold text-foreground flex-shrink-0 w-12 text-right">
+                    <span className="text-[13px] font-bold text-foreground flex-shrink-0 w-16 text-right">
                       {ms > 0 ? msToLabel(ms) : "–"}
                     </span>
                   </div>
@@ -325,7 +336,11 @@ export function StatsView({
           {(() => {
             const estudiosCount = completedCountByCategory["Estudio"] ?? 0;
             const monthLabel = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
-            const categoryLines = monthlyCategoryTotals.map(({ cat, ms }) => `${cat}: ${ms > 0 ? msToLabel(ms) : "0m"}`);
+            const categoryLines = monthlyCappedCategoryTotals.map(({ cat, ms }) => {
+              const rawMs = monthlyCategoryTotals.find((item) => item.cat === cat)?.ms ?? 0;
+              const suffix = cat === "LDC" && rawMs > ms ? ` (${msToLabel(rawMs)} real)` : "";
+              return `${cat}: ${ms > 0 ? msToLabel(ms) : "0m"}${suffix}`;
+            });
             const msg = [
               `📊 Informe ${monthLabel}`,
               ...categoryLines,
@@ -337,7 +352,7 @@ export function StatsView({
               <button
                 onClick={() => {
                   saveMonthlyReport(monthlyReport);
-                  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+                  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
                 }}
                 className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold text-sm transition-colors shadow-sm"
               >
@@ -352,59 +367,51 @@ export function StatsView({
       {/* ── ANUAL ── */}
       {mode === "anual" && (
         <>
-          {/* Annual precursor goal (50h only) */}
-          {precursorHours === 50 && (() => {
-            const annualGoalMs = 600 * 3_600_000;
-            const pct = Math.min(100, Math.round((yearTotalMs / annualGoalMs) * 100));
-            const remaining = Math.max(0, annualGoalMs - yearTotalMs);
-            const done = yearTotalMs >= annualGoalMs;
-            return (
-              <div className={`rounded-2xl px-5 py-4 border ${done ? "bg-green-500/10 border-green-500/20" : "bg-blue-500/10 border-blue-500/20"}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <p className={`text-xs font-semibold ${done ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>
-                    ⭐ Meta anual precursor · 600h
-                  </p>
-                  <span className={`text-xs font-bold ${done ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>
-                    {done ? "✓ Completado" : `Faltan ${msToLabel(remaining)}`}
-                  </span>
-                </div>
-                <div className="h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-                  <div className={`h-full rounded-full transition-all ${done ? "bg-green-500" : "bg-blue-500"}`} style={{ width: `${pct}%` }} />
-                </div>
-                <p className={`text-xs mt-1.5 ${done ? "text-green-600/70 dark:text-green-400/70" : "text-blue-600/70 dark:text-blue-400/70"}`}>
-                  {msToLabel(yearTotalMs)} de 600h · {serviceYearLabel}
-                </p>
-              </div>
-            );
-          })()}
 
-          {/* Quick stats */}
-          <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-3 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, #4ade8030, #34d39930)" }}>
-              <CheckCircle2 className="w-4 h-4 text-green-500" />
-            </div>
-            <div>
-              <p className="text-xl font-black tabular-nums text-foreground leading-none">{yearCompletedEvents.length}</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Eventos completados este año</p>
-            </div>
-          </div>
 
           {/* Resumen total año (filtered) */}
           {(() => {
             const hasExclusions = excluded.size > 0;
+            const annualGoalMs = precursorHours === 50 ? 600 * 3_600_000 : 0;
+            const annualGoalPct = annualGoalMs > 0 ? Math.min(100, Math.round((yearTotalMs / annualGoalMs) * 100)) : 0;
+            const annualGoalRemaining = annualGoalMs > 0 ? Math.max(0, annualGoalMs - yearTotalMs) : 0;
+            const annualGoalDone = annualGoalMs > 0 && yearTotalMs >= annualGoalMs;
             return (
-              <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4 flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-muted-foreground mb-0.5">
-                    Total {serviceYearLabel}
-                    {hasExclusions && <span className="ml-1 text-primary/70">· filtrado</span>}
-                  </p>
-                  <p className="text-2xl font-bold text-foreground tabular-nums">
-                    {yearFilteredMs > 0 ? msToLabel(yearFilteredMs) : "–"}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{yearCompletedEvents.length} completed events</p>
+              <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground mb-0.5">
+                      Total {serviceYearLabel}
+                      {hasExclusions && <span className="ml-1 text-primary/70">· filtrado</span>}
+                    </p>
+                    <p className="text-2xl font-bold text-foreground tabular-nums">
+                      {yearFilteredMs > 0 ? msToLabel(yearFilteredMs) : "–"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">time in completed events</p>
+                  </div>
+                  <div className="text-3xl">📅</div>
                 </div>
-                <div className="text-3xl">📅</div>
+                {precursorHours === 50 && (
+                  <div className="mt-4 border-t border-border pt-3">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <p className={`text-xs font-semibold ${annualGoalDone ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>
+                        Meta anual precursor · 600h
+                      </p>
+                      <span className={`text-xs font-bold ${annualGoalDone ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>
+                        {annualGoalDone ? "Completado" : `Faltan ${msToLabel(annualGoalRemaining)}`}
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${annualGoalDone ? "bg-green-500" : "bg-blue-500"}`}
+                        style={{ width: `${annualGoalPct}%` }}
+                      />
+                    </div>
+                    <p className={`text-xs mt-1.5 ${annualGoalDone ? "text-green-600/70 dark:text-green-400/70" : "text-blue-600/70 dark:text-blue-400/70"}`}>
+                      {msToLabel(yearTotalMs)} de 600h · {serviceYearLabel}
+                    </p>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -521,26 +528,6 @@ export function StatsView({
             </div>
           </div>
 
-          {/* Enviar Informe anual */}
-          {(() => {
-            const estudiosCount = yearCountByCategory["Estudio"] ?? 0;
-            const categoryLines = yearlyCategoryTotals.map(({ cat, ms }) => `${cat}: ${ms > 0 ? msToLabel(ms) : "0m"}`);
-            const msg = [
-              `📊 Informe Anual ${serviceYearLabel}`,
-              ...categoryLines,
-              `Total: ${yearFilteredMs > 0 ? msToLabel(yearFilteredMs) : "0m"}`,
-              `📖 Estudios: ${estudiosCount}`,
-            ].join("\n");
-            return (
-              <button
-                onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank")}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold text-sm transition-colors shadow-sm"
-              >
-                <Send className="w-4 h-4" />
-                Enviar Informe
-              </button>
-            );
-          })()}
         </>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
+import react from "@vitejs/plugin-react";
 import path from "path";
 
 export default defineConfig({
@@ -20,18 +20,17 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          "vendor-react": ["react", "react-dom", "react-router-dom"],
-          "vendor-map": ["leaflet", "react-leaflet"],
-          "vendor-charts": ["recharts"],
-          "vendor-ui": [
-            "@radix-ui/react-dialog",
-            "@radix-ui/react-dropdown-menu",
-            "@radix-ui/react-popover",
-            "@radix-ui/react-select",
-            "@radix-ui/react-tabs",
-            "lucide-react",
-          ],
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|react-router-dom)[\\/]/.test(id)) return "vendor-react";
+          if (/[\\/]node_modules[\\/](leaflet|react-leaflet)[\\/]/.test(id)) return "vendor-map";
+          if (/[\\/]node_modules[\\/]recharts[\\/]/.test(id)) return "vendor-charts";
+          if (
+            /[\\/]node_modules[\\/](@radix-ui[\\/]react-(dialog|dropdown-menu|popover|select|tabs)|lucide-react)[\\/]/.test(id)
+          ) {
+            return "vendor-ui";
+          }
+          return undefined;
         },
       },
     },

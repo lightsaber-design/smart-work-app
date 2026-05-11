@@ -17,6 +17,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { LocationPicker } from "@/components/LocationPicker";
 import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { useT } from "@/lib/LanguageContext";
@@ -36,7 +46,17 @@ interface CalendarViewProps {
   onToggleCompleted: (id: string) => void;
   onUpdateEvent: (
     id: string,
-    updates: { date?: Date; endTime?: string; category?: EventCategory; reminderMinutesBefore?: number }
+    updates: {
+      date?: Date;
+      endTime?: string;
+      category?: EventCategory;
+      reminderMinutesBefore?: number;
+      notified?: boolean;
+      completed?: boolean;
+      location?: { lat: number; lng: number };
+      recurrence?: RecurrenceType;
+      parentId?: string;
+    }
   ) => void;
   getEventsForDate: (date: Date) => CalendarEvent[];
   favoritePlaces: FavoritePlace[];
@@ -107,6 +127,27 @@ function eventEndDate(event: CalendarEvent): Date {
   const end = new Date(event.date);
   end.setHours(h, m, 0, 0);
   return end.getTime() > event.date.getTime() ? end : new Date(event.date.getTime() + 60 * 60_000);
+}
+
+function addParamsEndDate(params: AddEventParams): Date {
+  if (!params.endTime) return new Date(params.date.getTime() + 60 * 60_000);
+  const [h, m] = params.endTime.split(":").map(Number);
+  const end = new Date(params.date);
+  end.setHours(h, m, 0, 0);
+  return end.getTime() > params.date.getTime() ? end : new Date(params.date.getTime() + 60 * 60_000);
+}
+
+function isSameCalendarDay(a: Date, b: Date) {
+  return a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
+}
+
+function eventsOverlap(candidate: AddEventParams, event: CalendarEvent): boolean {
+  if (!isSameCalendarDay(candidate.date, event.date)) return false;
+  const candidateStart = candidate.date.getTime();
+  const candidateEnd = addParamsEndDate(candidate).getTime();
+  const eventStart = event.date.getTime();
+  const eventEnd = eventEndDate(event).getTime();
+  return candidateStart < eventEnd && candidateEnd > eventStart;
 }
 
 function timelineTopFromMinutes(minutes: number): number {
@@ -427,6 +468,10 @@ export function CalendarView({
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [monthOffset, setMonthOffset] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [pendingAddConflict, setPendingAddConflict] = useState<{
+    params: AddEventParams;
+    conflicts: CalendarEvent[];
+  } | null>(null);
 
   const [time, setTime] = useState("09:00");
   const [endTime, setEndTime] = useState("");
@@ -444,11 +489,7 @@ export function CalendarView({
   const [editCategory, setEditCategory] = useState<EventCategory>("Predi");
   const [editReminder, setEditReminder] = useState("15");
 
-  useScrollLock(dialogOpen || !!editEvent);
-
-  const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
-  const selectedMidnight = new Date(selectedDate); selectedMidnight.setHours(0, 0, 0, 0);
-  const isAddingPastNoRepeat = selectedMidnight < todayMidnight && recurrence === "none";
+  useScrollLock(dialogOpen || !!editEvent || !!pendingAddConflict);
 
   const selectedEvents = getEventsForDate(selectedDate).sort(
     (a, b) => a.date.getTime() - b.date.getTime()
@@ -481,7 +522,16 @@ export function CalendarView({
   const previewDate = new Date(selectedDate);
   const [previewHours, previewMinutes] = time.split(":").map(Number);
   previewDate.setHours(previewHours, previewMinutes, 0, 0);
+  const isAddingPastEvent = previewDate.getTime() < Date.now();
   const travelReminderPreview = getTravelReminderMinutes(previewDate, events, travelReminder);
+  const editPreviewDate = editEvent ? new Date(editEvent.date) : null;
+  if (editPreviewDate) {
+    const [editPreviewHours, editPreviewMinutes] = editTime.split(":").map(Number);
+    editPreviewDate.setHours(editPreviewHours, editPreviewMinutes, 0, 0);
+  }
+  const isEditingPastEvent = editPreviewDate ? editPreviewDate.getTime() < Date.now() : false;
+  const eventsForEditReminder = editEvent ? events.filter((event) => event.id !== editEvent.id) : events;
+  const editTravelReminderPreview = editPreviewDate ? getTravelReminderMinutes(editPreviewDate, eventsForEditReminder, travelReminder) : 0;
 
   const openEdit = (event: CalendarEvent) => {
     setEditEvent(event);
@@ -498,13 +548,50 @@ export function CalendarView({
     const [h, m] = editTime.split(":").map(Number);
     const newDate = new Date(editEvent.date);
     newDate.setHours(h, m, 0, 0);
+    const isPastEvent = newDate.getTime() < Date.now();
+    const reminderMinutesBefore = isPastEvent
+      ? 0
+      : travelReminder.enabled
+      ? getTravelReminderMinutes(newDate, eventsForEditReminder, travelReminder)
+      : parseInt(editReminder) || 15;
     onUpdateEvent(editEvent.id, {
       date: newDate,
       endTime: editEndTime || undefined,
       category: editCategory,
-      reminderMinutesBefore: parseInt(editReminder) || 15,
+      reminderMinutesBefore,
+      notified: isPastEvent ? true : undefined,
     });
     setEditEvent(null);
+  };
+
+  const resetAddForm = () => {
+    setTime("09:00"); setEndTime(""); setCategory("Predi"); setReminder("15");
+    setLocation(undefined); setLocationMode("none"); setSelectedFavoriteId(""); setRecurrence("none");
+    setDialogOpen(false);
+    setPendingAddConflict(null);
+  };
+
+  const commitAdd = (params: AddEventParams) => {
+    onAddEvent(params);
+    resetAddForm();
+  };
+
+  const overwriteAddConflict = () => {
+    if (!pendingAddConflict) return;
+    const target = pendingAddConflict.conflicts[0];
+    const { params } = pendingAddConflict;
+    onUpdateEvent(target.id, {
+      date: params.date,
+      endTime: params.endTime,
+      category: params.category,
+      reminderMinutesBefore: params.reminderMinutesBefore,
+      location: params.location,
+      recurrence: params.recurrence,
+      parentId: undefined,
+      notified: params.date.getTime() < Date.now() ? true : undefined,
+      completed: false,
+    });
+    resetAddForm();
   };
 
   const handleAdd = () => {
@@ -518,15 +605,22 @@ export function CalendarView({
         ? favoritePlaces.find((p) => p.id === selectedFavoriteId)?.location
         : undefined;
     const manualReminder = parseInt(reminder) || 15;
-    const reminderMinutesBefore = isAddingPastNoRepeat
+    const isPastEvent = date.getTime() < Date.now();
+    const reminderMinutesBefore = isPastEvent
       ? 0
       : travelReminder.enabled
       ? getTravelReminderMinutes(date, events, travelReminder)
       : manualReminder;
-    onAddEvent({ date, endTime: endTime || undefined, category, reminderMinutesBefore, location: eventLocation, recurrence });
-    setTime("09:00"); setEndTime(""); setCategory("Predi"); setReminder("15");
-    setLocation(undefined); setLocationMode("none"); setSelectedFavoriteId(""); setRecurrence("none");
-    setDialogOpen(false);
+    const params = { date, endTime: endTime || undefined, category, reminderMinutesBefore, location: eventLocation, recurrence };
+    const conflicts = events.filter((event) => eventsOverlap(params, event));
+    if (conflicts.length > 0) {
+      setPendingAddConflict({
+        params,
+        conflicts: conflicts.sort((a, b) => a.date.getTime() - b.date.getTime()),
+      });
+      return;
+    }
+    commitAdd(params);
   };
 
   const notifStatus =
@@ -758,6 +852,9 @@ export function CalendarView({
               </button>
               <p className="text-base font-bold text-foreground capitalize">{monthLabel}</p>
               <div className="flex items-center gap-1.5">
+                <Button size="sm" className="gap-1" onClick={() => setDialogOpen(true)}>
+                  <Plus className="w-4 h-4" /> {t("cal_add")}
+                </Button>
                 <button
                   onClick={() => setMonthOffset((v) => v + 1)}
                   className="w-9 h-9 rounded-full bg-muted flex items-center justify-center cursor-pointer"
@@ -924,11 +1021,6 @@ export function CalendarView({
               </>
             )}
 
-            <div className="flex justify-end mt-3 mb-4">
-              <Button size="sm" className="gap-1" onClick={() => setDialogOpen(true)}>
-                <Plus className="w-4 h-4" /> {t("cal_add")}
-              </Button>
-            </div>
           </div>
         </>
       )}
@@ -984,7 +1076,7 @@ export function CalendarView({
                 </SelectContent>
               </Select>
             </div>
-            {!isAddingPastNoRepeat && (
+            {!isAddingPastEvent && (
               <div className="space-y-2">
                 <Label>{t("cal_reminder")}</Label>
                 {travelReminder.enabled ? (
@@ -1037,6 +1129,42 @@ export function CalendarView({
         </div>
       </div>
 
+      <AlertDialog open={!!pendingAddConflict} onOpenChange={(open) => { if (!open) setPendingAddConflict(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Event already scheduled</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingAddConflict && (
+                <span className="block space-y-2">
+                  <span className="block">
+                    The new event overlaps with {pendingAddConflict.conflicts.length === 1 ? "this event" : `${pendingAddConflict.conflicts.length} events`}.
+                  </span>
+                  <span className="block rounded-lg border border-border bg-muted/40 px-3 py-2 text-foreground">
+                    {pendingAddConflict.conflicts[0].category} · {formatEventTime(pendingAddConflict.conflicts[0].date)}
+                    {pendingAddConflict.conflicts[0].endTime ? ` - ${pendingAddConflict.conflicts[0].endTime}` : ""}
+                  </span>
+                  <span className="block">
+                    Overwrite it, add the new event in parallel, or cancel.
+                  </span>
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2">
+            <AlertDialogCancel onClick={() => setPendingAddConflict(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-secondary text-secondary-foreground hover:bg-secondary/80"
+              onClick={() => {
+                if (pendingAddConflict) commitAdd(pendingAddConflict.params);
+              }}
+            >
+              Add in parallel
+            </AlertDialogAction>
+            <AlertDialogAction onClick={overwriteAddConflict}>Overwrite</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* ── Edit event bottom sheet ── */}
       <div
         className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${
@@ -1079,19 +1207,32 @@ export function CalendarView({
                     <Input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>{t("cal_reminder")}</Label>
-                  <Select value={editReminder} onValueChange={setEditReminder}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5">{t("cal_min_before", { n: 5 })}</SelectItem>
-                      <SelectItem value="10">{t("cal_min_before", { n: 10 })}</SelectItem>
-                      <SelectItem value="15">{t("cal_min_before", { n: 15 })}</SelectItem>
-                      <SelectItem value="30">{t("cal_min_before", { n: 30 })}</SelectItem>
-                      <SelectItem value="60">{t("cal_1h_before")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {!isEditingPastEvent && (
+                  <div className="space-y-2">
+                    <Label>{t("cal_reminder")}</Label>
+                    {travelReminder.enabled ? (
+                      <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+                        <p className="text-sm font-medium text-foreground">
+                          {editTravelReminderPreview > 0 ? `${editTravelReminderPreview} minutes before` : "At start time"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Adjusted from travel time so it stays after the previous event.
+                        </p>
+                      </div>
+                    ) : (
+                      <Select value={editReminder} onValueChange={setEditReminder}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="5">{t("cal_min_before", { n: 5 })}</SelectItem>
+                          <SelectItem value="10">{t("cal_min_before", { n: 10 })}</SelectItem>
+                          <SelectItem value="15">{t("cal_min_before", { n: 15 })}</SelectItem>
+                          <SelectItem value="30">{t("cal_min_before", { n: 30 })}</SelectItem>
+                          <SelectItem value="60">{t("cal_1h_before")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex-shrink-0 px-5 pt-3 pb-8 border-t border-border bg-card">
                 <Button onClick={handleSaveEdit} className="w-full">{t("cal_save_changes")}</Button>

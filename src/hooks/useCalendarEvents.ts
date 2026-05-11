@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { generateId } from "@/lib/uuid";
 import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 import { clampReminderMinutes } from "@/lib/eventReminders";
+import { findScheduledEventForTimerStart } from "@/lib/timerOverrun";
 
 export type EventCategory = "Predi" | "Carrito" | "LDC" | "Visitas" | "Estudio";
 export type RecurrenceType = "none" | "weekly" | "monthly";
@@ -96,7 +97,7 @@ function generateRecurringEvents(params: AddEventParams, count: number): Calenda
       endTime: params.endTime,
       category: params.category,
       reminderMinutesBefore: params.reminderMinutesBefore,
-      notified: false,
+      notified: date.getTime() < Date.now(),
       location: params.location,
       recurrence: params.recurrence,
       parentId: i === 0 ? undefined : parentId,
@@ -156,7 +157,7 @@ export function useCalendarEvents() {
         endTime: params.endTime || undefined,
         category: params.category,
         reminderMinutesBefore: params.reminderMinutesBefore,
-        notified: false,
+        notified: params.date.getTime() < Date.now(),
         location: params.location,
         recurrence: "none",
         completed: false,
@@ -171,6 +172,27 @@ export function useCalendarEvents() {
 
   const addCompletedEventNow = useCallback(
     (params: { date: Date; category: EventCategory; location?: { lat: number; lng: number } }) => {
+      const scheduledEvent = findScheduledEventForTimerStart(params.date, params.category, events);
+      if (scheduledEvent) {
+        setEvents((prev) => {
+          const updated = prev.map((event) =>
+            event.id === scheduledEvent.id
+              ? {
+                  ...event,
+                  date: params.date,
+                  category: params.category,
+                  notified: true,
+                  location: params.location ?? event.location,
+                  completed: true,
+                }
+              : event
+          ).sort((a, b) => a.date.getTime() - b.date.getTime());
+          persistEvents(updated);
+          return updated;
+        });
+        return scheduledEvent.id;
+      }
+
       const id = generateId();
       const event: CalendarEvent = {
         id,
@@ -190,7 +212,7 @@ export function useCalendarEvents() {
       });
       return id;
     },
-    [persistEvents]
+    [events, persistEvents]
   );
 
   const deleteEvent = useCallback((id: string) => {
@@ -231,11 +253,24 @@ export function useCalendarEvents() {
   const updateEvent = useCallback(
     (
       id: string,
-      updates: { date?: Date; endTime?: string; category?: EventCategory; reminderMinutesBefore?: number }
+      updates: {
+        date?: Date;
+        endTime?: string;
+        category?: EventCategory;
+        reminderMinutesBefore?: number;
+        notified?: boolean;
+        completed?: boolean;
+        location?: { lat: number; lng: number };
+        recurrence?: RecurrenceType;
+        parentId?: string;
+      }
     ) => {
       setEvents((prev) => {
+        const shouldResetNotification =
+          updates.notified === undefined &&
+          (updates.date !== undefined || updates.reminderMinutesBefore !== undefined);
         const updated = prev
-          .map((e) => (e.id === id ? { ...e, ...updates, notified: false } : e))
+          .map((e) => (e.id === id ? { ...e, ...updates, notified: shouldResetNotification ? false : updates.notified ?? e.notified } : e))
           .sort((a, b) => a.date.getTime() - b.date.getTime());
         persistEvents(updated);
         return updated;

@@ -47,7 +47,8 @@ export function LocationPicker({ value, onChange, defaultCenter }: LocationPicke
     setSearching(true);
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(search)}&limit=1`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(search)}&limit=1`,
+        { referrerPolicy: "no-referrer" }
       );
       if (!res.ok) return;
       const data = (await res.json()) as NominatimResult[];
