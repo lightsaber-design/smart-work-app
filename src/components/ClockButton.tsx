@@ -37,11 +37,11 @@ function formatSessionDay(isoDate: string): string {
 const ALL_CATEGORIES: WorkCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
 
 const CATEGORY_META: Record<WorkCategory, { icon: string; gradient: [string, string]; ring: string }> = {
-  Predi:   { icon: "🏠", gradient: ["#60a5fa", "#818cf8"], ring: "#818cf8" },
-  Carrito: { icon: "🪧", gradient: ["#4ade80", "#34d399"], ring: "#34d399" },
-  LDC:     { icon: "🛠️", gradient: ["#c084fc", "#818cf8"], ring: "#a855f7" },
-  Visitas: { icon: "🚶", gradient: ["#fb923c", "#f59e0b"], ring: "#f97316" },
-  Estudio: { icon: "📖", gradient: ["#f472b6", "#e879f9"], ring: "#ec4899" },
+  Predi:   { icon: "🏠", gradient: ["#bfdbfe", "#c7d2fe"], ring: "#a5b4fc" },
+  Carrito: { icon: "🪧", gradient: ["#bbf7d0", "#99f6e4"], ring: "#6ee7b7" },
+  LDC:     { icon: "🛠️", gradient: ["#ede9fe", "#ddd6fe"], ring: "#c4b5fd" },
+  Visitas: { icon: "🚶", gradient: ["#fed7aa", "#fef08a"], ring: "#fdba74" },
+  Estudio: { icon: "📖", gradient: ["#fce7f3", "#f5d0fe"], ring: "#f9a8d4" },
 };
 
 const RING_RADIUS = 108;
@@ -69,6 +69,7 @@ interface ClockButtonProps {
   activeEntryId?: string;
   activeEntryStartTime?: Date;
   estudios?: EstudioContact[];
+  onDisplayCategoryChange?: (category: WorkCategory) => void;
   onEstudioSession?: (
     contactId: string,
     data?: { time?: string; lesson?: string; notes?: string; files?: SessionFile[]; forceNew?: boolean }
@@ -96,7 +97,7 @@ function detectCategoryFromEvents(events: CalendarEvent[]): WorkCategory | null 
 export function ClockButton({
   isRunning, elapsed, onClockIn, onClockOut, onUpdateCategory, onUpdateStartTime,
   calendarEvents, activeCategory, activeEntryId, activeEntryStartTime,
-  estudios = [], onEstudioSession,
+  estudios = [], onDisplayCategoryChange, onEstudioSession,
 }: ClockButtonProps) {
   const t = useT();
   const detected = detectCategoryFromEvents(calendarEvents);
@@ -187,6 +188,10 @@ export function ClockButton({
   const meta = CATEGORY_META[currentCategory];
   const showEstudioPicker = currentCategory === "Estudio" && activeStudios.length > 0;
 
+  useEffect(() => {
+    onDisplayCategoryChange?.(currentCategory);
+  }, [currentCategory, onDisplayCategoryChange]);
+
   // Hour ring progress (fraction of current hour elapsed)
   const elapsedMs = elapsed * 1000;
   const hourProgress = elapsedMs > 0 ? (elapsedMs % 3_600_000) / 3_600_000 : 0;
@@ -213,9 +218,9 @@ export function ClockButton({
           style={{
             width: 264,
             height: 264,
-            background: `radial-gradient(circle at 40% 35%, ${meta.gradient[0]}22, transparent 60%), radial-gradient(circle at 70% 70%, ${meta.gradient[1]}18, transparent 60%), var(--card)`,
+            background: `radial-gradient(circle at 40% 35%, ${meta.gradient[0]}88, transparent 60%), radial-gradient(circle at 70% 70%, ${meta.gradient[1]}77, transparent 60%), var(--card)`,
             boxShadow: isRunning
-              ? `0 0 0 1px ${meta.ring}30, 0 0 40px 8px ${meta.ring}18, 0 8px 32px rgba(0,0,0,0.1)`
+              ? `0 0 0 1px ${meta.ring}55, 0 0 40px 8px ${meta.ring}38, 0 8px 32px rgba(0,0,0,0.1)`
               : "0 4px 24px rgba(0,0,0,0.08)",
           }}
         >
@@ -278,18 +283,18 @@ export function ClockButton({
                 <div className="flex items-end gap-0.5 leading-none mt-0.5">
                   {elapsedHrs > 0 && (
                     <>
-                      <span className="text-4xl font-black tabular-nums text-foreground">{elapsedHrs}</span>
-                      <span className="text-base font-bold text-muted-foreground mb-0.5">h</span>
+                      <span className="text-4xl font-black tabular-nums text-white">{elapsedHrs}</span>
+                      <span className="text-base font-bold text-white/70 mb-0.5">h</span>
                     </>
                   )}
-                  <span className="text-4xl font-black tabular-nums text-foreground ml-0.5">
+                  <span className="text-4xl font-black tabular-nums text-white ml-0.5">
                     {String(elapsedMins).padStart(elapsedHrs > 0 ? 2 : 1, "0")}
                   </span>
-                  <span className="text-base font-bold text-muted-foreground mb-0.5">m</span>
-                  <span className="text-2xl font-bold tabular-nums text-muted-foreground ml-0.5 mb-px">
+                  <span className="text-base font-bold text-white/70 mb-0.5">m</span>
+                  <span className="text-2xl font-bold tabular-nums text-white/60 ml-0.5 mb-px">
                     {String(elapsedSecs).padStart(2, "0")}
                   </span>
-                  <span className="text-xs font-bold text-muted-foreground mb-0.5">s</span>
+                  <span className="text-xs font-bold text-white/60 mb-0.5">s</span>
                 </div>
 
                 {/* Pause button */}
@@ -304,13 +309,13 @@ export function ClockButton({
             ) : (
               <>
                 {/* Idle: wall clock */}
-                <p className="text-[11px] font-semibold text-muted-foreground tracking-widest uppercase">
+                <p className="text-[11px] font-semibold text-white/70 tracking-widest uppercase">
                   {new Date().toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })}
                 </p>
-                <p className="text-[42px] font-black tabular-nums text-foreground leading-none tracking-tight">
+                <p className="text-[42px] font-black tabular-nums text-white leading-none tracking-tight">
                   {wallTime}
                 </p>
-                <p className="text-[11px] text-muted-foreground font-medium">
+                <p className="text-[11px] text-white/70 font-medium">
                   {currentCategory} · Toca para iniciar
                 </p>
 
@@ -343,17 +348,17 @@ export function ClockButton({
                 className="flex flex-col items-center gap-1.5 cursor-pointer"
               >
                 <div
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl transition-all shadow-sm ${
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl transition-all ${
                     isActive ? "scale-110 shadow-md" : "opacity-50"
                   }`}
                   style={isActive
                     ? { background: `linear-gradient(135deg, ${m.gradient[0]}, ${m.gradient[1]})` }
-                    : { background: "var(--muted)" }
+                    : { background: "rgba(255,255,255,0.14)" }
                   }
                 >
                   {m.icon}
                 </div>
-                <span className={`text-[10px] font-semibold ${isActive ? "text-foreground" : "text-muted-foreground"}`}>
+                <span className={`text-[10px] font-semibold ${isActive ? "text-white" : "text-white/70"}`}>
                   {cat}
                 </span>
               </button>
@@ -393,7 +398,7 @@ export function ClockButton({
         <div className="flex flex-col items-center gap-2 mt-4">
           <button
             onClick={handleToggleEdit}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            className="flex items-center gap-1 text-xs text-white/80 hover:text-white transition-colors cursor-pointer"
           >
             <Clock className="w-3 h-3" />
             {editingTime ? t("timer_cancel") : isRunning ? t("timer_edit_start") : t("timer_forgot")}

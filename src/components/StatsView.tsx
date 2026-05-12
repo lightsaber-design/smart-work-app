@@ -126,7 +126,7 @@ export function StatsView({
   const yearFilteredMs = yearlyCategoryTotals.reduce((sum, item) => sum + item.ms, 0);
 
   return (
-    <div className="px-4 space-y-4 pb-24">
+    <div className="px-5 pt-4 space-y-4 pb-24">
 
       {/* Mode switcher */}
       <div className="flex rounded-2xl bg-muted p-1 gap-1 mt-2">

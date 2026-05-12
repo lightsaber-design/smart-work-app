@@ -32,7 +32,7 @@ import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { useT } from "@/lib/LanguageContext";
 import { getTravelReminderMinutes, type TravelReminderSettings } from "@/lib/eventReminders";
 
-import { CATEGORY_LIST as CATEGORIES, CATEGORY_STYLE } from "@/lib/categories";
+import { CATEGORY_LIST as CATEGORIES, CATEGORY_META, CATEGORY_STYLE } from "@/lib/categories";
 
 const SHEET_POSITION_CLASS = "bottom-16";
 const SHEET_MAX_HEIGHT_CLASS = "max-h-[80vh]";
@@ -661,188 +661,267 @@ export function CalendarView({
       )}
 
       {/* Mode switcher */}
-      <div className="px-4 pt-4">
-        <div className="flex rounded-2xl bg-muted p-1 gap-1">
+      <div className="px-5 pt-4">
+        <div className="flex rounded-full bg-muted/70 p-1 gap-1 border border-border/40">
           {(["daily", "monthly"] as CalendarMode[]).map((m) => {
-            const labels: Record<CalendarMode, string> = { daily: "Día", monthly: "Mes" };
+            const meta: Record<CalendarMode, { label: string; icon: string }> = {
+              daily: { label: "Día", icon: "📅" },
+              monthly: { label: "Mes", icon: "🗓" },
+            };
             return (
               <button
                 key={m}
                 onClick={() => setMode(m)}
-                className={`flex-1 py-2 text-xs font-semibold rounded-xl transition-all ${
-                  mode === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold rounded-full transition-all duration-200 ${
+                  mode === m
+                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {labels[m]}
+                <span className="text-sm leading-none">{meta[m].icon}</span>
+                <span>{meta[m].label}</span>
               </button>
             );
           })}
         </div>
       </div>
-
-      {/* ── DAILY VIEW ── */}
+      {/* Vista diaria */}
       {mode === "daily" && (
-        <>
-          {/* Container 1: navegación + días de la semana */}
-          <div className="mx-4 mt-4 rounded-2xl bg-card/60 border border-border/50 shadow-sm px-4 py-4">
-            {/* Date header */}
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() - 7); setSelectedDate(d); }}
-                className="w-9 h-9 rounded-full bg-muted flex items-center justify-center"
-              >
-                <ChevronLeft className="w-5 h-5 text-muted-foreground" />
-              </button>
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground capitalize">
-                  {selectedDate.toLocaleDateString("es-ES", { weekday: "long" })}
+        <div className="mx-5 mt-4 pb-8">
+          {/* Header: día grande + mes + navegación + botón Hoy */}
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-end gap-2.5">
+              <span className="text-6xl font-black text-foreground leading-none tracking-tight">
+                {selectedDate.getDate()}
+              </span>
+              <div className="pb-1">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none mb-1">
+                  {selectedDate.getFullYear()}
                 </p>
-                <p className="text-base font-bold text-foreground">
-                  {selectedDate.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}
+                <p className="text-lg font-bold text-foreground leading-none capitalize">
+                  {selectedDate.toLocaleDateString("es-ES", { month: "long" })}
                 </p>
               </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() - 7); setSelectedDate(d); }}
+                className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+                aria-label="Previous week"
+              >
+                <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+              </button>
+              <button
+                onClick={() => setSelectedDate(new Date())}
+                className="px-4 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-bold shadow-md shadow-primary/25"
+              >
+                Hoy
+              </button>
               <button
                 onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() + 7); setSelectedDate(d); }}
-                className="w-9 h-9 rounded-full bg-muted flex items-center justify-center"
+                className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+                aria-label="Next week"
               >
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </button>
-            </div>
-
-            {/* Weekly strip */}
-            <div className="flex justify-between">
-              {dailyWeekDates.map((d) => {
-                const isSelected = d.toDateString() === selectedDate.toDateString();
-                const isToday = d.toDateString() === new Date().toDateString();
-                const hasEvents = events.some((e) => e.date.toDateString() === d.toDateString());
-                return (
-                  <button
-                    key={d.toDateString()}
-                    onClick={() => setSelectedDate(d)}
-                    className={`flex flex-col items-center gap-1 w-10 py-2 rounded-2xl transition-colors ${
-                      isSelected ? "bg-primary" : isToday ? "bg-primary/10" : "hover:bg-muted"
-                    }`}
-                  >
-                    <span className={`text-[9px] font-semibold ${isSelected ? "text-primary-foreground" : "text-muted-foreground"}`}>
-                      {DAY_NAMES_SHORT[d.getDay()]}
-                    </span>
-                    <span className={`text-sm font-bold ${isSelected ? "text-primary-foreground" : isToday ? "text-primary" : "text-foreground"}`}>
-                      {d.getDate()}
-                    </span>
-                    {hasEvents && !isSelected && <span className="w-1 h-1 rounded-full bg-primary/60" />}
-                  </button>
-                );
-              })}
             </div>
           </div>
 
-          {/* Container 2: total del día + eventos */}
-          <div className="mx-4 mt-3 rounded-2xl bg-card/60 border border-border/50 shadow-sm px-4 pt-3 pb-4">
-            {/* Day total + add */}
-            <div className="flex items-center justify-between mb-3">
-              {dayTotalMs > 0 ? (
-                <div className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-1.5">
-                  <Clock className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-xs font-semibold text-primary">
-                    {t("cal_total")} {dayTotalHrs}h {dayTotalMins}m
+          {/* Week strip */}
+          <div className="flex justify-between mb-5">
+            {dailyWeekDates.map((d) => {
+              const isSelected = d.toDateString() === selectedDate.toDateString();
+              const isToday = d.toDateString() === new Date().toDateString();
+              const hasEvents = events.some((e) => e.date.toDateString() === d.toDateString());
+              return (
+                <button
+                  key={d.toDateString()}
+                  onClick={() => setSelectedDate(d)}
+                  className="flex flex-col items-center gap-1 flex-1"
+                >
+                  <span className={`text-[10px] font-semibold ${isSelected ? "text-primary" : "text-muted-foreground"}`}>
+                    {DAY_NAMES_SHORT[d.getDay()]}
                   </span>
-                </div>
-              ) : (
-                <span className="text-xs text-muted-foreground">
-                  {selectedEvents.length === 0 ? t("cal_no_events") : `${selectedEvents.length} evento(s)`}
-                </span>
-              )}
-              <Button size="sm" className="gap-1" onClick={() => setDialogOpen(true)}>
-                <Plus className="w-4 h-4" /> {t("cal_add")}
-              </Button>
-            </div>
-
-          {/* Timeline */}
-          <div ref={timelineScrollRef} className="max-h-[58vh] overflow-y-auto pr-1">
-            <div className="flex gap-3">
-              <div className="w-12 flex-shrink-0 relative" style={{ height: TIMELINE_HEIGHT }}>
-                {HOURS.map((hour) => (
-                  <div
-                    key={hour}
-                    className="absolute right-0 -translate-y-1/2 text-[11px] text-muted-foreground"
-                    style={{ top: timelineTopFromMinutes((hour - TIMELINE_START_HOUR) * 60) }}
+                  <span
+                    className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black transition-all ${
+                      isSelected
+                        ? "bg-primary text-primary-foreground shadow-md shadow-primary/30"
+                        : isToday
+                        ? "text-primary"
+                        : "text-foreground"
+                    }`}
                   >
-                    {formatHour(hour)}
+                    {d.getDate()}
+                  </span>
+                  <span className={`h-1 w-1 rounded-full ${hasEvents ? (isSelected ? "bg-primary-foreground" : "bg-primary") : "bg-transparent"}`} />
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Total + Add button */}
+          <div className="flex items-center justify-between mb-3 px-1">
+            <p className="text-xs font-semibold text-muted-foreground">
+              {dayTotalMs > 0 ? `${t("cal_total")} ${dayTotalHrs}h ${dayTotalMins}m` : " "}
+            </p>
+            <button
+              onClick={() => setDialogOpen(true)}
+              className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md shadow-primary/25"
+              aria-label="Add event"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* ── Timeline ── */}
+          <div
+            ref={timelineScrollRef}
+            className="overflow-y-auto"
+            style={{ maxHeight: "60vh" }}
+          >
+            <div className="flex relative" style={{ minHeight: TIMELINE_HEIGHT }}>
+
+              {/* Hour labels column */}
+              <div className="w-14 flex-shrink-0 relative" style={{ height: TIMELINE_HEIGHT }}>
+                {HOURS.map((h) => (
+                  <div
+                    key={h}
+                    className="absolute left-0 right-0 flex items-start justify-end pr-3"
+                    style={{ top: (h - TIMELINE_START_HOUR) * HOUR_HEIGHT - 8 }}
+                  >
+                    <span className="text-[9px] text-muted-foreground/70 font-medium leading-none">
+                      {formatHour(h)}
+                    </span>
                   </div>
                 ))}
               </div>
-              <div className="relative flex-1 border-l border-border/40" style={{ height: TIMELINE_HEIGHT }}>
-                {HOURS.map((hour) => (
+
+              {/* Timeline content — border-l is the vertical rule */}
+              <div className="flex-1 relative border-l border-border" style={{ height: TIMELINE_HEIGHT }}>
+
+                {/* Hour grid lines */}
+                {HOURS.map((h) => (
                   <div
-                    key={hour}
+                    key={h}
                     className="absolute left-0 right-0 border-t border-border/30"
-                    style={{ top: timelineTopFromMinutes((hour - TIMELINE_START_HOUR) * 60) }}
+                    style={{ top: (h - TIMELINE_START_HOUR) * HOUR_HEIGHT }}
                   />
                 ))}
 
-                {nowTop != null && nowTop >= 0 && nowTop <= TIMELINE_HEIGHT && (
-                  <div className="absolute left-0 right-0 z-20 flex items-center" style={{ top: nowTop }}>
-                    <span className="h-2.5 w-2.5 -ml-[5px] rounded-full bg-red-500 shadow-sm" />
-                    <span className="h-px flex-1 bg-red-500/70" />
-                    <span className="ml-2 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                      Now
-                    </span>
+                {/* Current time indicator */}
+                {nowTop !== null && (
+                  <div
+                    className="absolute left-0 right-0 z-20 flex items-center pointer-events-none"
+                    style={{ top: nowTop }}
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0 -ml-1.5 shadow-sm" />
+                    <div className="flex-1 h-[1.5px] bg-primary" />
                   </div>
                 )}
 
+                {/* Calendar events */}
                 {selectedEvents.map((event) => {
-                  const startMinutes = minutesFromTimelineStart(event.date);
-                  const endMinutes = minutesFromTimelineStart(eventEndDate(event));
-                  const totalTimelineMinutes = (TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60;
-                  if (endMinutes <= 0 || startMinutes >= totalTimelineMinutes) return null;
-                  const top = timelineTopFromMinutes(Math.max(0, startMinutes));
-                  const bottom = timelineTopFromMinutes(Math.min(totalTimelineMinutes, endMinutes));
-                  const height = Math.max(44, bottom - top);
+                  const startMins = minutesFromTimelineStart(event.date);
+                  const clampedStart = Math.max(0, Math.min((TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60 - 30, startMins));
+                  const endDate = eventEndDate(event);
+                  const durationMins = Math.max(30, (endDate.getTime() - event.date.getTime()) / 60000);
+                  const top = timelineTopFromMinutes(clampedStart);
+                  const height = Math.max(44, (durationMins / 60) * HOUR_HEIGHT);
+                  const style = CATEGORY_STYLE[event.category] ?? { accent: "hsl(var(--primary))" };
+                  const meta = CATEGORY_META[event.category] ?? { icon: "•", gradient: ["#93c5fd", "#a5b4fc"] as [string, string] };
+                  const opacity = event.completed ? 0.45 : 1;
                   return (
-                    <div key={event.id} className="absolute left-4 right-0 z-10" style={{ top, height }}>
-                      <EventCard
-                        event={event}
-                        onToggle={() => onToggleCompleted(event.id)}
-                        onEdit={() => openEdit(event)}
-                        onDelete={() => onDeleteEvent(event.id)}
-                        fill
-                      />
+                    <div
+                      key={event.id}
+                      className="absolute left-2 right-2 rounded-xl overflow-hidden cursor-pointer active:opacity-75 transition-opacity"
+                      style={{
+                        top,
+                        height,
+                        opacity,
+                        background: `linear-gradient(135deg, ${meta.gradient[0]}, ${meta.gradient[1]})`,
+                        borderLeftWidth: 3,
+                        borderLeftColor: style.accent,
+                      }}
+                      onClick={() => openEdit(event)}
+                    >
+                      <div className="px-2.5 py-2 h-full flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm leading-none">{meta.icon}</span>
+                            <p className={`text-[11px] font-bold text-foreground leading-tight truncate ${event.completed ? "line-through" : ""}`}>
+                              {event.category}
+                            </p>
+                            {event.recurrence !== "none" && <Repeat className="w-2.5 h-2.5 opacity-50 flex-shrink-0" />}
+                          </div>
+                          {height > 54 && (
+                            <p className="text-[9px] text-foreground/60 mt-0.5 leading-none">
+                              {formatEventTime(event.date)}{event.endTime ? ` – ${event.endTime}` : ""}
+                            </p>
+                          )}
+                        </div>
+                        {height > 72 && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onToggleCompleted(event.id); }}
+                              className="p-0.5"
+                            >
+                              {event.completed
+                                ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                                : <Circle className="w-3.5 h-3.5 text-foreground/50" />}
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onDeleteEvent(event.id); }}
+                              className="p-0.5 text-foreground/40 ml-auto"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
 
+                {/* Study sessions */}
                 {selectedStudySessions.map((s) => {
-                  const [h, m] = s.time.split(":").map(Number);
-                  const minutes = (h - TIMELINE_START_HOUR) * 60 + m;
-                  if (minutes < 0 || minutes > (TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60) return null;
-                  const top = timelineTopFromMinutes(minutes);
+                  const [hh, mm] = s.time.split(":").map(Number);
+                  const sessionDate = new Date(selectedDate);
+                  sessionDate.setHours(hh, mm, 0, 0);
+                  const startMins = minutesFromTimelineStart(sessionDate);
+                  if (startMins < 0 || startMins >= (TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60) return null;
+                  const top = timelineTopFromMinutes(startMins);
                   return (
-                    <div key={s.id} className="absolute left-4 right-0 z-10" style={{ top }}>
-                      {/* Caja 1: nombre */}
-                      <div className="rounded-t-2xl rounded-b-none border-x border-t border-pink-200 bg-pink-50 px-3 py-2.5 flex items-center gap-2">
-                        <BookOpen className="w-3.5 h-3.5 text-pink-500 flex-shrink-0" />
-                        <span className="text-[12px] font-semibold text-pink-700 truncate">{s.contactName}</span>
-                        {s.lesson && <span className="text-[10px] text-pink-500 truncate flex-1">{s.lesson}</span>}
-                      </div>
-                      {/* Caja 2: hora */}
-                      <div className="rounded-t-none rounded-b-2xl border-x border-b border-t-0 border-pink-200 bg-background/60 px-3 py-1.5 flex items-center gap-1.5">
-                        <Clock className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                        <span className="text-[11px] text-muted-foreground">{s.time}</span>
+                    <div
+                      key={s.id}
+                      className="absolute left-2 right-2 rounded-xl overflow-hidden"
+                      style={{
+                        top,
+                        height: 52,
+                        background: "linear-gradient(135deg, #fce7f3, #f5d0fe)",
+                        borderLeftWidth: 3,
+                        borderLeftColor: "#ec4899",
+                      }}
+                    >
+                      <div className="px-2.5 py-2">
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm leading-none">📖</span>
+                          <p className="text-[11px] font-bold text-foreground truncate">{s.contactName}</p>
+                        </div>
+                        <p className="text-[9px] text-foreground/60 mt-0.5">{s.time}</p>
                       </div>
                     </div>
                   );
                 })}
+
               </div>
             </div>
           </div>
-          </div>{/* /container 2 */}
-        </>
+        </div>
       )}
-
       {/* ── MONTHLY VIEW ── */}
       {mode === "monthly" && (
         <>
-          <div className="px-4 pt-4">
+          <div className="px-5 pt-4">
             <div className="flex items-center justify-between mb-4">
               <button
                 onClick={() => setMonthOffset((v) => v - 1)}
@@ -969,7 +1048,7 @@ export function CalendarView({
 
           </div>
 
-          <div className="px-4">
+          <div className="px-5">
             {monthHoursMode ? (
               <>
                 <HoursMonthGrid
