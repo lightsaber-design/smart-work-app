@@ -266,17 +266,53 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
         {/* ── HOME TAB ── */}
         {activeTab === "home" && (() => {
-          // All future non-completed events from today midnight onwards
           const todayMidnight = new Date();
           todayMidnight.setHours(0, 0, 0, 0);
-          const allUpcoming = calendarEvents
+
+          // Calendar events — non-completed, from today midnight onwards
+          const calUpcoming = calendarEvents
             .filter((e) => !e.completed && e.date.getTime() >= todayMidnight.getTime())
-            .sort((a, b) => a.date.getTime() - b.date.getTime());
+            .map((e) => ({
+              id: e.id,
+              date: e.date,
+              category: e.category as import("@/hooks/useCalendarEvents").EventCategory,
+              label: e.category,
+              contactName: undefined as string | undefined,
+            }));
+
+          // Pending study sessions (from useEstudios) — from today midnight onwards
+          const estudiosUpcoming = estudios.contacts
+            .filter((c) => c.active)
+            .flatMap((c) =>
+              (c.sessions ?? [])
+                .filter((s) => {
+                  if (!s.pending) return false;
+                  const d = new Date(s.date);
+                  return d.getTime() >= todayMidnight.getTime();
+                })
+                .map((s) => {
+                  const d = new Date(s.date);
+                  const [hh, mm] = s.time.split(":").map(Number);
+                  d.setHours(hh, mm, 0, 0);
+                  return {
+                    id: s.id,
+                    date: d,
+                    category: "Estudio" as import("@/hooks/useCalendarEvents").EventCategory,
+                    label: `Estudio – ${c.name}`,
+                    contactName: c.name,
+                  };
+                })
+            );
+
+          // Unified sorted list
+          const allUpcoming = [...calUpcoming, ...estudiosUpcoming].sort(
+            (a, b) => a.date.getTime() - b.date.getTime()
+          );
           const totalUpcoming = allUpcoming.length;
-          // Next 3 events to display as cards
           const nextEvents = allUpcoming.slice(0, 3);
           const hasMore = allUpcoming.length > 3;
-          // Group ALL upcoming by category for summary
+
+          // Category chips — group by category across ALL upcoming
           const categoryGroups = CATEGORY_LIST.map((cat) => ({
             cat,
             count: allUpcoming.filter((e) => e.category === cat).length,
@@ -396,25 +432,25 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                       </div>
                     )}
 
-                    {/* Next 3 events */}
-                    {nextEvents.map((event) => {
-                      const style = CATEGORY_STYLE[event.category];
-                      const meta = CATEGORY_META[event.category];
-                      const isToday = event.date.toDateString() === new Date().toDateString();
+                    {/* Next 3 events (calendar + estudio sessions) */}
+                    {nextEvents.map((item) => {
+                      const style = CATEGORY_STYLE[item.category];
+                      const meta = CATEGORY_META[item.category];
+                      const isToday = item.date.toDateString() === new Date().toDateString();
                       const dateStr = isToday
                         ? "Hoy"
-                        : event.date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
-                      const timeStr = `${String(event.date.getHours()).padStart(2, "0")}:${String(event.date.getMinutes()).padStart(2, "0")}`;
+                        : item.date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+                      const timeStr = `${String(item.date.getHours()).padStart(2, "0")}:${String(item.date.getMinutes()).padStart(2, "0")}`;
                       return (
                         <button
-                          key={event.id}
-                          onClick={() => navigate("calendar")}
+                          key={item.id}
+                          onClick={() => navigate(item.contactName ? "estudios" : "calendar")}
                           className={`w-full flex items-center gap-3 rounded-2xl border px-3 py-3 text-left active:scale-[0.98] transition-transform ${style.card}`}
                           style={{ borderLeftWidth: 3, borderLeftColor: style.accent }}
                         >
                           <span className="text-xl leading-none flex-shrink-0">{meta.icon}</span>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-foreground truncate">{event.category}</p>
+                            <p className="text-sm font-bold text-foreground truncate">{item.label}</p>
                             <p className="text-[11px] text-muted-foreground capitalize">{dateStr} · {timeStr}</p>
                           </div>
                           <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
