@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
-import { EstudioContact } from "@/hooks/useEstudios";
+import { EstudioContact, EstudioSession, SessionFile } from "@/hooks/useEstudios";
 import {
   Plus, Trash2, BellOff, MapPin, Repeat, Clock, CheckCircle2,
   Circle, Pencil, ChevronLeft, ChevronRight, BookOpen, Star,
@@ -62,6 +62,7 @@ interface CalendarViewProps {
   favoritePlaces: FavoritePlace[];
   defaultCenter?: { lat: number; lng: number };
   estudiosContacts?: EstudioContact[];
+  onUpdateEstudioSession?: (contactId: string, sessionId: string, data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
   precursorHours?: number | null;
   travelReminder?: TravelReminderSettings;
   specialCampaignGoals?: Record<string, CampaignGoal>;
@@ -182,9 +183,15 @@ function EventCard({
 
   if (compact) {
     return (
-      <div className={`rounded-xl border px-2.5 py-1.5 mb-1.5 ${style.card} ${event.completed ? "opacity-50" : ""}`}>
+      <div
+        className={`rounded-xl border px-2.5 py-1.5 mb-1.5 ${style.card} ${event.completed ? "opacity-50" : ""} cursor-pointer active:opacity-75 transition-opacity`}
+        onClick={onEdit}
+      >
         <div className="flex items-center gap-1.5">
-          <button onClick={onToggle} className="flex-shrink-0">
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggle(); }}
+            className="flex-shrink-0"
+          >
             {event.completed
               ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
               : <Circle className="w-3.5 h-3.5 text-muted-foreground" />}
@@ -192,6 +199,7 @@ function EventCard({
           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style.dot}`} />
           <span className="text-[11px] font-semibold text-foreground truncate">{event.category}</span>
           <span className="text-[10px] text-muted-foreground ml-auto flex-shrink-0">{formatEventTime(event.date)}</span>
+          <Pencil className="w-3 h-3 text-muted-foreground flex-shrink-0 ml-1" />
         </div>
       </div>
     );
@@ -457,12 +465,14 @@ export function CalendarView({
   favoritePlaces,
   defaultCenter,
   estudiosContacts = [],
+  onUpdateEstudioSession,
   precursorHours = null,
   travelReminder = { enabled: false, minutes: 0 },
   specialCampaignGoals = {},
   onSetSpecialCampaign,
 }: CalendarViewProps) {
   const t = useT();
+  const activeContacts = estudiosContacts.filter((c) => c.active);
   const [mode, setMode] = useState<CalendarMode>("daily");
   const [monthHoursMode, setMonthHoursMode] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -472,10 +482,16 @@ export function CalendarView({
     params: AddEventParams;
     conflicts: CalendarEvent[];
   } | null>(null);
+  const [pendingEstudioConflict, setPendingEstudioConflict] = useState<{
+    params: AddEventParams;
+    contact: EstudioContact;
+    session: EstudioSession;
+  } | null>(null);
 
   const [time, setTime] = useState("09:00");
   const [endTime, setEndTime] = useState("");
   const [category, setCategory] = useState<EventCategory>("Predi");
+  const [selectedEstudioContactId, setSelectedEstudioContactId] = useState<string>("");
   const [reminder, setReminder] = useState("15");
   const [location, setLocation] = useState<{ lat: number; lng: number } | undefined>();
   const [recurrence, setRecurrence] = useState<RecurrenceType>("none");
@@ -487,7 +503,13 @@ export function CalendarView({
   const [editTime, setEditTime] = useState("09:00");
   const [editEndTime, setEditEndTime] = useState("");
   const [editCategory, setEditCategory] = useState<EventCategory>("Predi");
+  const [editEstudioContactId, setEditEstudioContactId] = useState<string>("");
   const [editReminder, setEditReminder] = useState("15");
+
+  // Filtered categories: hide Estudio if no active contacts
+  const availableCategories = CATEGORIES.filter(
+    (cat) => cat !== "Estudio" || activeContacts.length > 0
+  );
 
   useScrollLock(dialogOpen || !!editEvent || !!pendingAddConflict);
 
@@ -541,6 +563,11 @@ export function CalendarView({
     setEditEndTime(event.endTime || "");
     setEditCategory(event.category);
     setEditReminder(String(event.reminderMinutesBefore));
+    if (event.category === "Estudio" && activeContacts.length === 1) {
+      setEditEstudioContactId(activeContacts[0].id);
+    } else {
+      setEditEstudioContactId("");
+    }
   };
 
   const handleSaveEdit = () => {
@@ -566,9 +593,11 @@ export function CalendarView({
 
   const resetAddForm = () => {
     setTime("09:00"); setEndTime(""); setCategory("Predi"); setReminder("15");
+    setSelectedEstudioContactId("");
     setLocation(undefined); setLocationMode("none"); setSelectedFavoriteId(""); setRecurrence("none");
     setDialogOpen(false);
     setPendingAddConflict(null);
+    setPendingEstudioConflict(null);
   };
 
   const commitAdd = (params: AddEventParams) => {
@@ -611,7 +640,25 @@ export function CalendarView({
       : travelReminder.enabled
       ? getTravelReminderMinutes(date, events, travelReminder)
       : manualReminder;
-    const params = { date, endTime: endTime || undefined, category, reminderMinutesBefore, location: eventLocation, recurrence };
+    const params: AddEventParams = { date, endTime: endTime || undefined, category, reminderMinutesBefore, location: eventLocation, recurrence };
+
+    // Check upcoming study session conflict
+    if (category === "Estudio") {
+      const contact =
+        activeContacts.find((c) => c.id === selectedEstudioContactId) ??
+        (activeContacts.length === 1 ? activeContacts[0] : null);
+      if (contact) {
+        const now = Date.now();
+        const nextPending = (contact.sessions ?? [])
+          .filter((s) => s.pending && new Date(s.date).getTime() > now - 86_400_000)
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] ?? null;
+        if (nextPending) {
+          setPendingEstudioConflict({ params, contact, session: nextPending });
+          return;
+        }
+      }
+    }
+
     const conflicts = events.filter((event) => eventsOverlap(params, event));
     if (conflicts.length > 0) {
       setPendingAddConflict({
@@ -621,6 +668,39 @@ export function CalendarView({
       return;
     }
     commitAdd(params);
+  };
+
+  const commitAddAfterEstudioCheck = (params: AddEventParams) => {
+    const conflicts = events.filter((event) => eventsOverlap(params, event));
+    if (conflicts.length > 0) {
+      setPendingAddConflict({ params, conflicts: conflicts.sort((a, b) => a.date.getTime() - b.date.getTime()) });
+      return;
+    }
+    commitAdd(params);
+  };
+
+  const handleEstudioOverwrite = () => {
+    if (!pendingEstudioConflict) return;
+    const { params, contact, session } = pendingEstudioConflict;
+    const d = params.date;
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const timeStr = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    onUpdateEstudioSession?.(contact.id, session.id, {
+      date: dateStr,
+      time: timeStr,
+      lesson: session.lesson,
+      notes: session.notes,
+      files: session.files ?? [],
+    });
+    setPendingEstudioConflict(null);
+    commitAddAfterEstudioCheck(params);
+  };
+
+  const handleEstudioAddNew = () => {
+    if (!pendingEstudioConflict) return;
+    const { params } = pendingEstudioConflict;
+    setPendingEstudioConflict(null);
+    commitAddAfterEstudioCheck(params);
   };
 
   const notifStatus =
@@ -1127,13 +1207,48 @@ export function CalendarView({
             </p>
             <div className="space-y-2">
               <Label>{t("cal_category")}</Label>
-              <Select value={category} onValueChange={(v) => setCategory(v as EventCategory)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={category}
+                onValueChange={(v) => {
+                  setCategory(v as EventCategory);
+                  if (v === "Estudio" && activeContacts.length === 1) {
+                    setSelectedEstudioContactId(activeContacts[0].id);
+                  } else if (v !== "Estudio") {
+                    setSelectedEstudioContactId("");
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue>
+                    {category === "Estudio" && activeContacts.length === 1
+                      ? `Estudio – ${activeContacts[0].name}`
+                      : category}
+                  </SelectValue>
+                </SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                  {availableCategories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat === "Estudio" && activeContacts.length === 1
+                        ? `Estudio – ${activeContacts[0].name}`
+                        : cat}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+            {category === "Estudio" && activeContacts.length > 1 && (
+              <div className="space-y-2">
+                <Label>Contacto de estudio</Label>
+                <Select value={selectedEstudioContactId} onValueChange={setSelectedEstudioContactId}>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar contacto" /></SelectTrigger>
+                  <SelectContent>
+                    {activeContacts.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>{t("cal_start_time")}</Label>
@@ -1269,13 +1384,48 @@ export function CalendarView({
                 </p>
                 <div className="space-y-2">
                   <Label>{t("cal_category")}</Label>
-                  <Select value={editCategory} onValueChange={(v) => setEditCategory(v as EventCategory)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select
+                    value={editCategory}
+                    onValueChange={(v) => {
+                      setEditCategory(v as EventCategory);
+                      if (v === "Estudio" && activeContacts.length === 1) {
+                        setEditEstudioContactId(activeContacts[0].id);
+                      } else if (v !== "Estudio") {
+                        setEditEstudioContactId("");
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue>
+                        {editCategory === "Estudio" && activeContacts.length === 1
+                          ? `Estudio – ${activeContacts[0].name}`
+                          : editCategory}
+                      </SelectValue>
+                    </SelectTrigger>
                     <SelectContent>
-                      {CATEGORIES.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                      {availableCategories.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat === "Estudio" && activeContacts.length === 1
+                            ? `Estudio – ${activeContacts[0].name}`
+                            : cat}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+                {editCategory === "Estudio" && activeContacts.length > 1 && (
+                  <div className="space-y-2">
+                    <Label>Contacto de estudio</Label>
+                    <Select value={editEstudioContactId} onValueChange={setEditEstudioContactId}>
+                      <SelectTrigger><SelectValue placeholder="Seleccionar contacto" /></SelectTrigger>
+                      <SelectContent>
+                        {activeContacts.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label>{t("cal_start_time")}</Label>
@@ -1320,6 +1470,45 @@ export function CalendarView({
           )}
         </div>
       </div>
+
+      {/* ── Estudio session conflict dialog ── */}
+      <AlertDialog open={!!pendingEstudioConflict} onOpenChange={(open) => { if (!open) setPendingEstudioConflict(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sesión de estudio programada</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <span className="block space-y-2 text-sm text-muted-foreground">
+                {pendingEstudioConflict && (() => {
+                  const { contact, session } = pendingEstudioConflict;
+                  const sessionDate = new Date(session.date);
+                  const dateStr = sessionDate.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+                  return (
+                    <>
+                      <span className="block">
+                        <strong className="text-foreground">{contact.name}</strong> tiene una sesión programada el{" "}
+                        <strong className="text-foreground">{dateStr} a las {session.time}</strong>.
+                      </span>
+                      <span className="block">¿Este evento es esa sesión (mover la fecha programada) o es una sesión adicional?</span>
+                    </>
+                  );
+                })()}
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-col">
+            <AlertDialogCancel onClick={() => setPendingEstudioConflict(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-secondary text-secondary-foreground hover:bg-secondary/80"
+              onClick={handleEstudioAddNew}
+            >
+              Añadir como nueva
+            </AlertDialogAction>
+            <AlertDialogAction onClick={handleEstudioOverwrite}>
+              Sobreescribir sesión programada
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

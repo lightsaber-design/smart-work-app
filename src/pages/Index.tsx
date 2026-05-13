@@ -19,7 +19,7 @@ import { useEstudios } from "@/hooks/useEstudios";
 import { MissedStudyBanner } from "@/components/MissedStudyBanner";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { useSpecialCampaign } from "@/hooks/useSpecialCampaign";
-import { CATEGORY_META, CATEGORY_STYLE } from "@/lib/categories";
+import { CATEGORY_META, CATEGORY_STYLE, CATEGORY_LIST } from "@/lib/categories";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 import { removeJsonValue } from "@/lib/jsonFileStorage";
 import { shouldNotifyEvent } from "@/lib/eventReminders";
@@ -237,9 +237,28 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const timerCategoryMeta = CATEGORY_META[timerDisplayCategory];
   const timerBackground = `linear-gradient(160deg, ${hexToRgba(timerCategoryMeta.gradient[0], 0.55)} 0%, ${hexToRgba(timerCategoryMeta.gradient[1], 0.55)} 100%), #f8fafc`;
 
-  // Monthly total (tracker.monthTotal is in seconds)
-  const monthTotalHrs = Math.floor(tracker.monthTotal / 3600);
-  const monthTotalMins = Math.floor((tracker.monthTotal % 3600) / 60);
+  // Monthly total from completed calendar events (source of truth for hours)
+  const calMonthMs = (() => {
+    const now = new Date();
+    return calendarEvents
+      .filter((e) => {
+        return (
+          e.completed &&
+          e.endTime &&
+          e.date.getMonth() === now.getMonth() &&
+          e.date.getFullYear() === now.getFullYear()
+        );
+      })
+      .reduce((acc, e) => {
+        if (!e.endTime) return acc;
+        const [h, m] = e.endTime.split(":").map(Number);
+        const end = new Date(e.date);
+        end.setHours(h, m, 0, 0);
+        return acc + Math.max(0, end.getTime() - e.date.getTime());
+      }, 0);
+  })();
+  const monthTotalHrs = Math.floor(calMonthMs / 3_600_000);
+  const monthTotalMins = Math.floor((calMonthMs % 3_600_000) / 60_000);
 
   return (
     <div className="min-h-screen bg-background max-w-md mx-auto relative">
@@ -247,10 +266,21 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
         {/* ── HOME TAB ── */}
         {activeTab === "home" && (() => {
-          const homeEvents = calendarEvents
-            .filter((e) => !e.completed && e.date.getTime() > Date.now() - 3_600_000)
-            .sort((a, b) => a.date.getTime() - b.date.getTime())
-            .slice(0, 5);
+          // All future non-completed events from today midnight onwards
+          const todayMidnight = new Date();
+          todayMidnight.setHours(0, 0, 0, 0);
+          const allUpcoming = calendarEvents
+            .filter((e) => !e.completed && e.date.getTime() >= todayMidnight.getTime())
+            .sort((a, b) => a.date.getTime() - b.date.getTime());
+          const totalUpcoming = allUpcoming.length;
+          // Next 3 events to display as cards
+          const nextEvents = allUpcoming.slice(0, 3);
+          const hasMore = allUpcoming.length > 3;
+          // Group ALL upcoming by category for summary
+          const categoryGroups = CATEGORY_LIST.map((cat) => ({
+            cat,
+            count: allUpcoming.filter((e) => e.category === cat).length,
+          })).filter((g) => g.count > 0);
           return (
             <div className="min-h-screen bg-background pb-24">
               {/* Gradient hero */}
@@ -308,7 +338,12 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
                 {/* Upcoming events */}
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-bold text-foreground">Próximos eventos</h2>
+                  <h2 className="text-sm font-bold text-foreground">
+                    Próximos eventos
+                    {totalUpcoming > 0 && (
+                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">· {totalUpcoming} total</span>
+                    )}
+                  </h2>
                   <button
                     onClick={() => navigate("calendar")}
                     className="text-xs text-primary font-semibold flex items-center gap-0.5"
@@ -317,7 +352,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   </button>
                 </div>
 
-                {homeEvents.length === 0 ? (
+                {totalUpcoming === 0 ? (
                   <div className="rounded-2xl border border-border bg-muted/30 px-4 py-6 text-center">
                     <p className="text-sm text-muted-foreground">Sin eventos próximos</p>
                     <button
@@ -328,8 +363,41 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {homeEvents.map((event) => {
+                  <div className="space-y-2.5">
+                    {/* Category summary chips — ALL upcoming */}
+                    {categoryGroups.length > 0 && (
+                      <div className="rounded-2xl border border-border bg-card px-4 py-3">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                          Resumen · {totalUpcoming} evento{totalUpcoming !== 1 ? "s" : ""}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {categoryGroups.map(({ cat, count }) => {
+                            const meta = CATEGORY_META[cat];
+                            const style = CATEGORY_STYLE[cat];
+                            return (
+                              <button
+                                key={cat}
+                                onClick={() => navigate("calendar")}
+                                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold border active:scale-95 transition-transform ${style.card}`}
+                                style={{ borderColor: style.accent + "55" }}
+                              >
+                                <span>{meta.icon}</span>
+                                <span className="text-foreground">{cat}</span>
+                                <span
+                                  className="rounded-full px-1.5 py-0.5 text-[10px] font-black text-white leading-none"
+                                  style={{ backgroundColor: style.accent }}
+                                >
+                                  {count}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Next 3 events */}
+                    {nextEvents.map((event) => {
                       const style = CATEGORY_STYLE[event.category];
                       const meta = CATEGORY_META[event.category];
                       const isToday = event.date.toDateString() === new Date().toDateString();
@@ -353,12 +421,15 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                         </button>
                       );
                     })}
-                    <button
-                      onClick={() => navigate("calendar")}
-                      className="w-full flex items-center justify-center gap-1.5 py-3 text-sm font-semibold text-primary"
-                    >
-                      Ver más en el calendario <ChevronRight className="w-4 h-4" />
-                    </button>
+
+                    {hasMore && (
+                      <button
+                        onClick={() => navigate("calendar")}
+                        className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-primary"
+                      >
+                        Ver {allUpcoming.length - 3} más en el calendario <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -543,6 +614,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               favoritePlaces={favorites.places}
               defaultCenter={defaultCenter}
               estudiosContacts={estudios.contacts}
+              onUpdateEstudioSession={estudios.updateSession}
               precursorHours={setup.precursorHours}
               travelReminder={{
                 enabled: setup.travelTimeEnabled,
