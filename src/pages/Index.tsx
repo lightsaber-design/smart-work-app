@@ -18,6 +18,7 @@ import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 import { removeJsonValue } from "@/lib/jsonFileStorage";
 import { shouldNotifyEvent } from "@/lib/eventReminders";
 import { findActiveScheduledEvent, getEventEndDate, shouldShowTimerOverrunPrompt } from "@/lib/timerOverrun";
+import { showBrowserNotification } from "@/lib/notifications";
 
 const StatsView = lazy(() => import("@/components/StatsView").then((module) => ({ default: module.StatsView })));
 const CalendarView = lazy(() => import("@/components/CalendarView").then((module) => ({ default: module.CalendarView })));
@@ -137,8 +138,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       const now = Date.now();
       calendarEvents.forEach((event) => {
         if (shouldNotifyEvent(now, event)) {
-          if (!tracker.isRunning && "Notification" in window && Notification.permission === "granted") {
-            new Notification("⏰ Upcoming event", {
+          if (!tracker.isRunning) {
+            showBrowserNotification("⏰ Upcoming event", {
               body: `${event.category} starts soon. Start tracking when needed.`,
             });
           }
@@ -153,11 +154,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
   useEffect(() => {
     if (!showTimerOverrunPrompt || !activeScheduledEvent || timerOverrunNotifiedId === activeScheduledEvent.id) return;
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("⏰ Timer still running", {
-        body: `${activeScheduledEvent.category} has passed its scheduled end time.`,
-      });
-    }
+    showBrowserNotification("⏰ Timer still running", {
+      body: `${activeScheduledEvent.category} has passed its scheduled end time.`,
+    });
     setTimerOverrunNotifiedId(activeScheduledEvent.id);
   }, [activeScheduledEvent, showTimerOverrunPrompt, timerOverrunNotifiedId]);
 

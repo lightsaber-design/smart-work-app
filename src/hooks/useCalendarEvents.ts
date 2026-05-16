@@ -3,6 +3,7 @@ import { generateId } from "@/lib/uuid";
 import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 import { clampReminderMinutes } from "@/lib/eventReminders";
 import { findScheduledEventAtTimerStart, findScheduledEventForTimerStart } from "@/lib/timerOverrun";
+import { requestNotificationPermission } from "@/lib/notifications";
 
 export type EventCategory = "Predi" | "Carrito" | "LDC" | "Visitas" | "Estudio";
 export type RecurrenceType = "none" | "weekly" | "monthly";
@@ -154,9 +155,7 @@ export function useCalendarEvents() {
   }, []);
 
   useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
+    requestNotificationPermission();
   }, []);
 
   const markNotified = useCallback((id: string) => {
