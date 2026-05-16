@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 import { generateId } from "@/lib/uuid";
 import { lockScroll, unlockScroll } from "@/hooks/useScrollLock";
 import {
@@ -21,7 +21,7 @@ import {
 import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { saveFile, getFileURL, formatFileSize } from "@/lib/sessionFiles";
 
-/* ── constants ── */
+/* Constantes */
 const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const FREQ_LABELS: Record<ScheduleFrequency, string> = {
   weekly: "Semanal",
@@ -29,7 +29,7 @@ const FREQ_LABELS: Record<ScheduleFrequency, string> = {
   monthly: "Mensual",
 };
 
-/* ── helpers ── */
+/* Ayudantes */
 function formatRelative(isoDate: string): string {
   try {
     const diff = Date.now() - new Date(isoDate).getTime();
@@ -65,7 +65,7 @@ function isoToDateStr(iso: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/* ── small shared components ── */
+/* Componentes compartidos pequenos */
 function FileTypeIcon({ type }: { type: string }) {
   if (type.startsWith("image/")) return <Image className="w-4 h-4 text-blue-500" />;
   if (type === "application/pdf") return <FileText className="w-4 h-4 text-red-500" />;
@@ -107,7 +107,7 @@ function FilePicker({ files, onChange }: {
   );
 }
 
-/* ── Contact form (add & edit) ── */
+/* Formulario de contacto para agregar y editar */
 function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
   contact?: EstudioContact;
   favoritePlaces: FavoritePlace[];
@@ -170,7 +170,7 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
             <div className="space-y-1.5">
               <Label>Ubicación guardada <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
               <Select value={placeId} onValueChange={setPlaceId}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar lugar…" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Seleccionar lugar..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Sin ubicación</SelectItem>
                   {favoritePlaces.map((p) => (
@@ -257,7 +257,7 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
   );
 }
 
-/* ── Unified session form sheet (add now / schedule / edit) ── */
+/* Hoja unificada para agregar, programar o editar sesiones */
 function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onClose }: {
   session: EstudioSession | null;
   contact: EstudioContact;
@@ -268,6 +268,7 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
 }) {
   const isNew = session === null;
   const isPending = session?.pending ?? false;
+  const canComplete = Boolean(session?.pending) && new Date(session.date).getTime() <= Date.now();
 
   const [date, setDate] = useState(session ? isoToDateStr(session.date) : todayDateStr());
   const [time, setTime] = useState(session?.time ?? nowTime());
@@ -335,7 +336,7 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
           <div className="space-y-1.5">
             <Label>Lección <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
             <Input
-              placeholder="Ej: Cap. 3 — La esperanza de la resurrección"
+              placeholder="Ej: Cap. 3 - La esperanza de la resurrección"
               value={lesson}
               onChange={(e) => setLesson(e.target.value)}
             />
@@ -391,9 +392,9 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
 
         <div className="flex-shrink-0 px-4 pt-3 pb-6 border-t border-border bg-card mt-2 space-y-2">
           <Button onClick={handleSave} disabled={saving || !date} className="w-full">
-            {saving ? "Guardando…" : isNew ? (isPending ? "Programar sesión" : "Guardar sesión") : "Guardar cambios"}
+            {saving ? "Guardando..." : isNew ? (isPending ? "Programar sesión" : "Guardar sesión") : "Guardar cambios"}
           </Button>
-          {!isNew && isPending && onComplete && (
+          {!isNew && isPending && canComplete && onComplete && (
             <Button
               variant="outline"
               onClick={() => { onComplete(); onClose(); }}
@@ -417,7 +418,7 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
   );
 }
 
-/* ── History session card (click to open) ── */
+/* Tarjeta de sesion historica */
 function HistorySessionCard({ session, onOpen }: { session: EstudioSession; onOpen: () => void }) {
   return (
     <button
@@ -447,9 +448,9 @@ function HistorySessionCard({ session, onOpen }: { session: EstudioSession; onOp
   );
 }
 
-/* ── Contact detail view ── */
+/* Vista de detalle del contacto */
 function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, onArchive, onUnarchive,
-  onAddSession, onUpdateSession, onDeleteSession, onCompleteSession,
+  onAddSession, onUpdateSession, onDeleteSession, onCompleteSession, focusedSessionId, onFocusedSessionHandled,
 }: {
   contact: EstudioContact;
   favoritePlaces: FavoritePlace[];
@@ -462,12 +463,13 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
   onUpdateSession: (contactId: string, sessionId: string, data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
   onDeleteSession: (contactId: string, sessionId: string) => void;
   onCompleteSession: (contactId: string, sessionId: string) => void;
+  focusedSessionId?: string;
+  onFocusedSessionHandled?: () => void;
 }) {
   const [newSessionOpen, setNewSessionOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState<EstudioSession | null>(null);
-  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
 
   const doneSessions = (contact.sessions ?? [])
@@ -484,6 +486,18 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
     : null;
   const locationLabel = savedPlace?.name ?? contact.address ?? null;
   const sessionToday = doneSessions.some((s) => new Date(s.date).toDateString() === new Date().toDateString());
+
+  useEffect(() => {
+    if (!focusedSessionId) return;
+    const session = contact.sessions.find((s) => s.id === focusedSessionId);
+    if (!session) {
+      onFocusedSessionHandled?.();
+      return;
+    }
+    else setShowAllHistory(true);
+    setSelectedSession(session);
+    onFocusedSessionHandled?.();
+  }, [contact.sessions, focusedSessionId, onFocusedSessionHandled]);
 
   return (
     <div className="pb-24">
@@ -574,7 +588,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
 
       <div className="px-4 pt-4 space-y-6">
 
-        {/* ── Próximas sesiones ── */}
+        {/* Proximas sesiones */}
         <div>
           <div className="flex items-center gap-2 mb-3">
             <CalendarPlus className="w-4 h-4 text-primary" />
@@ -591,7 +605,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
             </div>
           ) : (
             <div className="space-y-2">
-              {(showAllUpcoming ? upcomingSessions : upcomingSessions.slice(0, 1)).map((s) => {
+              {upcomingSessions.slice(0, 4).map((s) => {
                 const isPast = new Date(s.date) < new Date() && new Date(s.date).toDateString() !== new Date().toDateString();
                 return (
                   <button
@@ -619,43 +633,12 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                   </button>
                 );
               })}
-              {!showAllUpcoming && upcomingSessions.length > 1 && (
-                <button
-                  onClick={() => setShowAllUpcoming(true)}
-                  className="w-full text-center text-xs font-medium text-primary py-2"
-                >
-                  Ver {upcomingSessions.length - 1} más →
-                </button>
-              )}
             </div>
           )}
         </div>
 
-        {/* ── Schedule banner ── */}
-        {contact.schedule && (
-          <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <RefreshCw className="w-4 h-4 text-primary" />
-              <div>
-                <p className="text-xs font-semibold text-primary">
-                  {FREQ_LABELS[contact.schedule.frequency]} · {DAY_NAMES[contact.schedule.dayOfWeek]} · {contact.schedule.time}
-                </p>
-                {contact.schedule.lesson && (
-                  <p className="text-xs text-muted-foreground">{contact.schedule.lesson}</p>
-                )}
-              </div>
-            </div>
-            <div className="space-y-0.5">
-              {getNextOccurrences(contact.schedule, 3).map((d, i) => (
-                <p key={i} className="text-xs text-muted-foreground capitalize">
-                  • {d.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })} · {contact.schedule.time}
-                </p>
-              ))}
-            </div>
-          </div>
-        )}
 
-        {/* ── Historial ── */}
+        {/* Historial */}
         <div>
           <div className="flex items-center gap-2 mb-3">
             <History className="w-4 h-4 text-muted-foreground" />
@@ -684,7 +667,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                   onClick={() => setShowAllHistory(true)}
                   className="w-full text-center text-xs font-medium text-muted-foreground py-2"
                 >
-                  Ver {doneSessions.length - 1} más →
+                  Ver {doneSessions.length - 1} más
                 </button>
               )}
             </div>
@@ -692,7 +675,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
         </div>
       </div>
 
-      {/* ── New session sheet (registro rápido) ── */}
+      {/* Hoja para nueva sesion */}
       {newSessionOpen && (
         <SessionEditSheet
           session={null}
@@ -703,7 +686,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
         />
       )}
 
-      {/* ── Edit existing session sheet ── */}
+      {/* Hoja para editar sesion existente */}
       {selectedSession && (
         <SessionEditSheet
           session={selectedSession}
@@ -722,7 +705,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
   );
 }
 
-/* ── Contact card (list item) ── */
+/* Tarjeta de contacto */
 function ContactCard({ contact, favoritePlaces, onClick }: {
   contact: EstudioContact;
   favoritePlaces: FavoritePlace[];
@@ -792,7 +775,7 @@ function ContactCard({ contact, favoritePlaces, onClick }: {
   );
 }
 
-/* ── Main view ── */
+/* Vista principal */
 interface EstudiosViewProps {
   contacts: EstudioContact[];
   favoritePlaces: FavoritePlace[];
@@ -805,17 +788,24 @@ interface EstudiosViewProps {
   onUpdateSession: (contactId: string, sessionId: string, data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
   onDeleteSession: (contactId: string, sessionId: string) => void;
   onCompleteSession: (contactId: string, sessionId: string) => void;
+  focusedSession?: { contactId: string; sessionId: string } | null;
+  onFocusedSessionHandled?: () => void;
 }
 
 export function EstudiosView({
   contacts, favoritePlaces,
   onAddContact, onUpdateContact, onDeleteContact, onArchiveContact, onUnarchiveContact,
   onAddSession, onUpdateSession, onDeleteSession, onCompleteSession,
+  focusedSession, onFocusedSessionHandled,
 }: EstudiosViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
   const selectedContact = selectedId ? contacts.find((c) => c.id === selectedId) ?? null : null;
+
+  useEffect(() => {
+    if (focusedSession) setSelectedId(focusedSession.contactId);
+  }, [focusedSession]);
 
   const active = contacts.filter((c) => c.active);
   const archived = contacts.filter((c) => !c.active);
@@ -834,6 +824,8 @@ export function EstudiosView({
         onUpdateSession={onUpdateSession}
         onDeleteSession={onDeleteSession}
         onCompleteSession={onCompleteSession}
+        focusedSessionId={focusedSession?.contactId === selectedContact.id ? focusedSession.sessionId : undefined}
+        onFocusedSessionHandled={onFocusedSessionHandled}
       />
     );
   }
@@ -886,3 +878,5 @@ export function EstudiosView({
     </div>
   );
 }
+
+

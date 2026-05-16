@@ -1,4 +1,6 @@
 import { Home, BarChart3, Clock, CalendarDays, User } from "lucide-react";
+import { CATEGORY_META } from "@/lib/categories";
+import { EventCategory } from "@/hooks/useCalendarEvents";
 
 export type AppTab = "home" | "summary" | "timer" | "calendar" | "profile" | "estudios" | "map";
 
@@ -6,6 +8,7 @@ interface BottomNavProps {
   activeTab: AppTab;
   onTabChange: (tab: AppTab) => void;
   isRunning?: boolean;
+  activeCategory?: EventCategory;
 }
 
 const LEFT_TABS = [
@@ -18,8 +21,13 @@ const RIGHT_TABS = [
   { id: "profile" as AppTab, icon: User, label: "Perfil" },
 ] as const;
 
-export function BottomNav({ activeTab, onTabChange, isRunning }: BottomNavProps) {
+export function BottomNav({ activeTab, onTabChange, isRunning, activeCategory = "Predi" }: BottomNavProps) {
   const profileActive = activeTab === "profile" || activeTab === "estudios" || activeTab === "map";
+  const categoryMeta = CATEGORY_META[activeCategory];
+  const timerButtonStyle = isRunning ? {
+    background: `linear-gradient(135deg, ${categoryMeta.gradient[0]} 0%, ${categoryMeta.gradient[1]} 100%)`,
+    boxShadow: `0 10px 25px ${categoryMeta.gradient[0]}40`,
+  } : undefined;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
@@ -38,21 +46,25 @@ export function BottomNav({ activeTab, onTabChange, isRunning }: BottomNavProps)
           );
         })}
 
-        {/* Timer — center raised button */}
+        {/* Boton central del timer */}
         <div className="flex-1 flex justify-center">
           <button
             onClick={() => onTabChange("timer")}
             className={`relative flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition-all active:scale-95 -mt-5 ${
               isRunning
-                ? "bg-green-500 shadow-green-500/30"
+                ? ""
                 : activeTab === "timer"
                 ? "bg-primary shadow-primary/30"
                 : "bg-primary/90 shadow-primary/20"
             }`}
+            style={timerButtonStyle}
           >
             <Clock className="w-6 h-6 text-white" />
             {isRunning && (
-              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-300 border-2 border-card animate-pulse" />
+              <span
+                className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card animate-pulse"
+                style={{ backgroundColor: categoryMeta.gradient[1] }}
+              />
             )}
           </button>
         </div>

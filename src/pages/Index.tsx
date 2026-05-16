@@ -1,20 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { lazy, Suspense, useMemo, useState, useEffect, useRef } from "react";
 import { useTimeTracker } from "@/hooks/useTimeTracker";
 import { useCalendarEvents, EventCategory } from "@/hooks/useCalendarEvents";
 import { useFavoritePlaces } from "@/hooks/useFavoritePlaces";
 import { useSetup, SetupData } from "@/hooks/useSetup";
 import { ClockButton } from "@/components/ClockButton";
 import { BottomNav, AppTab } from "@/components/BottomNav";
-import { StatsView } from "@/components/StatsView";
-import { SettingsView } from "@/components/SettingsView";
-import { LocationMap } from "@/components/LocationMap";
-import { CalendarView } from "@/components/CalendarView";
-import { SetupScreen } from "@/components/SetupScreen";
 import { LanguageProvider } from "@/lib/LanguageContext";
 import { detectLanguage, Lang } from "@/lib/i18n";
 import { useT } from "@/lib/LanguageContext";
-import { ChevronLeft, ChevronRight, MapPin, BookOpen, Moon, Sun, Plus } from "lucide-react";
-import { EstudiosView } from "@/components/EstudiosView";
+import { ChevronLeft, ChevronRight, MapPin, BookOpen, Moon, Sun, Plus, Pencil, Trash2 } from "lucide-react";
 import { useEstudios } from "@/hooks/useEstudios";
 import { MissedStudyBanner } from "@/components/MissedStudyBanner";
 import { useDarkMode } from "@/hooks/useDarkMode";
@@ -24,6 +18,13 @@ import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 import { removeJsonValue } from "@/lib/jsonFileStorage";
 import { shouldNotifyEvent } from "@/lib/eventReminders";
 import { findActiveScheduledEvent, getEventEndDate, shouldShowTimerOverrunPrompt } from "@/lib/timerOverrun";
+
+const StatsView = lazy(() => import("@/components/StatsView").then((module) => ({ default: module.StatsView })));
+const CalendarView = lazy(() => import("@/components/CalendarView").then((module) => ({ default: module.CalendarView })));
+const EstudiosView = lazy(() => import("@/components/EstudiosView").then((module) => ({ default: module.EstudiosView })));
+const LocationMap = lazy(() => import("@/components/LocationMap").then((module) => ({ default: module.LocationMap })));
+const SettingsView = lazy(() => import("@/components/SettingsView").then((module) => ({ default: module.SettingsView })));
+const SetupScreen = lazy(() => import("@/components/SetupScreen").then((module) => ({ default: module.SetupScreen })));
 
 type Tab = AppTab;
 type Category = EventCategory;
@@ -58,6 +59,14 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function TabLoading() {
+  return (
+    <div className="px-5 py-6 text-sm font-medium text-muted-foreground">
+      Cargando...
+    </div>
+  );
+}
+
 function AppContent({ setup, saveSetup }: AppContentProps) {
   const t = useT();
   const { isDark, toggle: toggleDark } = useDarkMode();
@@ -67,6 +76,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const [timerOverrunSnoozes, setTimerOverrunSnoozes] = useState<Record<string, number>>({});
   const [timerOverrunSnoozeTime, setTimerOverrunSnoozeTime] = useState("15:00");
   const [timerOverrunNotifiedId, setTimerOverrunNotifiedId] = useState<string | null>(null);
+  const [selectedStudySession, setSelectedStudySession] = useState<{ contactId: string; sessionId: string } | null>(null);
+  const [calendarFocusEventId, setCalendarFocusEventId] = useState<string | null>(null);
 
   // Summary sheet state
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -85,7 +96,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const favorites = useFavoritePlaces();
   const estudios = useEstudios();
   const campaign = useSpecialCampaign();
-  const { events: calendarEvents, markNotified } = calendar;
+  const { events: calendarEvents, markNotified, getEventsForDate } = calendar;
   const timerContentRef = useRef<HTMLDivElement>(null);
 
   const handleClearAll = () => {
@@ -150,8 +161,17 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     setTimerOverrunNotifiedId(activeScheduledEvent.id);
   }, [activeScheduledEvent, showTimerOverrunPrompt, timerOverrunNotifiedId]);
 
+  const todayKey = new Date().toDateString();
+  const now = useMemo(() => new Date(todayKey), [todayKey]);
+  const todayEvents = useMemo(
+    () => getEventsForDate(now)
+      .slice()
+      .sort((a, b) => a.date.getTime() - b.date.getTime()),
+    [getEventsForDate, now]
+  );
+
   // Sheet drag logic
-  const todayEventCount = calendar.getEventsForDate(new Date()).length;
+  const todayEventCount = todayEvents.length;
   const [timerContentBottomY, setTimerContentBottomY] = useState(0);
   useEffect(() => {
     if (activeTab !== "timer") return;
@@ -178,7 +198,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   );
   const restingSummaryOffset = summaryOpen ? 0 : collapsedSummaryOffset;
   const activeSummaryOffset = summaryDragOffset ?? restingSummaryOffset;
-  const summaryExpanded = summaryOpen || (summaryDragOffset !== null && activeSummaryOffset < collapsedSummaryOffset - 12);
 
   const startDrag = (clientY: number) => {
     dragStartY.current = clientY;
@@ -206,6 +225,15 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   };
 
   const navigate = (tab: Tab) => setActiveTab(tab);
+  const navigateToStudySession = (contactId: string, sessionId: string) => {
+    setSelectedStudySession({ contactId, sessionId });
+    setActiveTab("estudios");
+  };
+  const openCalendarEvent = (eventId: string) => {
+    setCalendarFocusEventId(eventId);
+    setSummaryOpen(false);
+    setActiveTab("calendar");
+  };
   const userName = setup.name || setup.city?.name || "Amigo";
 
   // Weather
@@ -222,24 +250,12 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       .catch(() => {});
   }, [setup.city]);
 
-  // Today's and upcoming events
-  const todayEvents = calendar
-    .getEventsForDate(new Date())
-    .slice()
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
-
-  const upcomingEvents = calendarEvents
-    .filter((e) => e.date.getTime() > Date.now() && !e.completed)
-    .sort((a, b) => a.date.getTime() - b.date.getTime())
-    .slice(0, 7);
-
   // Timer background gradient
   const timerCategoryMeta = CATEGORY_META[timerDisplayCategory];
-  const timerBackground = `linear-gradient(160deg, ${hexToRgba(timerCategoryMeta.gradient[0], 0.55)} 0%, ${hexToRgba(timerCategoryMeta.gradient[1], 0.55)} 100%), #f8fafc`;
+  const timerBackground = `linear-gradient(160deg, ${hexToRgba(timerCategoryMeta.gradient[0], 0.28)} 0%, ${hexToRgba(timerCategoryMeta.gradient[1], 0.2)} 100%), #f8fafc`;
 
   // Monthly total from completed calendar events (source of truth for hours)
-  const calMonthMs = (() => {
-    const now = new Date();
+  const calMonthMs = useMemo(() => {
     return calendarEvents
       .filter((e) => {
         return (
@@ -256,7 +272,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         end.setHours(h, m, 0, 0);
         return acc + Math.max(0, end.getTime() - e.date.getTime());
       }, 0);
-  })();
+  }, [calendarEvents, now]);
   const monthTotalHrs = Math.floor(calMonthMs / 3_600_000);
   const monthTotalMins = Math.floor((calMonthMs % 3_600_000) / 60_000);
 
@@ -278,6 +294,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               category: e.category as import("@/hooks/useCalendarEvents").EventCategory,
               label: e.category,
               contactName: undefined as string | undefined,
+              contactId: undefined as string | undefined,
+              sessionId: undefined as string | undefined,
             }));
 
           // Pending study sessions (from useEstudios) — from today midnight onwards
@@ -300,6 +318,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                     category: "Estudio" as import("@/hooks/useCalendarEvents").EventCategory,
                     label: `Estudio – ${c.name}`,
                     contactName: c.name,
+                    contactId: c.id,
+                    sessionId: s.id,
                   };
                 })
             );
@@ -322,7 +342,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               {/* Gradient hero */}
               <div
                 className="relative px-5 pt-14 pb-20"
-                style={{ background: "linear-gradient(160deg, #1e3a8a 0%, #1d4ed8 55%, #3b82f6 90%, #22c55e 100%)" }}
+                style={{ background: "linear-gradient(160deg, #17A2B8 0%, #5EC3C2 100%)" }}
               >
                 <div className="flex items-start justify-between">
                   <div>
@@ -444,7 +464,11 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                       return (
                         <button
                           key={item.id}
-                          onClick={() => navigate(item.contactName ? "estudios" : "calendar")}
+                          onClick={() =>
+                            item.contactId && item.sessionId
+                              ? navigateToStudySession(item.contactId, item.sessionId)
+                              : navigate("calendar")
+                          }
                           className={`w-full flex items-center gap-3 rounded-2xl border px-3 py-3 text-left active:scale-[0.98] transition-transform ${style.card}`}
                           style={{ borderLeftWidth: 3, borderLeftColor: style.accent }}
                         >
@@ -479,15 +503,17 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
               <h1 className="text-xl font-bold text-foreground">{t("nav_stats")}</h1>
             </header>
-            <StatsView
-              entries={tracker.monthEntries}
-              allEntries={tracker.entries}
-              monthTotal={tracker.monthTotal}
-              calendarEvents={calendar.events}
-              precursorHours={setup.precursorHours}
-              specialCampaignGoals={campaign.goals}
-              onSetSpecialCampaign={campaign.setGoal}
-            />
+            <Suspense fallback={<TabLoading />}>
+              <StatsView
+                entries={tracker.monthEntries}
+                allEntries={tracker.entries}
+                monthTotal={tracker.monthTotal}
+                calendarEvents={calendar.events}
+                precursorHours={setup.precursorHours}
+                specialCampaignGoals={campaign.goals}
+                onSetSpecialCampaign={campaign.setGoal}
+              />
+            </Suspense>
           </>
         )}
 
@@ -498,10 +524,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             <div className="px-5 pt-5 flex-shrink-0">
               <div className="flex items-center gap-3">
                 <div className="flex-1">
-                  <p className="text-sm text-white/70 font-medium">{getGreeting()}</p>
-                  <h1 className="text-xl font-bold text-white leading-tight">{userName}</h1>
+                  <p className="text-sm text-slate-700 font-medium">{getGreeting()}</p>
+                  <h1 className="text-xl font-bold text-slate-950 leading-tight">{userName}</h1>
                   {setup.city && (
-                    <p className="text-[11px] text-white/60">
+                    <p className="text-[11px] text-slate-700">
                       {setup.city.name}{weather ? ` · ${weatherCodeToEmoji(weather.code)} ${weather.temp}°` : ""}
                     </p>
                   )}
@@ -511,7 +537,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   className="w-9 h-9 rounded-full bg-white/18 flex items-center justify-center active:opacity-70 backdrop-blur"
                   aria-label="Cambiar modo"
                 >
-                  {isDark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-white" />}
+                  {isDark ? <Sun className="w-4 h-4 text-yellow-500" /> : <Moon className="w-4 h-4 text-slate-700" />}
                 </button>
               </div>
             </div>
@@ -566,14 +592,43 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                       const meta = CATEGORY_META[event.category];
                       const timeStr = `${String(event.date.getHours()).padStart(2, "0")}:${String(event.date.getMinutes()).padStart(2, "0")}`;
                       return (
-                        <div key={event.id} className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 ${style.card}`} style={{ borderLeftWidth: 3, borderLeftColor: style.accent }}>
+                        <button
+                          key={event.id}
+                          type="button"
+                          onClick={() => openCalendarEvent(event.id)}
+                          className={`w-full flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-left active:scale-[0.98] transition-transform ${style.card}`}
+                          style={{ borderLeftWidth: 3, borderLeftColor: style.accent }}
+                        >
                           <span className="text-lg leading-none">{meta.icon}</span>
                           <div className="flex-1 min-w-0">
                             <p className={`text-[13px] font-semibold text-foreground truncate ${event.completed ? "line-through opacity-50" : ""}`}>{event.category}</p>
                             <p className="text-[10px] text-muted-foreground">{timeStr}{event.endTime ? ` – ${event.endTime}` : ""}</p>
                           </div>
                           {event.completed && <span className="text-xs font-bold text-green-500">✓</span>}
-                        </div>
+                          <span className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className="w-7 h-7 rounded-full bg-background/70 border border-border flex items-center justify-center">
+                              <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                            </span>
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                calendar.deleteEvent(event.id);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key !== "Enter" && e.key !== " ") return;
+                                e.preventDefault();
+                                e.stopPropagation();
+                                calendar.deleteEvent(event.id);
+                              }}
+                              className="w-7 h-7 rounded-full bg-background/70 border border-border flex items-center justify-center"
+                              aria-label="Eliminar evento"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                            </span>
+                          </span>
+                        </button>
                       );
                     })}
                   </div>
@@ -640,25 +695,29 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
               <h1 className="text-xl font-bold text-foreground">{t("nav_calendar")}</h1>
             </header>
-            <CalendarView
-              events={calendar.events}
-              onAddEvent={calendar.addEvent}
-              onDeleteEvent={calendar.deleteEvent}
-              onToggleCompleted={calendar.toggleEventCompleted}
-              onUpdateEvent={calendar.updateEvent}
-              getEventsForDate={calendar.getEventsForDate}
-              favoritePlaces={favorites.places}
-              defaultCenter={defaultCenter}
-              estudiosContacts={estudios.contacts}
-              onUpdateEstudioSession={estudios.updateSession}
-              precursorHours={setup.precursorHours}
-              travelReminder={{
-                enabled: setup.travelTimeEnabled,
-                minutes: setup.travelTimeMinutes,
-              }}
-              specialCampaignGoals={campaign.goals}
-              onSetSpecialCampaign={campaign.setGoal}
-            />
+            <Suspense fallback={<TabLoading />}>
+              <CalendarView
+                events={calendar.events}
+                onAddEvent={calendar.addEvent}
+                onDeleteEvent={calendar.deleteEvent}
+                onToggleCompleted={calendar.toggleEventCompleted}
+                onUpdateEvent={calendar.updateEvent}
+                getEventsForDate={calendar.getEventsForDate}
+                favoritePlaces={favorites.places}
+                defaultCenter={defaultCenter}
+                estudiosContacts={estudios.contacts}
+                onUpdateEstudioSession={estudios.updateSession}
+                onAddEstudioSession={estudios.addScheduledSession}
+                onDeleteEstudioSession={estudios.deleteSession}
+                onCompleteEstudioSession={estudios.completeSession}
+                travelReminder={{
+                  enabled: setup.travelTimeEnabled,
+                  minutes: setup.travelTimeMinutes,
+                }}
+                focusEventId={calendarFocusEventId}
+                onFocusEventHandled={() => setCalendarFocusEventId(null)}
+              />
+            </Suspense>
           </>
         )}
 
@@ -683,15 +742,17 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
             {/* Quick access */}
             <div className="px-5 pt-5 mb-4 grid grid-cols-2 gap-3">
-              <button
-                onClick={() => navigate("estudios")}
-                className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-sm active:scale-[0.98] text-left"
-              >
-                <div className="w-9 h-9 rounded-xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0">
-                  <BookOpen className="w-4 h-4 text-pink-500" />
-                </div>
-                <span className="text-sm font-semibold text-foreground">Estudios</span>
-              </button>
+              {estudios.contacts.some((contact) => contact.active) && (
+                <button
+                  onClick={() => navigate("estudios")}
+                  className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-sm active:scale-[0.98] text-left"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0">
+                    <BookOpen className="w-4 h-4 text-pink-500" />
+                  </div>
+                  <span className="text-sm font-semibold text-foreground">Estudios</span>
+                </button>
+              )}
               <button
                 onClick={() => navigate("map")}
                 className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-sm active:scale-[0.98] text-left"
@@ -703,14 +764,16 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               </button>
             </div>
 
-            <SettingsView
-              entryCount={tracker.entries.length}
-              onClearAll={handleClearAll}
-              setup={setup}
-              onSaveSetup={saveSetup}
-              isDark={isDark}
-              onToggleDark={toggleDark}
-            />
+            <Suspense fallback={<TabLoading />}>
+              <SettingsView
+                entryCount={tracker.entries.length}
+                onClearAll={handleClearAll}
+                setup={setup}
+                onSaveSetup={saveSetup}
+                isDark={isDark}
+                onToggleDark={toggleDark}
+              />
+            </Suspense>
           </div>
         )}
 
@@ -729,19 +792,23 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 <h1 className="text-xl font-bold text-foreground">Estudios</h1>
               </div>
             </header>
-            <EstudiosView
-              contacts={estudios.contacts}
-              favoritePlaces={favorites.places}
-              onAddContact={estudios.addContact}
-              onUpdateContact={estudios.updateContact}
-              onDeleteContact={estudios.deleteContact}
-              onArchiveContact={estudios.archiveContact}
-              onUnarchiveContact={estudios.unarchiveContact}
-              onAddSession={estudios.addSession}
-              onUpdateSession={estudios.updateSession}
-              onDeleteSession={estudios.deleteSession}
-              onCompleteSession={estudios.completeSession}
-            />
+            <Suspense fallback={<TabLoading />}>
+              <EstudiosView
+                contacts={estudios.contacts}
+                favoritePlaces={favorites.places}
+                onAddContact={estudios.addContact}
+                onUpdateContact={estudios.updateContact}
+                onDeleteContact={estudios.deleteContact}
+                onArchiveContact={estudios.archiveContact}
+                onUnarchiveContact={estudios.unarchiveContact}
+                onAddSession={estudios.addSession}
+                onUpdateSession={estudios.updateSession}
+                onDeleteSession={estudios.deleteSession}
+                onCompleteSession={estudios.completeSession}
+                focusedSession={selectedStudySession}
+                onFocusedSessionHandled={() => setSelectedStudySession(null)}
+              />
+            </Suspense>
           </>
         )}
 
@@ -761,13 +828,14 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               </div>
             </header>
             <div className="py-4 pb-24">
-              <LocationMap
-                entries={tracker.entries}
-                favoritePlaces={favorites.places}
-                onAddFavorite={favorites.addPlace}
-                onDeleteFavorite={favorites.deletePlace}
-                defaultCenter={defaultCenter}
-              />
+              <Suspense fallback={<TabLoading />}>
+                <LocationMap
+                  favoritePlaces={favorites.places}
+                  onAddFavorite={favorites.addPlace}
+                  onDeleteFavorite={favorites.deletePlace}
+                  defaultCenter={defaultCenter}
+                />
+              </Suspense>
             </div>
           </>
         )}
@@ -829,6 +897,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         activeTab={activeTab}
         onTabChange={navigate}
         isRunning={tracker.isRunning}
+        activeCategory={timerDisplayCategory}
       />
     </div>
   );
@@ -851,7 +920,9 @@ const Index = () => {
   if (!setup.completed) {
     return (
       <LanguageProvider lang={lang}>
-        <SetupScreen onComplete={completeSetup} onLangChange={setSetupLang} />
+        <Suspense fallback={<TabLoading />}>
+          <SetupScreen onComplete={completeSetup} onLangChange={setSetupLang} />
+        </Suspense>
       </LanguageProvider>
     );
   }

@@ -1,14 +1,14 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { FavoritePlace } from "@/hooks/useFavoritePlaces";
-import { LocationPicker } from "@/components/LocationPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Star, Trash2, Plus } from "lucide-react";
 import { useT } from "@/lib/LanguageContext";
 
+const LocationPicker = lazy(() => import("@/components/LocationPicker").then((module) => ({ default: module.LocationPicker })));
+
 interface LocationMapProps {
-  entries?: unknown[];
   favoritePlaces: FavoritePlace[];
   onAddFavorite: (name: string, location: { lat: number; lng: number }) => void;
   onDeleteFavorite: (id: string) => void;
@@ -112,7 +112,9 @@ export function LocationMap({ favoritePlaces, onAddFavorite, onDeleteFavorite, d
 
             <div className="space-y-2">
               <Label>{t('map_location_label')}</Label>
-              <LocationPicker value={newLocation} onChange={setNewLocation} defaultCenter={defaultCenter} />
+              <Suspense fallback={<div className="h-[200px] rounded-lg border border-border bg-muted/40" />}>
+                <LocationPicker value={newLocation} onChange={setNewLocation} defaultCenter={defaultCenter} />
+              </Suspense>
             </div>
 
             <Button

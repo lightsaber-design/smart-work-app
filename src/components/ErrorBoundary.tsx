@@ -3,15 +3,55 @@ import { Component, ErrorInfo, ReactNode } from "react";
 interface Props { children: ReactNode; }
 interface State { error: Error | null; }
 
+const CHUNK_RELOAD_KEY = "smart-work-chunk-reload-attempted";
+
+function isChunkLoadError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /dynamically imported module|importing a module script|loading chunk|chunkloaderror/i.test(message);
+}
+
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
+  private readonly handleWindowError = (event: ErrorEvent) => {
+    const error = event.error instanceof Error ? event.error : new Error(event.message || "Unhandled error");
+    if (isChunkLoadError(error)) this.handleChunkRecovery(error);
+  };
+
+  private readonly handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+    const error = event.reason instanceof Error ? event.reason : new Error(String(event.reason));
+    if (isChunkLoadError(error)) this.handleError(error);
+  };
 
   static getDerivedStateFromError(error: Error): State {
     return { error };
   }
 
+  componentDidMount() {
+    window.addEventListener("error", this.handleWindowError);
+    window.addEventListener("unhandledrejection", this.handleUnhandledRejection);
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener("error", this.handleWindowError);
+    window.removeEventListener("unhandledrejection", this.handleUnhandledRejection);
+  }
+
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("App crash:", error, info.componentStack);
+    this.handleChunkRecovery(error);
+  }
+
+  private handleError(error: Error) {
+    console.error("App runtime error:", error);
+    this.handleChunkRecovery(error);
+    this.setState({ error });
+  }
+
+  private handleChunkRecovery(error: Error) {
+    if (!isChunkLoadError(error)) return;
+    if (sessionStorage.getItem(CHUNK_RELOAD_KEY) === "1") return;
+    sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
+    window.location.reload();
   }
 
   render() {

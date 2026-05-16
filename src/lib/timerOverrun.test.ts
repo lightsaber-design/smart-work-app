@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CalendarEvent } from "@/hooks/useCalendarEvents";
 import { TimeEntry } from "@/hooks/useTimeTracker";
-import { findActiveScheduledEvent, findScheduledEventForTimerStart, shouldShowTimerOverrunPrompt } from "./timerOverrun";
+import { findActiveScheduledEvent, findScheduledEventAtTimerStart, findScheduledEventForTimerStart, shouldShowTimerOverrunPrompt } from "./timerOverrun";
 
 const event: CalendarEvent = {
   id: "event-1",
@@ -36,6 +36,10 @@ describe("timer overrun prompt", () => {
 
   it("does not match a completed scheduled event", () => {
     expect(findScheduledEventForTimerStart(new Date(2026, 4, 10, 10, 5), "Predi", [{ ...event, completed: true }])).toBeNull();
+  });
+
+  it("can match a scheduled event by timer start time without category", () => {
+    expect(findScheduledEventAtTimerStart(new Date(2026, 4, 10, 10, 5), [{ ...event, category: "Carrito" }])?.id).toBe("event-1");
   });
 
   it("matches the running timer to the scheduled event", () => {

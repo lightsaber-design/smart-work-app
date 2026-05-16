@@ -45,7 +45,7 @@ export function StatsView({
     (e) => e.completed && e.date.getMonth() === now.getMonth() && e.date.getFullYear() === now.getFullYear()
   );
 
-  const { completedMs: totalCompletedMs, completedMsByCategory, completedCountByCategory } =
+  const { completedMsByCategory, completedCountByCategory } =
     monthCompletedEvents.reduce(
       (acc, e) => {
         if (!e.endTime) return acc;

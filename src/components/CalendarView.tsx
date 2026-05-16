@@ -1,12 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { lazy, Suspense, useCallback, useState, useEffect, useRef } from "react";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
 import { EstudioContact, EstudioSession, SessionFile } from "@/hooks/useEstudios";
+import { generateId } from "@/lib/uuid";
 import {
-  Plus, Trash2, BellOff, MapPin, Repeat, Clock, CheckCircle2,
-  Circle, Pencil, ChevronLeft, ChevronRight, BookOpen, Star,
+  Plus, Trash2, BellOff, Repeat, CheckCircle2,
+  Circle, ChevronLeft, ChevronRight, Paperclip, X,
 } from "lucide-react";
-import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,15 +27,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { LocationPicker } from "@/components/LocationPicker";
 import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { useT } from "@/lib/LanguageContext";
 import { getTravelReminderMinutes, type TravelReminderSettings } from "@/lib/eventReminders";
+import { formatFileSize, saveFile } from "@/lib/sessionFiles";
 
 import { CATEGORY_LIST as CATEGORIES, CATEGORY_META, CATEGORY_STYLE } from "@/lib/categories";
 
 const SHEET_POSITION_CLASS = "bottom-16";
 const SHEET_MAX_HEIGHT_CLASS = "max-h-[80vh]";
+const LocationPicker = lazy(() => import("@/components/LocationPicker").then((module) => ({ default: module.LocationPicker })));
 
 type CalendarMode = "daily" | "monthly";
 
@@ -63,10 +64,12 @@ interface CalendarViewProps {
   defaultCenter?: { lat: number; lng: number };
   estudiosContacts?: EstudioContact[];
   onUpdateEstudioSession?: (contactId: string, sessionId: string, data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
-  precursorHours?: number | null;
+  onAddEstudioSession?: (contactId: string, data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
+  onDeleteEstudioSession?: (contactId: string, sessionId: string) => void;
+  onCompleteEstudioSession?: (contactId: string, sessionId: string) => void;
   travelReminder?: TravelReminderSettings;
-  specialCampaignGoals?: Record<string, CampaignGoal>;
-  onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
+  focusEventId?: string | null;
+  onFocusEventHandled?: () => void;
 }
 
 const DAY_NAMES_SHORT = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
@@ -83,18 +86,6 @@ function formatHour(h: number) {
 
 function formatEventTime(date: Date) {
   return date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-}
-
-function computeDuration(event: CalendarEvent): string | null {
-  if (!event.endTime) return null;
-  const [h, m] = event.endTime.split(":").map(Number);
-  const end = new Date(event.date);
-  end.setHours(h, m, 0, 0);
-  const diff = end.getTime() - event.date.getTime();
-  if (diff <= 0) return null;
-  const hrs = Math.floor(diff / 3600000);
-  const mins = Math.floor((diff % 3600000) / 60000);
-  return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
 }
 
 function getWeekDates(anchorDate: Date): Date[] {
@@ -155,192 +146,73 @@ function timelineTopFromMinutes(minutes: number): number {
   return (minutes / 60) * HOUR_HEIGHT;
 }
 
-// ── Event card: dos cajas apiladas ────────────────────────────────────────
-function EventCard({
-  event,
-  onToggle,
-  onEdit,
-  onDelete,
-  compact = false,
-  fill = false,
-}: {
-  event: CalendarEvent;
-  onToggle: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  compact?: boolean;
-  fill?: boolean;
-}) {
-  const style = CATEGORY_STYLE[event.category] ?? {
-    card: "bg-muted border-border",
-    border: "border-border",
-    dot: "bg-primary",
-    dotColor: "hsl(var(--primary))",
-    accent: "hsl(var(--primary))",
-  };
-  const duration = computeDuration(event);
-  const timeLabel = `${formatEventTime(event.date)}${event.endTime ? ` – ${event.endTime}` : ""}${duration ? ` · ${duration}` : ""}`;
+function dateInputValue(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
-  if (compact) {
-    return (
-      <div
-        className={`rounded-xl border px-2.5 py-1.5 mb-1.5 ${style.card} ${event.completed ? "opacity-50" : ""} cursor-pointer active:opacity-75 transition-opacity`}
-        onClick={onEdit}
+function StudyFilePicker({
+  files,
+  onChange,
+}: {
+  files: { file: File; id: string }[];
+  onChange: (files: { file: File; id: string }[]) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="space-y-1.5">
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          const selected = Array.from(event.target.files ?? []);
+          onChange([...files, ...selected.map((file) => ({ file, id: generateId() }))]);
+          event.target.value = "";
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl py-3 text-sm text-muted-foreground active:opacity-75"
       >
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggle(); }}
-            className="flex-shrink-0"
-          >
-            {event.completed
-              ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-              : <Circle className="w-3.5 h-3.5 text-muted-foreground" />}
-          </button>
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style.dot}`} />
-          <span className="text-[11px] font-semibold text-foreground truncate">{event.category}</span>
-          <span className="text-[10px] text-muted-foreground ml-auto flex-shrink-0">{formatEventTime(event.date)}</span>
-          <Pencil className="w-3 h-3 text-muted-foreground flex-shrink-0 ml-1" />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`${fill ? "h-full" : "mb-2"} rounded-2xl overflow-hidden border shadow-sm ${style.card} ${style.border} ${event.completed ? "opacity-60" : ""}`}
-      style={{ borderLeftWidth: 3, borderLeftColor: style.accent }}
-    >
-      {/* Row 1: toggle + name + actions */}
-      <div className="flex items-center justify-between gap-2 px-3 pt-2.5 pb-1">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <button onClick={onToggle} className="flex-shrink-0 cursor-pointer">
-            {event.completed
-              ? <CheckCircle2 className="w-4 h-4 text-green-500" />
-              : <Circle className="w-4 h-4 text-muted-foreground" />}
-          </button>
-          <p className={`text-sm font-semibold text-foreground leading-tight truncate ${event.completed ? "line-through" : ""}`}>
-            {event.category}
-            {event.recurrence !== "none" && (
-              <Repeat className="w-2.5 h-2.5 inline ml-1.5 opacity-50" />
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-0.5 flex-shrink-0">
-          {event.location && <MapPin className="w-3.5 h-3.5 text-muted-foreground" />}
-          <button onClick={onEdit} className="p-1 rounded text-muted-foreground hover:text-primary transition-colors cursor-pointer">
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={onDelete} className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors cursor-pointer">
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-      {/* Row 2: time */}
-      <div className="flex items-center gap-1.5 px-3 pb-2.5">
-        <Clock className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-        <span className="text-[11px] text-muted-foreground">{timeLabel}</span>
-      </div>
-    </div>
-  );
-}
-
-// ── Hours heatmap grid ────────────────────────────────────────────────────
-function HoursMonthGrid({
-  monthBase,
-  getEventsForDate,
-  onSelectDate,
-}: {
-  monthBase: Date;
-  getEventsForDate: (date: Date) => CalendarEvent[];
-  onSelectDate: (date: Date) => void;
-}) {
-  const year = monthBase.getFullYear();
-  const month = monthBase.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDow = new Date(year, month, 1).getDay();
-  const offset = firstDow === 0 ? 6 : firstDow - 1;
-
-  const days: (Date | null)[] = [
-    ...Array(offset).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1)),
-  ];
-  while (days.length % 7 !== 0) days.push(null);
-
-  const weeks: (Date | null)[][] = [];
-  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
-
-  const today = new Date();
-
-  return (
-    <div className="rounded-2xl bg-card border border-border shadow-sm p-3">
-      <div className="grid grid-cols-7 mb-1">
-        {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
-          <div key={d} className="text-center text-[9px] font-semibold text-muted-foreground py-1">{d}</div>
-        ))}
-      </div>
-      <div className="space-y-1">
-        {weeks.map((week, wi) => (
-          <div key={wi} className="grid grid-cols-7 gap-1">
-            {week.map((day, di) => {
-              if (!day) return <div key={`empty-${wi}-${di}`} />;
-              const dayEvents = getEventsForDate(day);
-              const { hrs, mins, ms } = dayTotalFromEvents(dayEvents);
-              const isToday = day.toDateString() === today.toDateString();
-              let label = "";
-              if (ms > 0) {
-                label = hrs >= 1 ? (mins >= 30 ? `${hrs}.5h` : `${hrs}h`) : `${mins}m`;
-              }
-              const bgClass =
-                ms >= 5 * 3_600_000 ? "bg-primary text-primary-foreground" :
-                ms >= 3 * 3_600_000 ? "bg-primary/75 text-primary-foreground" :
-                ms >= 1 * 3_600_000 ? "bg-primary/45 text-foreground" :
-                ms > 0              ? "bg-primary/20 text-foreground" :
-                                      "bg-muted/40 text-muted-foreground";
-              return (
-                <button
-                  key={day.toDateString()}
-                  onClick={() => onSelectDate(day)}
-                  className={`relative aspect-square rounded-xl flex items-center justify-center transition-all active:scale-95 ${bgClass} ${
-                    isToday ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : ""
-                  }`}
-                >
-                  <span className="absolute top-[3px] right-[5px] text-[8px] font-semibold leading-none opacity-60">
-                    {day.getDate()}
-                  </span>
-                  {label ? (
-                    <span className="text-[11px] font-bold leading-none mt-1">{label}</span>
-                  ) : (
-                    <span className="text-[10px] opacity-20 mt-1">·</span>
-                  )}
-                </button>
-              );
-            })}
+        <Paperclip className="w-4 h-4" /> Adjuntar archivo
+      </button>
+      {files.map(({ file, id }) => (
+        <div key={id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-muted">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium truncate">{file.name}</p>
+            <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
           </div>
-        ))}
-      </div>
-      <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-border/40">
-        <span className="text-[9px] text-muted-foreground">Menos</span>
-        {["bg-muted/40", "bg-primary/20", "bg-primary/45", "bg-primary/75", "bg-primary"].map((c) => (
-          <span key={c} className={`w-3.5 h-3.5 rounded-md ${c}`} />
-        ))}
-        <span className="text-[9px] text-muted-foreground">Más</span>
-      </div>
+          <button type="button" onClick={() => onChange(files.filter((item) => item.id !== id))}>
+            <X className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
 
-// ── Event state monthly grid ──────────────────────────────────────────────
+
+// Grid mensual por estado de evento.
 function EventMonthGrid({
   monthBase,
+  monthLabel,
   events,
   selectedDate,
-  estudiosContacts,
   onSelectDate,
+  onPreviousMonth,
+  onNextMonth,
+  onAddEvent,
 }: {
   monthBase: Date;
+  monthLabel: string;
   events: CalendarEvent[];
   selectedDate: Date;
-  estudiosContacts: EstudioContact[];
   onSelectDate: (date: Date) => void;
+  onPreviousMonth: () => void;
+  onNextMonth: () => void;
+  onAddEvent: () => void;
 }) {
   const year = monthBase.getFullYear();
   const month = monthBase.getMonth();
@@ -360,14 +232,37 @@ function EventMonthGrid({
   const today = new Date();
   const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
 
-  const estudioDateStrings = new Set(
-    estudiosContacts.flatMap((c) =>
-      (c.sessions ?? []).filter((s) => s.pending).map((s) => new Date(s.date).toDateString())
-    )
-  );
-
   return (
     <div className="rounded-2xl bg-card border border-border shadow-sm p-3">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <p className="text-sm font-bold text-foreground capitalize truncate">{monthLabel}</p>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onPreviousMonth}
+            className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+            aria-label="Mes anterior"
+          >
+            <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+          </button>
+          <button
+            type="button"
+            onClick={onNextMonth}
+            className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+            aria-label="Mes siguiente"
+          >
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </button>
+          <button
+            type="button"
+            onClick={onAddEvent}
+            className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md shadow-primary/20"
+            aria-label="Añadir evento"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
       <div className="grid grid-cols-7 mb-1">
         {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
           <div key={d} className="text-center text-[9px] font-semibold text-muted-foreground py-1">{d}</div>
@@ -382,8 +277,6 @@ function EventMonthGrid({
               const dayMidnight = new Date(day); dayMidnight.setHours(0, 0, 0, 0);
               const isSelected = day.toDateString() === selectedDate.toDateString();
               const isToday = day.toDateString() === today.toDateString();
-              const isEstudio = estudioDateStrings.has(day.toDateString());
-
               const dayEvents = events.filter((e) => e.date.toDateString() === day.toDateString());
               const hasCompleted = dayEvents.some((e) => e.completed);
               const hasFuture = dayEvents.some((e) => {
@@ -415,7 +308,7 @@ function EventMonthGrid({
                   onClick={() => onSelectDate(day)}
                   className={`relative aspect-square rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 ${bgClass} ${
                     isToday && !isSelected ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : ""
-                  } ${isEstudio && !isSelected ? "ring-2 ring-pink-400 ring-offset-1 ring-offset-card" : ""}`}
+                  }`}
                 >
                   <span className={`text-[11px] font-bold leading-none ${isSelected ? "text-primary-foreground" : ""}`}>
                     {day.getDate()}
@@ -448,7 +341,7 @@ function EventMonthGrid({
           <span className="w-3 h-3 rounded-md bg-muted-foreground/20" /> Pendiente
         </span>
         <span className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
-          <span className="w-3 h-3 rounded-md ring-2 ring-pink-400" /> Estudio
+          <span className="w-3 h-3 rounded-md ring-2 ring-primary" /> Día actual
         </span>
       </div>
     </div>
@@ -466,21 +359,24 @@ export function CalendarView({
   defaultCenter,
   estudiosContacts = [],
   onUpdateEstudioSession,
-  precursorHours = null,
+  onAddEstudioSession,
+  onDeleteEstudioSession,
+  onCompleteEstudioSession,
   travelReminder = { enabled: false, minutes: 0 },
-  specialCampaignGoals = {},
-  onSetSpecialCampaign,
+  focusEventId,
+  onFocusEventHandled,
 }: CalendarViewProps) {
   const t = useT();
   const activeContacts = estudiosContacts.filter((c) => c.active);
+  const singleActiveContactId = activeContacts.length === 1 ? activeContacts[0].id : "";
   const [mode, setMode] = useState<CalendarMode>("daily");
-  const [monthHoursMode, setMonthHoursMode] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [monthOffset, setMonthOffset] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pendingAddConflict, setPendingAddConflict] = useState<{
     params: AddEventParams;
     conflicts: CalendarEvent[];
+    studyTarget?: { contact: EstudioContact; session?: EstudioSession | null };
   } | null>(null);
   const [pendingEstudioConflict, setPendingEstudioConflict] = useState<{
     params: AddEventParams;
@@ -492,6 +388,10 @@ export function CalendarView({
   const [endTime, setEndTime] = useState("");
   const [category, setCategory] = useState<EventCategory>("Predi");
   const [selectedEstudioContactId, setSelectedEstudioContactId] = useState<string>("");
+  const [studyLesson, setStudyLesson] = useState("");
+  const [studyNotes, setStudyNotes] = useState("");
+  const [studyFiles, setStudyFiles] = useState<{ file: File; id: string }[]>([]);
+  const [savingAdd, setSavingAdd] = useState(false);
   const [reminder, setReminder] = useState("15");
   const [location, setLocation] = useState<{ lat: number; lng: number } | undefined>();
   const [recurrence, setRecurrence] = useState<RecurrenceType>("none");
@@ -505,13 +405,21 @@ export function CalendarView({
   const [editCategory, setEditCategory] = useState<EventCategory>("Predi");
   const [editEstudioContactId, setEditEstudioContactId] = useState<string>("");
   const [editReminder, setEditReminder] = useState("15");
+  const [selectedStudySession, setSelectedStudySession] = useState<{ contact: EstudioContact; session: EstudioSession } | null>(null);
+  const [studySessionDate, setStudySessionDate] = useState("");
+  const [studySessionTime, setStudySessionTime] = useState("");
+  const [studySessionLesson, setStudySessionLesson] = useState("");
+  const [studySessionNotes, setStudySessionNotes] = useState("");
+  const [studySessionFiles, setStudySessionFiles] = useState<SessionFile[]>([]);
+  const [studySessionPendingFiles, setStudySessionPendingFiles] = useState<{ file: File; id: string }[]>([]);
+  const [savingStudySession, setSavingStudySession] = useState(false);
 
   // Filtered categories: hide Estudio if no active contacts
   const availableCategories = CATEGORIES.filter(
     (cat) => cat !== "Estudio" || activeContacts.length > 0
   );
 
-  useScrollLock(dialogOpen || !!editEvent || !!pendingAddConflict);
+  useScrollLock(dialogOpen || !!editEvent || !!pendingAddConflict || !!selectedStudySession);
 
   const selectedEvents = getEventsForDate(selectedDate).sort(
     (a, b) => a.date.getTime() - b.date.getTime()
@@ -520,7 +428,7 @@ export function CalendarView({
     .flatMap((c) =>
       (c.sessions ?? [])
         .filter((s) => s.pending && new Date(s.date).toDateString() === selectedDate.toDateString())
-        .map((s) => ({ ...s, contactName: c.name }))
+        .map((s) => ({ ...s, contact: c, contactName: c.name }))
     )
     .sort((a, b) => a.time.localeCompare(b.time));
   const { hrs: dayTotalHrs, mins: dayTotalMins, ms: dayTotalMs } = dayTotalFromEvents(selectedEvents);
@@ -534,13 +442,6 @@ export function CalendarView({
   monthBase.setMonth(monthBase.getMonth() + monthOffset);
   const monthLabel = monthBase.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 
-  // Computed once; shared by the precursor banner, campaign toggle, and hours-grid total.
-  const daysInMonth = new Date(monthBase.getFullYear(), monthBase.getMonth() + 1, 0).getDate();
-  const monthTotalMs = Array.from({ length: daysInMonth }, (_, i) => {
-    const d = new Date(monthBase.getFullYear(), monthBase.getMonth(), i + 1);
-    return dayTotalFromEvents(getEventsForDate(d)).ms;
-  }).reduce((a, b) => a + b, 0);
-  const monthTotalHrs = monthTotalMs / 3_600_000;
   const previewDate = new Date(selectedDate);
   const [previewHours, previewMinutes] = time.split(":").map(Number);
   previewDate.setHours(previewHours, previewMinutes, 0, 0);
@@ -555,7 +456,7 @@ export function CalendarView({
   const eventsForEditReminder = editEvent ? events.filter((event) => event.id !== editEvent.id) : events;
   const editTravelReminderPreview = editPreviewDate ? getTravelReminderMinutes(editPreviewDate, eventsForEditReminder, travelReminder) : 0;
 
-  const openEdit = (event: CalendarEvent) => {
+  const openEdit = useCallback((event: CalendarEvent) => {
     setEditEvent(event);
     const hh = String(event.date.getHours()).padStart(2, "0");
     const mm = String(event.date.getMinutes()).padStart(2, "0");
@@ -563,10 +464,60 @@ export function CalendarView({
     setEditEndTime(event.endTime || "");
     setEditCategory(event.category);
     setEditReminder(String(event.reminderMinutesBefore));
-    if (event.category === "Estudio" && activeContacts.length === 1) {
-      setEditEstudioContactId(activeContacts[0].id);
+    if (event.category === "Estudio" && singleActiveContactId) {
+      setEditEstudioContactId(singleActiveContactId);
     } else {
       setEditEstudioContactId("");
+    }
+  }, [singleActiveContactId]);
+
+  useEffect(() => {
+    if (!focusEventId) return;
+    const event = events.find((item) => item.id === focusEventId);
+    if (!event) {
+      onFocusEventHandled?.();
+      return;
+    }
+    setSelectedDate(new Date(event.date));
+    setMode("daily");
+    openEdit(event);
+    onFocusEventHandled?.();
+  }, [focusEventId, events, onFocusEventHandled, openEdit]);
+
+  const openStudySession = (contact: EstudioContact, session: EstudioSession) => {
+    setSelectedStudySession({ contact, session });
+    setStudySessionDate(dateInputValue(new Date(session.date)));
+    setStudySessionTime(session.time);
+    setStudySessionLesson(session.lesson ?? "");
+    setStudySessionNotes(session.notes ?? "");
+    setStudySessionFiles(session.files ?? []);
+    setStudySessionPendingFiles([]);
+  };
+
+  const closeStudySession = () => {
+    setSelectedStudySession(null);
+    setStudySessionPendingFiles([]);
+  };
+
+  const saveSelectedStudySession = async () => {
+    if (!selectedStudySession || savingStudySession) return;
+    setSavingStudySession(true);
+    try {
+      const files = [...studySessionFiles];
+      for (const { file, id } of studySessionPendingFiles) {
+        await saveFile(id, file);
+        files.push({ id, name: file.name, type: file.type, size: file.size });
+      }
+      onUpdateEstudioSession?.(selectedStudySession.contact.id, selectedStudySession.session.id, {
+        date: studySessionDate,
+        time: studySessionTime,
+        lesson: studySessionLesson.trim() || undefined,
+        notes: studySessionNotes.trim() || undefined,
+        files,
+      });
+      closeStudySession();
+    } finally {
+      setSavingStudySession(false);
     }
   };
 
@@ -594,6 +545,7 @@ export function CalendarView({
   const resetAddForm = () => {
     setTime("09:00"); setEndTime(""); setCategory("Predi"); setReminder("15");
     setSelectedEstudioContactId("");
+    setStudyLesson(""); setStudyNotes(""); setStudyFiles([]);
     setLocation(undefined); setLocationMode("none"); setSelectedFavoriteId(""); setRecurrence("none");
     setDialogOpen(false);
     setPendingAddConflict(null);
@@ -605,10 +557,60 @@ export function CalendarView({
     resetAddForm();
   };
 
-  const overwriteAddConflict = () => {
+  const buildStudySessionData = async (date: Date) => {
+    const files: SessionFile[] = [];
+    for (const { file, id } of studyFiles) {
+      await saveFile(id, file);
+      files.push({ id, name: file.name, type: file.type, size: file.size });
+    }
+    return {
+      date: dateInputValue(date),
+      time: `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`,
+      lesson: studyLesson.trim() || undefined,
+      notes: studyNotes.trim() || undefined,
+      files,
+    };
+  };
+
+  const findMatchingStudySession = (contact: EstudioContact, date: Date) =>
+    (contact.sessions ?? []).find((session) => {
+      const sessionDate = new Date(session.date);
+      return session.pending && sessionDate.toDateString() === date.toDateString() && session.time === `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+    }) ?? null;
+
+  const saveStudySessionForEvent = async (
+    params: AddEventParams,
+    studyTarget?: { contact: EstudioContact; session?: EstudioSession | null }
+  ) => {
+    if (params.category === "Estudio") {
+      const contact =
+        studyTarget?.contact ??
+        activeContacts.find((c) => c.id === selectedEstudioContactId) ??
+        (activeContacts.length === 1 ? activeContacts[0] : null);
+      if (contact) {
+        const sessionData = await buildStudySessionData(params.date);
+        if (studyTarget?.session) {
+          onUpdateEstudioSession?.(contact.id, studyTarget.session.id, sessionData);
+        } else {
+          onAddEstudioSession?.(contact.id, sessionData);
+        }
+      }
+    }
+  };
+
+  const commitAddWithStudySession = async (
+    params: AddEventParams,
+    studyTarget?: { contact: EstudioContact; session?: EstudioSession | null }
+  ) => {
+    await saveStudySessionForEvent(params, studyTarget);
+    commitAdd(params);
+  };
+
+  const overwriteAddConflict = async () => {
     if (!pendingAddConflict) return;
     const target = pendingAddConflict.conflicts[0];
     const { params } = pendingAddConflict;
+    const isPastOverwrite = params.date.getTime() < Date.now();
     onUpdateEvent(target.id, {
       date: params.date,
       endTime: params.endTime,
@@ -617,13 +619,15 @@ export function CalendarView({
       location: params.location,
       recurrence: params.recurrence,
       parentId: undefined,
-      notified: params.date.getTime() < Date.now() ? true : undefined,
-      completed: false,
+      notified: isPastOverwrite ? true : undefined,
+      completed: isPastOverwrite,
     });
+    await saveStudySessionForEvent(params, pendingAddConflict.studyTarget);
     resetAddForm();
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
+    if (savingAdd) return;
     const [hours, minutes] = time.split(":").map(Number);
     const date = new Date(selectedDate);
     date.setHours(hours, minutes, 0, 0);
@@ -642,18 +646,15 @@ export function CalendarView({
       : manualReminder;
     const params: AddEventParams = { date, endTime: endTime || undefined, category, reminderMinutesBefore, location: eventLocation, recurrence };
 
-    // Check upcoming study session conflict
+    const studyContact = category === "Estudio"
+      ? activeContacts.find((c) => c.id === selectedEstudioContactId) ?? (activeContacts.length === 1 ? activeContacts[0] : null)
+      : null;
+
     if (category === "Estudio") {
-      const contact =
-        activeContacts.find((c) => c.id === selectedEstudioContactId) ??
-        (activeContacts.length === 1 ? activeContacts[0] : null);
-      if (contact) {
-        const now = Date.now();
-        const nextPending = (contact.sessions ?? [])
-          .filter((s) => s.pending && new Date(s.date).getTime() > now - 86_400_000)
-          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] ?? null;
-        if (nextPending) {
-          setPendingEstudioConflict({ params, contact, session: nextPending });
+      if (studyContact) {
+        const matchingSession = findMatchingStudySession(studyContact, date);
+        if (matchingSession) {
+          setPendingEstudioConflict({ params, contact: studyContact, session: matchingSession });
           return;
         }
       }
@@ -664,43 +665,51 @@ export function CalendarView({
       setPendingAddConflict({
         params,
         conflicts: conflicts.sort((a, b) => a.date.getTime() - b.date.getTime()),
+        studyTarget: studyContact ? { contact: studyContact } : undefined,
       });
       return;
     }
-    commitAdd(params);
+    setSavingAdd(true);
+    try {
+      await commitAddWithStudySession(params, studyContact ? { contact: studyContact } : undefined);
+    } finally {
+      setSavingAdd(false);
+    }
   };
 
-  const commitAddAfterEstudioCheck = (params: AddEventParams) => {
+  const commitAddAfterEstudioCheck = async (
+    params: AddEventParams,
+    studyTarget?: { contact: EstudioContact; session?: EstudioSession | null }
+  ) => {
     const conflicts = events.filter((event) => eventsOverlap(params, event));
     if (conflicts.length > 0) {
-      setPendingAddConflict({ params, conflicts: conflicts.sort((a, b) => a.date.getTime() - b.date.getTime()) });
+      setPendingAddConflict({
+        params,
+        conflicts: conflicts.sort((a, b) => a.date.getTime() - b.date.getTime()),
+        studyTarget,
+      });
       return;
     }
-    commitAdd(params);
+    setSavingAdd(true);
+    try {
+      await commitAddWithStudySession(params, studyTarget);
+    } finally {
+      setSavingAdd(false);
+    }
   };
 
-  const handleEstudioOverwrite = () => {
+  const handleEstudioOverwrite = async () => {
     if (!pendingEstudioConflict) return;
     const { params, contact, session } = pendingEstudioConflict;
-    const d = params.date;
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const timeStr = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-    onUpdateEstudioSession?.(contact.id, session.id, {
-      date: dateStr,
-      time: timeStr,
-      lesson: session.lesson,
-      notes: session.notes,
-      files: session.files ?? [],
-    });
     setPendingEstudioConflict(null);
-    commitAddAfterEstudioCheck(params);
+    await commitAddAfterEstudioCheck(params, { contact, session });
   };
 
-  const handleEstudioAddNew = () => {
+  const handleEstudioAddNew = async () => {
     if (!pendingEstudioConflict) return;
-    const { params } = pendingEstudioConflict;
+    const { params, contact } = pendingEstudioConflict;
     setPendingEstudioConflict(null);
-    commitAddAfterEstudioCheck(params);
+    await commitAddAfterEstudioCheck(params, { contact, session: null });
   };
 
   const notifStatus =
@@ -744,9 +753,9 @@ export function CalendarView({
       <div className="px-5 pt-4">
         <div className="flex rounded-full bg-muted/70 p-1 gap-1 border border-border/40">
           {(["daily", "monthly"] as CalendarMode[]).map((m) => {
-            const meta: Record<CalendarMode, { label: string; icon: string }> = {
-              daily: { label: "Día", icon: "📅" },
-              monthly: { label: "Mes", icon: "🗓" },
+            const meta: Record<CalendarMode, { label: string }> = {
+              daily: { label: "Día" },
+              monthly: { label: "Mes" },
             };
             return (
               <button
@@ -758,7 +767,6 @@ export function CalendarView({
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <span className="text-sm leading-none">{meta[m].icon}</span>
                 <span>{meta[m].label}</span>
               </button>
             );
@@ -768,7 +776,7 @@ export function CalendarView({
       {/* Vista diaria */}
       {mode === "daily" && (
         <div className="mx-5 mt-4 pb-8">
-          {/* Header: día grande + mes + navegación + botón Hoy */}
+          {/* Cabecera: día grande, mes, navegación y botón Hoy */}
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-end gap-2.5">
               <span className="text-6xl font-black text-foreground leading-none tracking-tight">
@@ -853,7 +861,7 @@ export function CalendarView({
             </button>
           </div>
 
-          {/* ── Timeline ── */}
+          {/* Línea de tiempo */}
           <div
             ref={timelineScrollRef}
             className="overflow-y-auto"
@@ -876,7 +884,7 @@ export function CalendarView({
                 ))}
               </div>
 
-              {/* Timeline content — border-l is the vertical rule */}
+              {/* Contenido de la línea de tiempo con borde vertical */}
               <div className="flex-1 relative border-l border-border" style={{ height: TIMELINE_HEIGHT }}>
 
                 {/* Hour grid lines */}
@@ -910,6 +918,7 @@ export function CalendarView({
                   const style = CATEGORY_STYLE[event.category] ?? { accent: "hsl(var(--primary))" };
                   const meta = CATEGORY_META[event.category] ?? { icon: "•", gradient: ["#93c5fd", "#a5b4fc"] as [string, string] };
                   const opacity = event.completed ? 0.45 : 1;
+                  const cannotMarkCompleted = !event.completed && event.date.getTime() > Date.now();
                   return (
                     <div
                       key={event.id}
@@ -935,28 +944,27 @@ export function CalendarView({
                           </div>
                           {height > 54 && (
                             <p className="text-[9px] text-foreground/60 mt-0.5 leading-none">
-                              {formatEventTime(event.date)}{event.endTime ? ` – ${event.endTime}` : ""}
+                              {formatEventTime(event.date)}{event.endTime ? ` - ${event.endTime}` : ""}
                             </p>
                           )}
                         </div>
-                        {height > 72 && (
-                          <div className="flex items-center gap-1 mt-1">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onToggleCompleted(event.id); }}
-                              className="p-0.5"
-                            >
-                              {event.completed
-                                ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                                : <Circle className="w-3.5 h-3.5 text-foreground/50" />}
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onDeleteEvent(event.id); }}
-                              className="p-0.5 text-foreground/40 ml-auto"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-1 mt-1">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onToggleCompleted(event.id); }}
+                            disabled={cannotMarkCompleted}
+                            className={`p-0.5 ${cannotMarkCompleted ? "opacity-40 cursor-not-allowed" : ""}`}
+                          >
+                            {event.completed
+                              ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                              : <Circle className="w-3.5 h-3.5 text-foreground/50" />}
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onDeleteEvent(event.id); }}
+                            className="p-0.5 text-foreground/40 ml-auto"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -971,15 +979,16 @@ export function CalendarView({
                   if (startMins < 0 || startMins >= (TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60) return null;
                   const top = timelineTopFromMinutes(startMins);
                   return (
-                    <div
+                    <button
                       key={s.id}
-                      className="absolute left-2 right-2 rounded-xl overflow-hidden"
+                      onClick={() => openStudySession(s.contact, s)}
+                      className="absolute left-2 right-2 rounded-xl overflow-hidden text-left active:opacity-80"
                       style={{
                         top,
                         height: 52,
-                        background: "linear-gradient(135deg, #fce7f3, #f5d0fe)",
+                        background: "linear-gradient(135deg, #D07D7D, #E6A3A3)",
                         borderLeftWidth: 3,
-                        borderLeftColor: "#ec4899",
+                        borderLeftColor: "#D07D7D",
                       }}
                     >
                       <div className="px-2.5 py-2">
@@ -989,7 +998,7 @@ export function CalendarView({
                         </div>
                         <p className="text-[9px] text-foreground/60 mt-0.5">{s.time}</p>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
 
@@ -998,193 +1007,23 @@ export function CalendarView({
           </div>
         </div>
       )}
-      {/* ── MONTHLY VIEW ── */}
+      {/* Vista mensual */}
       {mode === "monthly" && (
-        <>
-          <div className="px-5 pt-4">
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() => setMonthOffset((v) => v - 1)}
-                className="w-9 h-9 rounded-full bg-muted flex items-center justify-center cursor-pointer"
-              >
-                <ChevronLeft className="w-5 h-5 text-muted-foreground" />
-              </button>
-              <p className="text-base font-bold text-foreground capitalize">{monthLabel}</p>
-              <div className="flex items-center gap-1.5">
-                <Button size="sm" className="gap-1" onClick={() => setDialogOpen(true)}>
-                  <Plus className="w-4 h-4" /> {t("cal_add")}
-                </Button>
-                <button
-                  onClick={() => setMonthOffset((v) => v + 1)}
-                  className="w-9 h-9 rounded-full bg-muted flex items-center justify-center cursor-pointer"
-                >
-                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                </button>
-                <button
-                  onClick={() => setMonthHoursMode((v) => !v)}
-                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all border cursor-pointer ${
-                    monthHoursMode
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-muted text-muted-foreground border-border"
-                  }`}
-                >
-                  <Clock className="w-3 h-3" />
-                  {monthHoursMode ? "Horas" : "Normal"}
-                </button>
-              </div>
-            </div>
-
-            {/* ── Banner precursor ── */}
-            {precursorHours !== null && (() => {
-              const progress = Math.min(1, monthTotalHrs / precursorHours);
-              const remaining = Math.max(0, precursorHours - monthTotalHrs);
-              const done = progress >= 1;
-              return (
-                <div className={`mb-4 rounded-2xl border px-3 py-2.5 space-y-2 ${
-                  done
-                    ? "border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800/40"
-                    : "border-primary/20 bg-primary/5 dark:bg-primary/10"
-                }`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <Clock className={`w-3.5 h-3.5 ${done ? "text-green-500" : "text-primary"}`} />
-                      <span className={`text-xs font-semibold ${done ? "text-green-700 dark:text-green-400" : "text-primary"}`}>
-                        Meta precursor · {precursorHours}h/mes
-                      </span>
-                    </div>
-                    <span className={`text-xs font-bold ${done ? "text-green-600 dark:text-green-400" : "text-primary"}`}>
-                      {done ? "✓ Completado" : `Faltan ${remaining.toFixed(1)}h`}
-                    </span>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className={`text-[10px] ${done ? "text-green-600 dark:text-green-400" : "text-primary/70"}`}>
-                        {monthTotalHrs.toFixed(1)}h de {precursorHours}h
-                      </span>
-                      <span className={`text-[10px] font-semibold ${done ? "text-green-700 dark:text-green-400" : "text-primary"}`}>
-                        {Math.round(progress * 100)}%
-                      </span>
-                    </div>
-                    <div className={`h-1.5 rounded-full overflow-hidden ${done ? "bg-green-200 dark:bg-green-800/40" : "bg-primary/20"}`}>
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${done ? "bg-green-500" : "bg-primary"}`}
-                        style={{ width: `${progress * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* ── Campaña especial toggle (solo si no es precursor) ── */}
-            {precursorHours === null && onSetSpecialCampaign && (() => {
-              const key = monthKey(monthBase);
-              const activeGoal = specialCampaignGoals[key] ?? null;
-              const progress = activeGoal ? Math.min(1, monthTotalHrs / activeGoal) : 0;
-              return (
-                <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800/40 px-3 py-2.5 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <Star className="w-3.5 h-3.5 text-amber-500" />
-                      <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">Campaña especial</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {([null, 15, 30] as const).map((opt) => (
-                        <button
-                          key={String(opt)}
-                          onClick={() => onSetSpecialCampaign(key, opt as CampaignGoal | null)}
-                          className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold border transition-colors ${
-                            activeGoal === opt
-                              ? "bg-amber-500 text-white border-amber-500"
-                              : "bg-card text-muted-foreground border-border hover:border-amber-300"
-                          }`}
-                        >
-                          {opt === null ? "Off" : `${opt}h`}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {activeGoal && (
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-amber-600 dark:text-amber-400">
-                          {monthTotalHrs.toFixed(1)}h de {activeGoal}h
-                        </span>
-                        <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">
-                          {Math.round(progress * 100)}%
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-amber-200 dark:bg-amber-800/40 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-amber-500 transition-all duration-500"
-                          style={{ width: `${progress * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-          </div>
-
-          <div className="px-5">
-            {monthHoursMode ? (
-              <>
-                <HoursMonthGrid
-                  monthBase={monthBase}
-                  getEventsForDate={getEventsForDate}
-                  onSelectDate={(d) => { setSelectedDate(d); setMode("daily"); }}
-                />
-                {(() => {
-                  if (monthTotalMs === 0) return null;
-                  const mHrs = Math.floor(monthTotalMs / 3_600_000);
-                  const mMins = Math.floor((monthTotalMs % 3_600_000) / 60_000);
-                  return (
-                    <div className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-primary/10 px-4 py-2">
-                      <Clock className="w-3.5 h-3.5 text-primary" />
-                      <span className="text-xs font-semibold text-primary">
-                        Total del mes: {mHrs}h {mMins}m
-                      </span>
-                    </div>
-                  );
-                })()}
-              </>
-            ) : (
-              <>
-                <EventMonthGrid
-                  monthBase={monthBase}
-                  events={events}
-                  selectedDate={selectedDate}
-                  estudiosContacts={estudiosContacts}
-                  onSelectDate={(d) => { setSelectedDate(d); setMode("daily"); }}
-                />
-
-                {selectedEvents.length > 0 && (
-                  <div className="space-y-1.5 mt-3 mb-4">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                      {selectedDate.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
-                    </p>
-                    {selectedEvents.map((event) => (
-                      <EventCard
-                        key={event.id}
-                        event={event}
-                        onToggle={() => onToggleCompleted(event.id)}
-                        onEdit={() => openEdit(event)}
-                        onDelete={() => onDeleteEvent(event.id)}
-                        compact
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-
-          </div>
-        </>
+        <div className="px-5 pt-4">
+          <EventMonthGrid
+            monthBase={monthBase}
+            monthLabel={monthLabel}
+            events={events}
+            selectedDate={selectedDate}
+            onSelectDate={(d) => { setSelectedDate(d); setMode("daily"); }}
+            onPreviousMonth={() => setMonthOffset((v) => v - 1)}
+            onNextMonth={() => setMonthOffset((v) => v + 1)}
+            onAddEvent={() => setDialogOpen(true)}
+          />
+        </div>
       )}
 
-      {/* ── Add event bottom sheet ── */}
+      {/* Hoja inferior para añadir evento */}
       <div
         className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${
           dialogOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
@@ -1221,7 +1060,7 @@ export function CalendarView({
                 <SelectTrigger>
                   <SelectValue>
                     {category === "Estudio" && activeContacts.length === 1
-                      ? `Estudio – ${activeContacts[0].name}`
+                      ? `Estudio - ${activeContacts[0].name}`
                       : category}
                   </SelectValue>
                 </SelectTrigger>
@@ -1229,7 +1068,7 @@ export function CalendarView({
                   {availableCategories.map((cat) => (
                     <SelectItem key={cat} value={cat}>
                       {cat === "Estudio" && activeContacts.length === 1
-                        ? `Estudio – ${activeContacts[0].name}`
+                        ? `Estudio - ${activeContacts[0].name}`
                         : cat}
                     </SelectItem>
                   ))}
@@ -1247,6 +1086,30 @@ export function CalendarView({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+            {category === "Estudio" && (
+              <div className="space-y-3 rounded-2xl border border-border bg-muted/20 p-3">
+                <div className="space-y-1.5">
+                  <Label>Lección <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+                  <Input
+                    placeholder="Ej: Cap. 3 - La esperanza de la resurrección"
+                    value={studyLesson}
+                    onChange={(event) => setStudyLesson(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Notas <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+                  <Input
+                    placeholder="Ej: Mostró interés en el tema de la familia"
+                    value={studyNotes}
+                    onChange={(event) => setStudyNotes(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Archivos <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+                  <StudyFilePicker files={studyFiles} onChange={setStudyFiles} />
+                </div>
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
@@ -1314,11 +1177,15 @@ export function CalendarView({
               </Select>
             </div>
             {locationMode === "custom" && (
-              <LocationPicker value={location} onChange={setLocation} defaultCenter={defaultCenter} />
+              <Suspense fallback={<div className="h-[200px] rounded-lg border border-border bg-muted/40" />}>
+                <LocationPicker value={location} onChange={setLocation} defaultCenter={defaultCenter} />
+              </Suspense>
             )}
           </div>
           <div className="flex-shrink-0 px-5 pt-3 pb-8 border-t border-border bg-card">
-            <Button onClick={handleAdd} className="w-full">{t("cal_save_event")}</Button>
+            <Button onClick={handleAdd} disabled={savingAdd} className="w-full">
+              {savingAdd ? "Guardando..." : t("cal_save_event")}
+            </Button>
           </div>
         </div>
       </div>
@@ -1348,8 +1215,8 @@ export function CalendarView({
             <AlertDialogCancel onClick={() => setPendingAddConflict(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-secondary text-secondary-foreground hover:bg-secondary/80"
-              onClick={() => {
-                if (pendingAddConflict) commitAdd(pendingAddConflict.params);
+              onClick={async () => {
+                if (pendingAddConflict) await commitAddWithStudySession(pendingAddConflict.params, pendingAddConflict.studyTarget);
               }}
             >
               Add in parallel
@@ -1359,7 +1226,100 @@ export function CalendarView({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Edit event bottom sheet ── */}
+      <div
+        className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${
+          selectedStudySession ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+        onClick={closeStudySession}
+      />
+      <div
+        className={`fixed left-0 right-0 ${SHEET_POSITION_CLASS} max-w-md mx-auto z-40 transition-transform duration-300 ease-out ${
+          selectedStudySession ? "translate-y-0" : "translate-y-full"
+        }`}
+      >
+        <div className={`bg-card rounded-t-3xl border-t border-x border-border shadow-2xl ${SHEET_MAX_HEIGHT_CLASS} flex flex-col`}>
+          <button onClick={closeStudySession} className="w-full flex flex-col items-center pt-3 pb-2 flex-shrink-0">
+            <div className="w-10 h-1 rounded-full bg-border" />
+          </button>
+          {selectedStudySession && (
+            <>
+              <div className="px-5 space-y-4 overflow-y-auto flex-1 pb-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Sesión de estudio</p>
+                  <h2 className="text-base font-bold text-foreground">{selectedStudySession.contact.name}</h2>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Fecha</Label>
+                    <Input type="date" value={studySessionDate} onChange={(event) => setStudySessionDate(event.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Hora</Label>
+                    <Input type="time" value={studySessionTime} onChange={(event) => setStudySessionTime(event.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Lección <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                  <Input value={studySessionLesson} onChange={(event) => setStudySessionLesson(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Notas <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                  <Input value={studySessionNotes} onChange={(event) => setStudySessionNotes(event.target.value)} />
+                </div>
+                {studySessionFiles.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label>Archivos</Label>
+                    {studySessionFiles.map((file) => (
+                      <div key={file.id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-muted">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{file.name}</p>
+                          <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+                        </div>
+                        <button onClick={() => setStudySessionFiles(studySessionFiles.filter((item) => item.id !== file.id))}>
+                          <X className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <Label>Añadir archivos</Label>
+                  <StudyFilePicker files={studySessionPendingFiles} onChange={setStudySessionPendingFiles} />
+                </div>
+              </div>
+              <div className="flex-shrink-0 px-5 pt-3 pb-8 border-t border-border bg-card space-y-2">
+                <Button onClick={saveSelectedStudySession} disabled={savingStudySession} className="w-full">
+                  {savingStudySession ? "Guardando..." : "Guardar cambios"}
+                </Button>
+                {new Date(selectedStudySession.session.date).getTime() <= Date.now() && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      onCompleteEstudioSession?.(selectedStudySession.contact.id, selectedStudySession.session.id);
+                      closeStudySession();
+                    }}
+                  >
+                    Marcar como completada
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  className="w-full text-destructive"
+                  onClick={() => {
+                    onDeleteEstudioSession?.(selectedStudySession.contact.id, selectedStudySession.session.id);
+                    closeStudySession();
+                  }}
+                >
+                  Eliminar sesión
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Hoja inferior para editar evento */}
       <div
         className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${
           editEvent ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
@@ -1398,7 +1358,7 @@ export function CalendarView({
                     <SelectTrigger>
                       <SelectValue>
                         {editCategory === "Estudio" && activeContacts.length === 1
-                          ? `Estudio – ${activeContacts[0].name}`
+                          ? `Estudio - ${activeContacts[0].name}`
                           : editCategory}
                       </SelectValue>
                     </SelectTrigger>
@@ -1406,7 +1366,7 @@ export function CalendarView({
                       {availableCategories.map((cat) => (
                         <SelectItem key={cat} value={cat}>
                           {cat === "Estudio" && activeContacts.length === 1
-                            ? `Estudio – ${activeContacts[0].name}`
+                            ? `Estudio - ${activeContacts[0].name}`
                             : cat}
                         </SelectItem>
                       ))}
@@ -1463,19 +1423,29 @@ export function CalendarView({
                   </div>
                 )}
               </div>
-              <div className="flex-shrink-0 px-5 pt-3 pb-8 border-t border-border bg-card">
+              <div className="flex-shrink-0 px-5 pt-3 pb-8 border-t border-border bg-card space-y-2">
                 <Button onClick={handleSaveEdit} className="w-full">{t("cal_save_changes")}</Button>
+                <Button
+                  variant="ghost"
+                  className="w-full text-destructive"
+                  onClick={() => {
+                    onDeleteEvent(editEvent.id);
+                    setEditEvent(null);
+                  }}
+                >
+                  Eliminar evento
+                </Button>
               </div>
             </>
           )}
         </div>
       </div>
 
-      {/* ── Estudio session conflict dialog ── */}
+      {/* Dialogo de conflicto de sesion de estudio */}
       <AlertDialog open={!!pendingEstudioConflict} onOpenChange={(open) => { if (!open) setPendingEstudioConflict(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Sesión de estudio programada</AlertDialogTitle>
+            <AlertDialogTitle>Ya hay una sesión para esa fecha</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <span className="block space-y-2 text-sm text-muted-foreground">
                 {pendingEstudioConflict && (() => {
@@ -1485,10 +1455,10 @@ export function CalendarView({
                   return (
                     <>
                       <span className="block">
-                        <strong className="text-foreground">{contact.name}</strong> tiene una sesión programada el{" "}
+                        <strong className="text-foreground">{contact.name}</strong> ya tiene una sesión programada el{" "}
                         <strong className="text-foreground">{dateStr} a las {session.time}</strong>.
                       </span>
-                      <span className="block">¿Este evento es esa sesión (mover la fecha programada) o es una sesión adicional?</span>
+                      <span className="block">Puedes continuar rellenando esa sesión existente o añadir una sesión adicional.</span>
                     </>
                   );
                 })()}
@@ -1504,7 +1474,7 @@ export function CalendarView({
               Añadir como nueva
             </AlertDialogAction>
             <AlertDialogAction onClick={handleEstudioOverwrite}>
-              Sobreescribir sesión programada
+              Continuar rellenando
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1512,3 +1482,5 @@ export function CalendarView({
     </div>
   );
 }
+
+

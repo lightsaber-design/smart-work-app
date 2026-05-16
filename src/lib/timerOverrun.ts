@@ -36,6 +36,17 @@ export function findScheduledEventForTimerStart(
     .sort((a, b) => Math.abs(a.date.getTime() - startTime.getTime()) - Math.abs(b.date.getTime() - startTime.getTime()))[0] ?? null;
 }
 
+export function findScheduledEventAtTimerStart(startTime: Date, events: CalendarEvent[]): CalendarEvent | null {
+  return events
+    .filter((event) => {
+      const end = getEstimatedEventEndDate(event);
+      if (event.completed) return false;
+      if (!isSameDay(event.date, startTime)) return false;
+      return startTime.getTime() >= event.date.getTime() - 15 * 60_000 && startTime.getTime() <= end.getTime();
+    })
+    .sort((a, b) => Math.abs(a.date.getTime() - startTime.getTime()) - Math.abs(b.date.getTime() - startTime.getTime()))[0] ?? null;
+}
+
 export function findActiveScheduledEvent(activeEntry: TimeEntry | undefined, events: CalendarEvent[]): CalendarEvent | null {
   if (!activeEntry || activeEntry.endTime) return null;
 

@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { generateId } from "@/lib/uuid";
 import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 import { clampReminderMinutes } from "@/lib/eventReminders";
-import { findScheduledEventForTimerStart } from "@/lib/timerOverrun";
+import { findScheduledEventAtTimerStart, findScheduledEventForTimerStart } from "@/lib/timerOverrun";
 
 export type EventCategory = "Predi" | "Carrito" | "LDC" | "Visitas" | "Estudio";
 export type RecurrenceType = "none" | "weekly" | "monthly";
@@ -108,14 +108,39 @@ function generateRecurringEvents(params: AddEventParams, count: number): Calenda
   return events;
 }
 
+function getEventEndDate(event: CalendarEvent): Date {
+  if (!event.endTime) return new Date(event.date.getTime() + 60 * 60_000);
+  const [hours, minutes] = event.endTime.split(":").map(Number);
+  const end = new Date(event.date);
+  end.setHours(hours, minutes, 0, 0);
+  return end.getTime() > event.date.getTime() ? end : new Date(event.date.getTime() + 60 * 60_000);
+}
+
+function isSameCalendarDay(a: Date, b: Date) {
+  return a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
+}
+
+function eventsShareSchedule(a: CalendarEvent, b: CalendarEvent): boolean {
+  if (!isSameCalendarDay(a.date, b.date)) return false;
+  return a.date.getTime() < getEventEndDate(b).getTime() && getEventEndDate(a).getTime() > b.date.getTime();
+}
+
+function removeCompletedScheduleDuplicates(events: CalendarEvent[], completedEvent: CalendarEvent): CalendarEvent[] {
+  if (!completedEvent.completed) return events;
+  return events.filter((event) => event.id === completedEvent.id || !event.completed || !eventsShareSchedule(event, completedEvent));
+}
+
 export function useCalendarEvents() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const eventsRef = useRef<CalendarEvent[]>([]);
 
   useEffect(() => {
     readJsonValue<unknown[]>("calendar-events", [])
       .then((value) => {
         if (!Array.isArray(value)) throw new Error("bad format");
-        setEvents(value.map(parseStoredEvent).filter((event): event is CalendarEvent => event !== null));
+        const parsedEvents = value.map(parseStoredEvent).filter((event): event is CalendarEvent => event !== null);
+        eventsRef.current = parsedEvents;
+        setEvents(parsedEvents);
       })
       .catch((error) => console.error("Error loading events:", error));
   }, []);
@@ -137,6 +162,7 @@ export function useCalendarEvents() {
   const markNotified = useCallback((id: string) => {
     setEvents((prev) => {
       const updated = prev.map((e) => (e.id === id ? { ...e, notified: true } : e));
+      eventsRef.current = updated;
       persistEvents(updated);
       return updated;
     });
@@ -147,6 +173,7 @@ export function useCalendarEvents() {
       const recurring = generateRecurringEvents(params, 12);
       setEvents((prev) => {
         const updated = [...prev, ...recurring].sort((a, b) => a.date.getTime() - b.date.getTime());
+        eventsRef.current = updated;
         persistEvents(updated);
         return updated;
       });
@@ -164,6 +191,7 @@ export function useCalendarEvents() {
       };
       setEvents((prev) => {
         const updated = [...prev, event].sort((a, b) => a.date.getTime() - b.date.getTime());
+        eventsRef.current = updated;
         persistEvents(updated);
         return updated;
       });
@@ -172,21 +200,25 @@ export function useCalendarEvents() {
 
   const addCompletedEventNow = useCallback(
     (params: { date: Date; category: EventCategory; location?: { lat: number; lng: number } }) => {
-      const scheduledEvent = findScheduledEventForTimerStart(params.date, params.category, events);
+      const scheduledEvent =
+        findScheduledEventForTimerStart(params.date, params.category, eventsRef.current) ??
+        findScheduledEventAtTimerStart(params.date, eventsRef.current);
       if (scheduledEvent) {
         setEvents((prev) => {
-          const updated = prev.map((event) =>
+          const completedEvent = {
+            ...scheduledEvent,
+            date: params.date,
+            category: params.category,
+            notified: true,
+            location: params.location ?? scheduledEvent.location,
+            completed: true,
+          };
+          const updated = removeCompletedScheduleDuplicates(prev, completedEvent).map((event) =>
             event.id === scheduledEvent.id
-              ? {
-                  ...event,
-                  date: params.date,
-                  category: params.category,
-                  notified: true,
-                  location: params.location ?? event.location,
-                  completed: true,
-                }
+              ? { ...event, ...completedEvent }
               : event
           ).sort((a, b) => a.date.getTime() - b.date.getTime());
+          eventsRef.current = updated;
           persistEvents(updated);
           return updated;
         });
@@ -206,13 +238,14 @@ export function useCalendarEvents() {
         completed: true,
       };
       setEvents((prev) => {
-        const updated = [...prev, event].sort((a, b) => a.date.getTime() - b.date.getTime());
+        const updated = [...removeCompletedScheduleDuplicates(prev, event), event].sort((a, b) => a.date.getTime() - b.date.getTime());
+        eventsRef.current = updated;
         persistEvents(updated);
         return updated;
       });
       return id;
     },
-    [events, persistEvents]
+    [persistEvents]
   );
 
   const deleteEvent = useCallback((id: string) => {
@@ -222,10 +255,12 @@ export function useCalendarEvents() {
       if (event.recurrence !== "none") {
         const parentId = event.parentId || event.id;
         const updated = prev.filter((e) => e.id !== parentId && e.parentId !== parentId);
+        eventsRef.current = updated;
         persistEvents(updated);
         return updated;
       }
       const updated = prev.filter((e) => e.id !== id);
+      eventsRef.current = updated;
       persistEvents(updated);
       return updated;
     });
@@ -244,7 +279,16 @@ export function useCalendarEvents() {
 
   const toggleEventCompleted = useCallback((id: string) => {
     setEvents((prev) => {
-      const updated = prev.map((e) => (e.id === id ? { ...e, completed: !e.completed } : e));
+      const target = prev.find((event) => event.id === id);
+      if (!target) return prev;
+
+      const nextCompleted = !target.completed;
+      if (nextCompleted && target.date.getTime() > Date.now()) return prev;
+
+      const targetAfterToggle = { ...target, completed: nextCompleted };
+      const base = nextCompleted ? removeCompletedScheduleDuplicates(prev, targetAfterToggle) : prev;
+      const updated = base.map((e) => (e.id === id ? targetAfterToggle : e));
+      eventsRef.current = updated;
       persistEvents(updated);
       return updated;
     });
@@ -266,12 +310,20 @@ export function useCalendarEvents() {
       }
     ) => {
       setEvents((prev) => {
+        const target = prev.find((event) => event.id === id);
+        if (!target) return prev;
+        const targetDate = updates.date ?? target.date;
+        if (updates.completed === true && targetDate.getTime() > Date.now()) return prev;
+
         const shouldResetNotification =
           updates.notified === undefined &&
           (updates.date !== undefined || updates.reminderMinutesBefore !== undefined);
-        const updated = prev
+        const mapped = prev
           .map((e) => (e.id === id ? { ...e, ...updates, notified: shouldResetNotification ? false : updates.notified ?? e.notified } : e))
           .sort((a, b) => a.date.getTime() - b.date.getTime());
+        const completedEvent = updates.completed === true ? mapped.find((event) => event.id === id) : undefined;
+        const updated = completedEvent ? removeCompletedScheduleDuplicates(mapped, completedEvent) : mapped;
+        eventsRef.current = updated;
         persistEvents(updated);
         return updated;
       });

@@ -183,7 +183,7 @@ export function useEstudios() {
         const parsed = value.map(parseStoredContact).filter((contact): contact is EstudioContact => contact !== null);
         const filled = parsed.map(fillPendingSessions);
         setContacts(filled);
-        if (JSON.stringify(parsed) !== JSON.stringify(filled)) {
+        if (filled.some((contact, index) => contact !== parsed[index])) {
           void writeJsonValue("estudios", filled).catch((error) => console.error("Error saving studies:", error));
         }
       })
@@ -354,6 +354,37 @@ export function useEstudios() {
     });
   }, [persist]);
 
+  const addScheduledSession = useCallback((
+    contactId: string,
+    data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }
+  ) => {
+    setContacts((prev) => {
+      const updated = prev.map((c) => {
+        if (c.id !== contactId) return c;
+        const [year, month, day] = data.date.split("-").map(Number);
+        const [hours, minutes] = data.time.split(":").map(Number);
+        const d = new Date(year, month - 1, day, hours, minutes);
+        return {
+          ...c,
+          sessions: [
+            ...c.sessions,
+            {
+              id: generateId(),
+              date: d.toISOString(),
+              time: data.time,
+              lesson: data.lesson?.trim() || undefined,
+              notes: data.notes?.trim() || undefined,
+              files: data.files,
+              pending: true,
+            },
+          ],
+        };
+      });
+      persist(updated);
+      return updated;
+    });
+  }, [persist]);
+
   const completeSession = useCallback((contactId: string, sessionId: string) => {
     setContacts((prev) => {
       const updated = prev.map((c) => {
@@ -380,6 +411,7 @@ export function useEstudios() {
     archiveContact,
     unarchiveContact,
     addSession,
+    addScheduledSession,
     deleteSession,
     updateSession,
     completeSession,
