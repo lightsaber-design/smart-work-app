@@ -40,12 +40,17 @@ function parseStoredEntry(value: unknown): TimeEntry | null {
   const startTime = new Date(String(value.startTime));
   if (Number.isNaN(startTime.getTime())) return null;
 
-  const parsedEndTime = value.endTime ? new Date(String(value.endTime)) : null;
+  let endTime: Date | null = null;
+  if (value.endTime !== null && value.endTime !== undefined && value.endTime !== "") {
+    const parsedEndTime = new Date(String(value.endTime));
+    if (Number.isNaN(parsedEndTime.getTime())) return null;
+    endTime = parsedEndTime;
+  }
 
   return {
     id: value.id,
     startTime,
-    endTime: parsedEndTime && !Number.isNaN(parsedEndTime.getTime()) ? parsedEndTime : null,
+    endTime,
     description: typeof value.description === "string" ? value.description : "",
     category: isWorkCategory(value.category) ? value.category : "Predi",
     startLocation: parseGeoLocation(value.startLocation),
@@ -220,7 +225,7 @@ export function useTimeTracker() {
 }
 
 export function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;

@@ -4,6 +4,7 @@ interface Props { children: ReactNode; }
 interface State { error: Error | null; }
 
 const CHUNK_RELOAD_KEY = "smart-work-chunk-reload-attempted";
+const RECOVERABLE_TIMER_KEYS = ["time-entries", "calendar-events"];
 
 function isChunkLoadError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -54,9 +55,16 @@ export class ErrorBoundary extends Component<Props, State> {
     window.location.reload();
   }
 
+  private resetTimerData = () => {
+    // Limpia solo los datos que puede dejar bloqueado el temporizador.
+    RECOVERABLE_TIMER_KEYS.forEach((key) => localStorage.removeItem(key));
+    sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+    window.location.reload();
+  };
+
   render() {
     if (this.state.error) {
-      const showDetails = import.meta.env.DEV;
+      const message = this.state.error.message || "Unknown error";
 
       return (
         <div className="min-h-screen flex flex-col items-center justify-center px-6 gap-4 bg-background text-foreground">
@@ -64,18 +72,21 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="text-sm text-muted-foreground text-center break-all">
             Please reload the app and try again.
           </p>
-          {showDetails && (
-            <pre className="text-[10px] text-muted-foreground bg-muted rounded-xl p-3 w-full overflow-x-auto whitespace-pre-wrap break-all max-h-60 overflow-y-auto">
-              {this.state.error.message}
-              {"\n\n"}
-              {this.state.error.stack}
-            </pre>
-          )}
+          <details className="w-full max-w-sm rounded-xl bg-muted p-3 text-xs text-muted-foreground">
+            <summary className="cursor-pointer font-semibold text-foreground">Error details</summary>
+            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all">{message}</pre>
+          </details>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
           >
             Reload
+          </button>
+          <button
+            onClick={this.resetTimerData}
+            className="px-4 py-2 rounded-xl border border-border text-sm font-semibold text-foreground"
+          >
+            Reset timer data
           </button>
         </div>
       );
