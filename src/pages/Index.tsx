@@ -168,9 +168,18 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       .sort((a, b) => a.date.getTime() - b.date.getTime()),
     [getEventsForDate, now]
   );
+  const nextUpcomingEvent = useMemo(() => {
+    const currentTime = Date.now();
+    return calendarEvents
+      .filter((event) => !event.completed && event.date.getTime() >= currentTime)
+      .slice()
+      .sort((a, b) => a.date.getTime() - b.date.getTime())[0] ?? null;
+  }, [calendarEvents, todayKey]);
+  const summaryEvents = todayEvents.length > 0 ? todayEvents : nextUpcomingEvent ? [nextUpcomingEvent] : [];
+  const showingNextEvent = todayEvents.length === 0 && nextUpcomingEvent !== null;
 
   // Sheet drag logic
-  const todayEventCount = todayEvents.length;
+  const todayEventCount = summaryEvents.length;
   const [timerContentBottomY, setTimerContentBottomY] = useState(0);
   useEffect(() => {
     if (activeTab !== "timer") return;
@@ -571,25 +580,28 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 </button>
                 <div className="px-5 flex items-center justify-between mb-2 cursor-pointer" onClick={toggleSummary}>
                   <p className="text-sm font-bold text-foreground">
-                    Hoy
-                    {todayEvents.length > 0 && (
+                    {showingNextEvent ? "Next" : "Hoy"}
+                    {summaryEvents.length > 0 && (
                       <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                        · {todayEvents.length} evento{todayEvents.length !== 1 ? "s" : ""}
+                        · {summaryEvents.length} evento{summaryEvents.length !== 1 ? "s" : ""}
                       </span>
                     )}
                   </p>
                 </div>
 
-                {todayEvents.length === 0 ? (
+                {summaryEvents.length === 0 ? (
                   <div className="px-5 pb-4 pt-1">
                     <p className="text-sm font-semibold text-foreground">Sin actividad hoy</p>
                   </div>
                 ) : (
                   <div className="px-5 pb-3 space-y-2">
-                    {todayEvents.map((event) => {
+                    {summaryEvents.map((event) => {
                       const style = CATEGORY_STYLE[event.category];
                       const meta = CATEGORY_META[event.category];
                       const timeStr = `${String(event.date.getHours()).padStart(2, "0")}:${String(event.date.getMinutes()).padStart(2, "0")}`;
+                      const dateLabel = event.date.toDateString() === todayKey
+                        ? timeStr
+                        : `${event.date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })} · ${timeStr}`;
                       return (
                         <button
                           key={event.id}
@@ -601,7 +613,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                           <span className="text-lg leading-none">{meta.icon}</span>
                           <div className="flex-1 min-w-0">
                             <p className={`text-[13px] font-semibold text-foreground truncate ${event.completed ? "line-through opacity-50" : ""}`}>{event.category}</p>
-                            <p className="text-[10px] text-muted-foreground">{timeStr}{event.endTime ? ` – ${event.endTime}` : ""}</p>
+                            <p className="text-[10px] text-muted-foreground">{dateLabel}{event.endTime ? ` – ${event.endTime}` : ""}</p>
                           </div>
                           {event.completed && <span className="text-xs font-bold text-green-500">✓</span>}
                           <span className="flex items-center gap-1.5 flex-shrink-0">
