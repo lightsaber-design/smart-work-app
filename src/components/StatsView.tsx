@@ -335,19 +335,7 @@ export function StatsView({
           {/* Enviar Informe mensual */}
           {(() => {
             const estudiosCount = completedCountByCategory["Estudio"] ?? 0;
-            const monthLabel = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
-            const categoryLines = monthlyCappedCategoryTotals.map(({ cat, ms }) => {
-              const rawMs = monthlyCategoryTotals.find((item) => item.cat === cat)?.ms ?? 0;
-              const suffix = cat === "LDC" && rawMs > ms ? ` (${msToLabel(rawMs)} real)` : "";
-              return `${cat}: ${ms > 0 ? msToLabel(ms) : "0m"}${suffix}`;
-            });
-            const msg = [
-              `📊 Informe ${monthLabel}`,
-              ...categoryLines,
-              `Total: ${monthlyFilteredMs > 0 ? msToLabel(monthlyFilteredMs) : "0m"}`,
-              `⏱️ Horas a enviar: ${monthlyReport.reportedHours}h`,
-              `📖 Estudios: ${estudiosCount}`,
-            ].join("\n");
+            const msg = [`Horas: ${monthlyReport.reportedHours}h`, `Estudios: ${estudiosCount}`].join("\n");
             return (
               <button
                 onClick={() => {

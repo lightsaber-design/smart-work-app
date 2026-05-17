@@ -1,7 +1,7 @@
 import { Pause, Play, BookOpen, X, Clock } from "lucide-react";
 import { WorkCategory } from "@/hooks/useTimeTracker";
 import { CalendarEvent } from "@/hooks/useCalendarEvents";
-import { EstudioContact, EstudioSession, SessionFile } from "@/hooks/useEstudios";
+import { EstudioContact, EstudioSession, SessionFile, hasActiveStudyWork } from "@/hooks/useEstudios";
 import {
   Select,
   SelectContent,
@@ -127,7 +127,7 @@ export function ClockButton({
     return () => { if (tickRef.current) clearInterval(tickRef.current); };
   }, []);
 
-  const activeStudios = useMemo(() => estudios.filter((e) => e.active), [estudios]);
+  const activeStudios = useMemo(() => estudios.filter(hasActiveStudyWork), [estudios]);
   const categories = useMemo(
     () => activeStudios.length > 0 ? ALL_CATEGORIES : ALL_CATEGORIES.filter((c) => c !== "Estudio"),
     [activeStudios.length]
@@ -136,6 +136,9 @@ export function ClockButton({
   useEffect(() => {
     if (category === "Estudio" && activeStudios.length === 1) {
       setSelectedEstudioId(activeStudios[0].id);
+    } else if (category === "Estudio" && activeStudios.length === 0) {
+      setCategory("Predi");
+      setSelectedEstudioId("");
     }
   }, [category, activeStudios]);
 

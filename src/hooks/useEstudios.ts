@@ -44,6 +44,22 @@ export type ContactFormData = Pick<EstudioContact, "name" | "address" | "notes" 
   schedule?: ContactSchedule;
 };
 
+export type ScheduledSessionData = {
+  date: string;
+  time: string;
+  lesson?: string;
+  notes?: string;
+  files: SessionFile[];
+  forceNew?: boolean;
+};
+
+export function hasActiveStudyWork(contact: EstudioContact): boolean {
+  return contact.active && (
+    Boolean(contact.schedule) ||
+    (contact.sessions ?? []).some((session) => session.pending)
+  );
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -167,6 +183,10 @@ export function getNextOccurrences(schedule: ContactSchedule, count: number): Da
 function now(): string {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function dateKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
 export function useEstudios() {
@@ -330,23 +350,30 @@ export function useEstudios() {
     setContacts((prev) => {
       const updated = prev.map((c) =>
         c.id === contactId
-          ? {
-              ...c,
-              sessions: c.sessions.map((s) => {
-                if (s.id !== sessionId) return s;
-                const [year, month, day] = data.date.split("-").map(Number);
-                const [hours, minutes] = data.time.split(":").map(Number);
-                const d = new Date(year, month - 1, day, hours, minutes);
-                return {
-                  ...s,
-                  date: d.toISOString(),
-                  time: data.time,
-                  lesson: data.lesson?.trim() || undefined,
-                  notes: data.notes?.trim() || undefined,
-                  files: data.files,
-                };
-              }),
-            }
+          ? (() => {
+              let targetDate: Date | null = null;
+              const sessions = c.sessions
+                .map((s) => {
+                  if (s.id !== sessionId) return s;
+                  const [year, month, day] = data.date.split("-").map(Number);
+                  const [hours, minutes] = data.time.split(":").map(Number);
+                  const d = new Date(year, month - 1, day, hours, minutes);
+                  targetDate = d;
+                  return {
+                    ...s,
+                    date: d.toISOString(),
+                    time: data.time,
+                    lesson: data.lesson?.trim() || undefined,
+                    notes: data.notes?.trim() || undefined,
+                    files: data.files,
+                  };
+                })
+                .filter((s) => {
+                  if (!targetDate || s.id === sessionId || !s.pending) return true;
+                  return dateKey(new Date(s.date)) !== dateKey(targetDate);
+                });
+              return { ...c, sessions };
+            })()
           : c
       );
       persist(updated);
@@ -354,28 +381,43 @@ export function useEstudios() {
     });
   }, [persist]);
 
-  const addScheduledSession = useCallback((
-    contactId: string,
-    data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }
-  ) => {
+  const addScheduledSession = useCallback((contactId: string, data: ScheduledSessionData) => {
     setContacts((prev) => {
       const updated = prev.map((c) => {
         if (c.id !== contactId) return c;
         const [year, month, day] = data.date.split("-").map(Number);
         const [hours, minutes] = data.time.split(":").map(Number);
         const d = new Date(year, month - 1, day, hours, minutes);
+        const replacement = {
+          date: d.toISOString(),
+          time: data.time,
+          lesson: data.lesson?.trim() || undefined,
+          notes: data.notes?.trim() || undefined,
+          files: data.files,
+          pending: true,
+        };
+        const nextPending = data.forceNew
+          ? null
+          : c.sessions
+              .filter((session) => session.pending)
+              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] ?? null;
+
+        if (nextPending) {
+          return {
+            ...c,
+            sessions: c.sessions.map((session) =>
+              session.id === nextPending.id ? { ...session, ...replacement } : session
+            ),
+          };
+        }
+
         return {
           ...c,
           sessions: [
             ...c.sessions,
             {
               id: generateId(),
-              date: d.toISOString(),
-              time: data.time,
-              lesson: data.lesson?.trim() || undefined,
-              notes: data.notes?.trim() || undefined,
-              files: data.files,
-              pending: true,
+              ...replacement,
             },
           ],
         };

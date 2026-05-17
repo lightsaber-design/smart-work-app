@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useState, useEffect, useRef } from "react";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
-import { EstudioContact, EstudioSession, SessionFile } from "@/hooks/useEstudios";
+import { EstudioContact, EstudioSession, ScheduledSessionData, SessionFile, hasActiveStudyWork } from "@/hooks/useEstudios";
 import { generateId } from "@/lib/uuid";
 import {
   Plus, Trash2, BellOff, Repeat, CheckCircle2,
@@ -65,7 +65,7 @@ interface CalendarViewProps {
   defaultCenter?: { lat: number; lng: number };
   estudiosContacts?: EstudioContact[];
   onUpdateEstudioSession?: (contactId: string, sessionId: string, data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
-  onAddEstudioSession?: (contactId: string, data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
+  onAddEstudioSession?: (contactId: string, data: ScheduledSessionData) => void;
   onDeleteEstudioSession?: (contactId: string, sessionId: string) => void;
   onCompleteEstudioSession?: (contactId: string, sessionId: string) => void;
   travelReminder?: TravelReminderSettings;
@@ -461,7 +461,7 @@ export function CalendarView({
   onSetSpecialCampaign,
 }: CalendarViewProps) {
   const t = useT();
-  const activeContacts = estudiosContacts.filter((c) => c.active);
+  const activeContacts = estudiosContacts.filter(hasActiveStudyWork);
   const singleActiveContactId = activeContacts.length === 1 ? activeContacts[0].id : "";
   const [mode, setMode] = useState<CalendarMode>("daily");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -512,6 +512,13 @@ export function CalendarView({
   const availableCategories = CATEGORIES.filter(
     (cat) => cat !== "Estudio" || activeContacts.length > 0
   );
+
+  useEffect(() => {
+    if (category === "Estudio" && activeContacts.length === 0) {
+      setCategory("Predi");
+      setSelectedEstudioContactId("");
+    }
+  }, [category, activeContacts.length]);
 
   useScrollLock(dialogOpen || !!editEvent || !!pendingAddConflict || !!selectedStudySession);
 
@@ -698,7 +705,10 @@ export function CalendarView({
         if (studyTarget?.session) {
           onUpdateEstudioSession?.(contact.id, studyTarget.session.id, sessionData);
         } else {
-          onAddEstudioSession?.(contact.id, sessionData);
+          onAddEstudioSession?.(contact.id, {
+            ...sessionData,
+            forceNew: studyTarget?.session === null,
+          });
         }
       }
     }
