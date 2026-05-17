@@ -5,7 +5,7 @@ import { EstudioContact, EstudioSession, SessionFile } from "@/hooks/useEstudios
 import { generateId } from "@/lib/uuid";
 import {
   Plus, Trash2, BellOff, Repeat, CheckCircle2,
-  Circle, ChevronLeft, ChevronRight, Paperclip, X,
+  Circle, ChevronLeft, ChevronRight, Paperclip, X, Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -121,6 +121,13 @@ function formatDurationLabel(ms: number): string {
   if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
   if (hrs > 0) return `${hrs}h`;
   return `${mins}m`;
+}
+
+function formatMonthCellDuration(ms: number): string {
+  const safeMs = Math.max(0, ms);
+  const hrs = Math.floor(safeMs / 3_600_000);
+  const mins = safeMs > 0 ? Math.max(1, Math.floor((safeMs % 3_600_000) / 60_000)) : 0;
+  return `${hrs}:${String(mins).padStart(2, "0")}`;
 }
 
 function minutesFromTimelineStart(date: Date): number {
@@ -310,8 +317,12 @@ function EventMonthGrid({
           </div>
         )}
         {canSetCampaign && (
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-[10px] font-semibold text-muted-foreground">Campaña especial</span>
+          <div className="mt-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-2.5 py-2">
+            <div className="mb-2 flex items-center gap-1.5">
+              <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">Campaña especial</span>
+            </div>
+            <div className="flex items-center gap-2">
             {([15, 30] as CampaignGoal[]).map((goal) => (
               <button
                 key={goal}
@@ -326,6 +337,7 @@ function EventMonthGrid({
                 {goal}h
               </button>
             ))}
+            </div>
           </div>
         )}
       </div>
@@ -373,11 +385,13 @@ function EventMonthGrid({
                 <button
                   key={day.toDateString()}
                   onClick={() => onSelectDate(day)}
-                  className={`relative aspect-square rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 ${bgClass} ${
+                  className={`relative aspect-square rounded-xl flex flex-col items-center justify-center transition-all active:scale-95 ${
+                    dayTotal.ms > 0 ? "gap-0.5 px-0.5" : "gap-1"
+                  } ${bgClass} ${
                     isToday && !isSelected ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : ""
                   }`}
                 >
-                  <span className={`text-[11px] font-bold leading-none ${isSelected ? "text-primary-foreground" : ""}`}>
+                  <span className={`font-bold leading-none ${dayTotal.ms > 0 ? "text-[10px]" : "text-sm"} ${isSelected ? "text-primary-foreground" : ""}`}>
                     {day.getDate()}
                   </span>
                   {categoryDots.length > 0 && (
@@ -392,8 +406,8 @@ function EventMonthGrid({
                     </div>
                   )}
                   {dayTotal.ms > 0 && (
-                    <span className={`text-[8px] font-bold leading-none ${isSelected ? "text-primary-foreground/80" : "text-foreground/70"}`}>
-                      {formatDurationLabel(dayTotal.ms)}
+                    <span className={`max-w-full truncate text-[11px] font-black leading-none tabular-nums ${isSelected ? "text-primary-foreground/85" : "text-foreground/80"}`}>
+                      {formatMonthCellDuration(dayTotal.ms)}
                     </span>
                   )}
                 </button>
