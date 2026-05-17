@@ -13,7 +13,7 @@ import { useEstudios } from "@/hooks/useEstudios";
 import { MissedStudyBanner } from "@/components/MissedStudyBanner";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { useSpecialCampaign } from "@/hooks/useSpecialCampaign";
-import { CATEGORY_META, CATEGORY_STYLE, CATEGORY_LIST } from "@/lib/categories";
+import { CATEGORY_META, CATEGORY_STYLE } from "@/lib/categories";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 import { removeJsonValue } from "@/lib/jsonFileStorage";
 import { shouldNotifyEvent } from "@/lib/eventReminders";
@@ -170,11 +170,12 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   );
   const upcomingSummaryEvents = useMemo(() => {
     const currentTime = Date.now();
-    return calendarEvents
+    const upcoming = calendarEvents
       .filter((event) => !event.completed && event.date.getTime() >= currentTime)
       .slice()
-      .sort((a, b) => a.date.getTime() - b.date.getTime())
-      .slice(0, 2);
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+    const nextDayKey = upcoming[0]?.date.toDateString();
+    return nextDayKey ? upcoming.filter((event) => event.date.toDateString() === nextDayKey) : [];
   }, [calendarEvents, todayKey]);
   const summaryEvents = todayEvents.length > 0 ? todayEvents : upcomingSummaryEvents;
   const showingUpcomingEvents = todayEvents.length === 0 && upcomingSummaryEvents.length > 0;
@@ -183,8 +184,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       const key = event.date.toDateString();
       const existing = groups.find((group) => group.key === key);
       const label = key === todayKey
-        ? "Today"
-        : event.date.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" });
+        ? "Hoy"
+        : event.date.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
       if (existing) {
         existing.events.push(event);
       } else {
@@ -353,14 +354,21 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             (a, b) => a.date.getTime() - b.date.getTime()
           );
           const totalUpcoming = allUpcoming.length;
-          const nextEvents = allUpcoming.slice(0, 3);
-          const hasMore = allUpcoming.length > 3;
-
-          // Category chips — group by category across ALL upcoming
-          const categoryGroups = CATEGORY_LIST.map((cat) => ({
-            cat,
-            count: allUpcoming.filter((e) => e.category === cat).length,
-          })).filter((g) => g.count > 0);
+          const nextDayGroups = allUpcoming.reduce<Array<{ key: string; label: string; events: typeof allUpcoming }>>((groups, item) => {
+            const key = item.date.toDateString();
+            const existing = groups.find((group) => group.key === key);
+            const label = key === todayKey
+              ? "Hoy"
+              : item.date.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+            if (existing) {
+              existing.events.push(item);
+            } else if (groups.length < 2) {
+              groups.push({ key, label, events: [item] });
+            }
+            return groups;
+          }, []);
+          const displayedUpcomingCount = nextDayGroups.reduce((count, group) => count + group.events.length, 0);
+          const hasMore = allUpcoming.length > displayedUpcomingCount;
           return (
             <div className="min-h-screen bg-background pb-24">
               {/* Gradient hero */}
@@ -443,75 +451,45 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-2.5">
-                    {/* Category summary chips — ALL upcoming */}
-                    {categoryGroups.length > 0 && (
-                      <div className="rounded-2xl border border-border bg-card px-4 py-3">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-                          Resumen · {totalUpcoming} evento{totalUpcoming !== 1 ? "s" : ""}
+                  <div className="space-y-4">
+                    {nextDayGroups.map((group) => (
+                      <div key={group.key} className="space-y-2">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground capitalize">
+                          {group.label}
                         </p>
-                        <div className="flex flex-wrap gap-2">
-                          {categoryGroups.map(({ cat, count }) => {
-                            const meta = CATEGORY_META[cat];
-                            const style = CATEGORY_STYLE[cat];
-                            return (
-                              <button
-                                key={cat}
-                                onClick={() => navigate("calendar")}
-                                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold border active:scale-95 transition-transform ${style.card}`}
-                                style={{ borderColor: style.accent + "55" }}
-                              >
-                                <span>{meta.icon}</span>
-                                <span className="text-foreground">{cat}</span>
-                                <span
-                                  className="rounded-full px-1.5 py-0.5 text-[10px] font-black text-white leading-none"
-                                  style={{ backgroundColor: style.accent }}
-                                >
-                                  {count}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
+                        {group.events.map((item) => {
+                          const style = CATEGORY_STYLE[item.category];
+                          const meta = CATEGORY_META[item.category];
+                          const timeStr = `${String(item.date.getHours()).padStart(2, "0")}:${String(item.date.getMinutes()).padStart(2, "0")}`;
+                          return (
+                            <button
+                              key={item.id}
+                              onClick={() =>
+                                item.contactId && item.sessionId
+                                  ? navigateToStudySession(item.contactId, item.sessionId)
+                                  : navigate("calendar")
+                              }
+                              className={`w-full flex items-center gap-3 rounded-2xl border px-3 py-3 text-left active:scale-[0.98] transition-transform ${style.card}`}
+                              style={{ borderLeftWidth: 3, borderLeftColor: style.accent }}
+                            >
+                              <span className="text-xl leading-none flex-shrink-0">{meta.icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-foreground truncate">{item.label}</p>
+                                <p className="text-[11px] text-muted-foreground">{timeStr}</p>
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                            </button>
+                          );
+                        })}
                       </div>
-                    )}
-
-                    {/* Next 3 events (calendar + estudio sessions) */}
-                    {nextEvents.map((item) => {
-                      const style = CATEGORY_STYLE[item.category];
-                      const meta = CATEGORY_META[item.category];
-                      const isToday = item.date.toDateString() === new Date().toDateString();
-                      const dateStr = isToday
-                        ? "Hoy"
-                        : item.date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
-                      const timeStr = `${String(item.date.getHours()).padStart(2, "0")}:${String(item.date.getMinutes()).padStart(2, "0")}`;
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() =>
-                            item.contactId && item.sessionId
-                              ? navigateToStudySession(item.contactId, item.sessionId)
-                              : navigate("calendar")
-                          }
-                          className={`w-full flex items-center gap-3 rounded-2xl border px-3 py-3 text-left active:scale-[0.98] transition-transform ${style.card}`}
-                          style={{ borderLeftWidth: 3, borderLeftColor: style.accent }}
-                        >
-                          <span className="text-xl leading-none flex-shrink-0">{meta.icon}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-foreground truncate">{item.label}</p>
-                            <p className="text-[11px] text-muted-foreground capitalize">{dateStr} · {timeStr}</p>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                        </button>
-                      );
-                    })}
+                    ))}
 
                     {hasMore && (
                       <button
                         onClick={() => navigate("calendar")}
                         className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-primary"
                       >
-                        Ver {allUpcoming.length - 3} más en el calendario <ChevronRight className="w-3.5 h-3.5" />
+                        Ver {allUpcoming.length - displayedUpcomingCount} más en el calendario <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
@@ -596,7 +574,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 </button>
                 <div className="px-5 flex items-center justify-between mb-2 cursor-pointer" onClick={toggleSummary}>
                   <p className="text-sm font-bold text-foreground">
-                    {showingUpcomingEvents ? "Upcoming" : "Today"}
+                    {showingUpcomingEvents ? "Upcoming" : "Hoy"}
                     {summaryEvents.length > 0 && (
                       <span className="ml-1.5 text-xs font-normal text-muted-foreground">
                         · {summaryEvents.length} evento{summaryEvents.length !== 1 ? "s" : ""}
@@ -607,10 +585,13 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
                 {summaryEvents.length === 0 ? (
                   <div className="px-5 pb-4 pt-1">
-                    <p className="text-sm font-semibold text-foreground">Sin actividad hoy</p>
+                    <p className="text-sm font-semibold text-foreground">Para hoy nada</p>
                   </div>
                 ) : (
                   <div className="px-5 pb-3 space-y-3">
+                    {showingUpcomingEvents && (
+                      <p className="text-sm font-semibold text-foreground">Para hoy nada</p>
+                    )}
                     {groupedSummaryEvents.map((group) => (
                       <div key={group.key} className="space-y-2">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
@@ -747,6 +728,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 }}
                 focusEventId={calendarFocusEventId}
                 onFocusEventHandled={() => setCalendarFocusEventId(null)}
+                precursorHours={setup.precursorHours}
+                specialCampaignGoals={campaign.goals}
+                onSetSpecialCampaign={campaign.setGoal}
               />
             </Suspense>
           </>

@@ -31,6 +31,7 @@ import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { useT } from "@/lib/LanguageContext";
 import { getTravelReminderMinutes, type TravelReminderSettings } from "@/lib/eventReminders";
 import { formatFileSize, saveFile } from "@/lib/sessionFiles";
+import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 
 import { CATEGORY_LIST as CATEGORIES, CATEGORY_META, CATEGORY_STYLE } from "@/lib/categories";
 
@@ -70,6 +71,9 @@ interface CalendarViewProps {
   travelReminder?: TravelReminderSettings;
   focusEventId?: string | null;
   onFocusEventHandled?: () => void;
+  precursorHours?: number | null;
+  specialCampaignGoals?: Record<string, CampaignGoal>;
+  onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
 }
 
 const DAY_NAMES_SHORT = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
@@ -107,6 +111,16 @@ function dayTotalFromEvents(dayEvents: CalendarEvent[]): { ms: number; hrs: numb
     return acc + Math.max(0, end.getTime() - e.date.getTime());
   }, 0);
   return { ms, hrs: Math.floor(ms / 3600000), mins: Math.floor((ms % 3600000) / 60000) };
+}
+
+function formatDurationLabel(ms: number): string {
+  const safeMs = Math.max(0, ms);
+  const hrs = Math.floor(safeMs / 3_600_000);
+  const rawMins = Math.floor((safeMs % 3_600_000) / 60_000);
+  const mins = safeMs > 0 && hrs === 0 ? Math.max(1, rawMins) : rawMins;
+  if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
+  if (hrs > 0) return `${hrs}h`;
+  return `${mins}m`;
 }
 
 function minutesFromTimelineStart(date: Date): number {
@@ -204,6 +218,9 @@ function EventMonthGrid({
   onPreviousMonth,
   onNextMonth,
   onAddEvent,
+  precursorHours,
+  specialCampaignGoals,
+  onSetSpecialCampaign,
 }: {
   monthBase: Date;
   monthLabel: string;
@@ -213,6 +230,9 @@ function EventMonthGrid({
   onPreviousMonth: () => void;
   onNextMonth: () => void;
   onAddEvent: () => void;
+  precursorHours?: number | null;
+  specialCampaignGoals?: Record<string, CampaignGoal>;
+  onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
 }) {
   const year = monthBase.getFullYear();
   const month = monthBase.getMonth();
@@ -231,6 +251,14 @@ function EventMonthGrid({
 
   const today = new Date();
   const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
+  const currentMonthKey = monthKey(monthBase);
+  const monthEvents = events.filter(
+    (event) => event.completed && event.date.getMonth() === month && event.date.getFullYear() === year
+  );
+  const { ms: monthTotalMs } = dayTotalFromEvents(monthEvents);
+  const monthGoal = precursorHours != null ? precursorHours : specialCampaignGoals?.[currentMonthKey] ?? null;
+  const monthGoalPct = monthGoal ? Math.min(100, Math.round((monthTotalMs / (monthGoal * 3_600_000)) * 100)) : 0;
+  const canSetCampaign = precursorHours === null && typeof onSetSpecialCampaign === "function";
 
   return (
     <div className="rounded-2xl bg-card border border-border shadow-sm p-3">
@@ -263,6 +291,44 @@ function EventMonthGrid({
           </button>
         </div>
       </div>
+      <div className="mb-3 rounded-2xl border border-border bg-muted/30 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Horas del mes</p>
+            <p className="text-xl font-black text-foreground tabular-nums">{formatDurationLabel(monthTotalMs)}</p>
+          </div>
+          {monthGoal && (
+            <div className="text-right">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Meta</p>
+              <p className="text-sm font-bold text-foreground">{monthGoalPct}% · {monthGoal}h</p>
+            </div>
+          )}
+        </div>
+        {monthGoal && (
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background">
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${monthGoalPct}%` }} />
+          </div>
+        )}
+        {canSetCampaign && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-[10px] font-semibold text-muted-foreground">Campaña especial</span>
+            {([15, 30] as CampaignGoal[]).map((goal) => (
+              <button
+                key={goal}
+                type="button"
+                onClick={() => onSetSpecialCampaign?.(currentMonthKey, specialCampaignGoals?.[currentMonthKey] === goal ? null : goal)}
+                className={`rounded-full px-2.5 py-1 text-[10px] font-bold transition-colors ${
+                  specialCampaignGoals?.[currentMonthKey] === goal
+                    ? "bg-amber-500 text-white"
+                    : "bg-background text-muted-foreground"
+                }`}
+              >
+                {goal}h
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="grid grid-cols-7 mb-1">
         {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
           <div key={d} className="text-center text-[9px] font-semibold text-muted-foreground py-1">{d}</div>
@@ -278,6 +344,7 @@ function EventMonthGrid({
               const isSelected = day.toDateString() === selectedDate.toDateString();
               const isToday = day.toDateString() === today.toDateString();
               const dayEvents = events.filter((e) => e.date.toDateString() === day.toDateString());
+              const dayTotal = dayTotalFromEvents(dayEvents);
               const hasCompleted = dayEvents.some((e) => e.completed);
               const hasFuture = dayEvents.some((e) => {
                 const d = new Date(e.date); d.setHours(0, 0, 0, 0);
@@ -324,6 +391,11 @@ function EventMonthGrid({
                       ))}
                     </div>
                   )}
+                  {dayTotal.ms > 0 && (
+                    <span className={`text-[8px] font-bold leading-none ${isSelected ? "text-primary-foreground/80" : "text-foreground/70"}`}>
+                      {formatDurationLabel(dayTotal.ms)}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -365,6 +437,9 @@ export function CalendarView({
   travelReminder = { enabled: false, minutes: 0 },
   focusEventId,
   onFocusEventHandled,
+  precursorHours,
+  specialCampaignGoals,
+  onSetSpecialCampaign,
 }: CalendarViewProps) {
   const t = useT();
   const activeContacts = estudiosContacts.filter((c) => c.active);
@@ -1019,6 +1094,9 @@ export function CalendarView({
             onPreviousMonth={() => setMonthOffset((v) => v - 1)}
             onNextMonth={() => setMonthOffset((v) => v + 1)}
             onAddEvent={() => setDialogOpen(true)}
+            precursorHours={precursorHours}
+            specialCampaignGoals={specialCampaignGoals}
+            onSetSpecialCampaign={onSetSpecialCampaign}
           />
         </div>
       )}
