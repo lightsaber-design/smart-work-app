@@ -79,6 +79,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const [timerOverrunNotifiedId, setTimerOverrunNotifiedId] = useState<string | null>(null);
   const [selectedStudySession, setSelectedStudySession] = useState<{ contactId: string; sessionId: string } | null>(null);
   const [calendarFocusEventId, setCalendarFocusEventId] = useState<string | null>(null);
+  const [calendarFocusMonthDate, setCalendarFocusMonthDate] = useState<Date | null>(null);
 
   // Summary sheet state
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -259,6 +260,13 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     setSummaryOpen(false);
     setActiveTab("calendar");
   };
+  const openMonthlyCalendar = () => {
+    const monthDate = new Date(now);
+    monthDate.setDate(1);
+    setCalendarFocusEventId(null);
+    setCalendarFocusMonthDate(monthDate);
+    setActiveTab("calendar");
+  };
   const userName = setup.name || setup.city?.name || "Amigo";
 
   // Weather
@@ -401,7 +409,11 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               <div className="bg-background rounded-t-[32px] -mt-10 relative z-10 px-5 pt-5 pb-4">
 
                 {/* Monthly hours card */}
-                <div className="rounded-3xl border border-border bg-card shadow-xl p-5 mb-6">
+                <button
+                  type="button"
+                  onClick={openMonthlyCalendar}
+                  className="w-full rounded-3xl border border-border bg-card shadow-xl p-5 mb-6 text-left transition-transform active:scale-[0.98]"
+                >
                   <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Total del mes</p>
                   <div className="flex items-end gap-1.5 mt-1.5">
                     <span className="text-4xl font-black text-foreground leading-none">{monthTotalHrs}</span>
@@ -422,7 +434,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                       </p>
                     </div>
                   )}
-                </div>
+                </button>
 
                 {/* Upcoming events */}
                 <div className="flex items-center justify-between mb-3">
@@ -728,6 +740,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 }}
                 focusEventId={calendarFocusEventId}
                 onFocusEventHandled={() => setCalendarFocusEventId(null)}
+                focusMonthDate={calendarFocusMonthDate}
+                onFocusMonthHandled={() => setCalendarFocusMonthDate(null)}
                 precursorHours={setup.precursorHours}
                 specialCampaignGoals={campaign.goals}
                 onSetSpecialCampaign={campaign.setGoal}

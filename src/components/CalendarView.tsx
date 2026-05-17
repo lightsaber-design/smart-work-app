@@ -71,6 +71,8 @@ interface CalendarViewProps {
   travelReminder?: TravelReminderSettings;
   focusEventId?: string | null;
   onFocusEventHandled?: () => void;
+  focusMonthDate?: Date | null;
+  onFocusMonthHandled?: () => void;
   precursorHours?: number | null;
   specialCampaignGoals?: Record<string, CampaignGoal>;
   onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
@@ -126,7 +128,8 @@ function formatDurationLabel(ms: number): string {
 function formatMonthCellDuration(ms: number): string {
   const safeMs = Math.max(0, ms);
   const hrs = Math.floor(safeMs / 3_600_000);
-  const mins = safeMs > 0 ? Math.max(1, Math.floor((safeMs % 3_600_000) / 60_000)) : 0;
+  const rawMins = Math.floor((safeMs % 3_600_000) / 60_000);
+  const mins = safeMs > 0 && hrs === 0 ? Math.max(1, rawMins) : rawMins;
   return `${hrs}:${String(mins).padStart(2, "0")}`;
 }
 
@@ -451,6 +454,8 @@ export function CalendarView({
   travelReminder = { enabled: false, minutes: 0 },
   focusEventId,
   onFocusEventHandled,
+  focusMonthDate,
+  onFocusMonthHandled,
   precursorHours,
   specialCampaignGoals,
   onSetSpecialCampaign,
@@ -572,6 +577,18 @@ export function CalendarView({
     openEdit(event);
     onFocusEventHandled?.();
   }, [focusEventId, events, onFocusEventHandled, openEdit]);
+
+  useEffect(() => {
+    if (!focusMonthDate) return;
+    const target = new Date(focusMonthDate);
+    target.setDate(1);
+    const current = new Date();
+    current.setDate(1);
+    setSelectedDate(target);
+    setMonthOffset((target.getFullYear() - current.getFullYear()) * 12 + target.getMonth() - current.getMonth());
+    setMode("monthly");
+    onFocusMonthHandled?.();
+  }, [focusMonthDate, onFocusMonthHandled]);
 
   const openStudySession = (contact: EstudioContact, session: EstudioSession) => {
     setSelectedStudySession({ contact, session });

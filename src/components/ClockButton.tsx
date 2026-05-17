@@ -213,6 +213,24 @@ export function ClockButton({
   const elapsedHrs = Math.floor(elapsedMs / 3_600_000);
   const elapsedMins = Math.floor((elapsedMs % 3_600_000) / 60_000);
   const elapsedSecs = Math.floor((elapsedMs % 60_000) / 1_000);
+  const elapsedHourDigits = String(elapsedHrs).length;
+  const elapsedNumberClass = elapsedHourDigits >= 4
+    ? "text-[2.45rem]"
+    : elapsedHourDigits >= 3
+    ? "text-[2.95rem]"
+    : "text-6xl";
+  const elapsedMinuteClass = elapsedHourDigits >= 4
+    ? "text-[2.45rem]"
+    : elapsedHourDigits >= 3
+    ? "text-[2.85rem]"
+    : "text-6xl";
+  const elapsedUnitClass = elapsedHourDigits >= 3 ? "text-base mb-0.5" : "text-xl mb-1";
+  const elapsedSecondsClass = elapsedHourDigits >= 4
+    ? "text-xl mb-0.5"
+    : elapsedHourDigits >= 3
+    ? "text-2xl mb-0.5"
+    : "text-3xl mb-1";
+  const elapsedSecondsUnitClass = elapsedHourDigits >= 3 ? "text-xs mb-0.5" : "text-sm mb-1";
   const circleBackground = isRunning ? strongCategoryBackground(meta.gradient) : softCategoryBackground(meta.gradient);
   const circleText = isRunning ? "text-white" : "text-slate-900";
   const mutedCircleText = isRunning ? "text-white/75" : "text-slate-700";
@@ -292,21 +310,21 @@ export function ClockButton({
                 </div>
 
                 {/* Tiempo transcurrido grande */}
-                <div className="flex items-end gap-0.5 leading-none mt-0.5">
+                <div className="flex max-w-[218px] items-end justify-center gap-0.5 leading-none mt-0.5 overflow-hidden">
                   {elapsedHrs > 0 && (
                     <>
-                      <span className="text-6xl font-black tabular-nums text-white">{elapsedHrs}</span>
-                      <span className="text-xl font-bold text-white/75 mb-1">h</span>
+                      <span className={`${elapsedNumberClass} font-black tabular-nums text-white leading-none`}>{elapsedHrs}</span>
+                      <span className={`${elapsedUnitClass} font-bold text-white/75`}>h</span>
                     </>
                   )}
-                  <span className="text-6xl font-black tabular-nums text-white ml-0.5">
+                  <span className={`${elapsedMinuteClass} font-black tabular-nums text-white leading-none ml-0.5`}>
                     {String(elapsedMins).padStart(elapsedHrs > 0 ? 2 : 1, "0")}
                   </span>
-                  <span className="text-xl font-bold text-white/75 mb-1">m</span>
-                  <span className="text-3xl font-bold tabular-nums text-white/70 ml-0.5 mb-1">
+                  <span className={`${elapsedUnitClass} font-bold text-white/75`}>m</span>
+                  <span className={`${elapsedSecondsClass} font-bold tabular-nums text-white/70 ml-0.5`}>
                     {String(elapsedSecs).padStart(2, "0")}
                   </span>
-                  <span className="text-sm font-bold text-white/65 mb-1">s</span>
+                  <span className={`${elapsedSecondsUnitClass} font-bold text-white/65`}>s</span>
                 </div>
 
                 {/* Botón de pausa */}
