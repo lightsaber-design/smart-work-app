@@ -85,11 +85,11 @@ export function LocationMap({ favoritePlaces, onAddFavorite, onDeleteFavorite, d
 
       {/* Bottom sheet */}
       <div
-        className={`fixed left-0 right-0 bottom-0 max-w-md mx-auto z-40 transition-transform duration-300 ease-out ${
+        className={`fixed left-0 right-0 bottom-16 max-w-md mx-auto z-40 transition-transform duration-300 ease-out ${
           addOpen ? "translate-y-0" : "translate-y-full"
         }`}
       >
-        <div className="bg-card rounded-t-3xl border-t border-x shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="bg-card rounded-t-3xl border-t border-x shadow-2xl max-h-[calc(90vh-4rem)] overflow-y-auto">
           {/* Drag handle */}
           <button
             className="sticky top-0 w-full flex flex-col items-center pt-3 pb-2 bg-card rounded-t-3xl"
@@ -98,7 +98,7 @@ export function LocationMap({ favoritePlaces, onAddFavorite, onDeleteFavorite, d
             <div className="w-10 h-1 rounded-full bg-border" />
           </button>
 
-          <div className="px-4 pb-8 space-y-4">
+          <div className="px-4 pb-4 space-y-4">
             <span className="text-base font-semibold text-foreground">{t('map_new_favorite')}</span>
 
             <div className="space-y-2">

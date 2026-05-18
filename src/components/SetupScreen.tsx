@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { MapPin, Clock, User } from "lucide-react";
 import { LANGUAGES, Lang, detectLanguage } from "@/lib/i18n";
 import { useT } from "@/lib/LanguageContext";
+import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
 
 interface SetupScreenProps {
   onComplete: (data: Omit<SetupData, "completed">) => void;
@@ -35,6 +36,8 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
       precursorHours,
       travelTimeEnabled,
       travelTimeMinutes,
+      activityStartHour: DEFAULT_ACTIVITY_START_HOUR,
+      activityEndHour: DEFAULT_ACTIVITY_END_HOUR,
       hasBibleStudies: false,
       language: selectedLang,
     });

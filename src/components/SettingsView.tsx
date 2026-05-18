@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { CitySearch } from "@/components/CitySearch";
 import { PrecursorHoursConfig } from "@/components/PrecursorHoursConfig";
 import { TravelTimeConfig } from "@/components/TravelTimeConfig";
+import { ActivityHoursConfig } from "@/components/ActivityHoursConfig";
 import { SetupData } from "@/hooks/useSetup";
 import { useT } from "@/lib/LanguageContext";
 import { LANGUAGES, Lang } from "@/lib/i18n";
@@ -88,6 +89,14 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
             enabled={setup.travelTimeEnabled}
             minutes={setup.travelTimeMinutes}
             onChange={(value) => onSaveSetup({ travelTimeEnabled: value.enabled, travelTimeMinutes: value.minutes })}
+          />
+        </div>
+
+        <div className="space-y-2 pt-1">
+          <ActivityHoursConfig
+            startHour={setup.activityStartHour}
+            endHour={setup.activityEndHour}
+            onChange={(value) => onSaveSetup({ activityStartHour: value.startHour, activityEndHour: value.endHour })}
           />
         </div>
       </div>

@@ -19,6 +19,7 @@ import { removeJsonValue } from "@/lib/jsonFileStorage";
 import { shouldNotifyEvent } from "@/lib/eventReminders";
 import { findActiveScheduledEvent, getEventEndDate, shouldShowTimerOverrunPrompt } from "@/lib/timerOverrun";
 import { showBrowserNotification } from "@/lib/notifications";
+import { clampTimeValueToHourRange } from "@/lib/activityHours";
 
 const StatsView = lazy(() => import("@/components/StatsView").then((module) => ({ default: module.StatsView })));
 const CalendarView = lazy(() => import("@/components/CalendarView").then((module) => ({ default: module.CalendarView })));
@@ -81,6 +82,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const [calendarFocusEventId, setCalendarFocusEventId] = useState<string | null>(null);
   const [calendarFocusMonthDate, setCalendarFocusMonthDate] = useState<Date | null>(null);
 
+  useEffect(() => {
+    setTimerOverrunSnoozeTime((value) => clampTimeValueToHourRange(value, setup.activityStartHour, setup.activityEndHour));
+  }, [setup.activityStartHour, setup.activityEndHour]);
+
   // Summary sheet state
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryDragOffset, setSummaryDragOffset] = useState<number | null>(null);
@@ -126,7 +131,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
   const postponeTimerOverrunPrompt = () => {
     if (!activeScheduledEvent) return;
-    const [hours, minutes] = timerOverrunSnoozeTime.split(":").map(Number);
+    const safeSnoozeTime = clampTimeValueToHourRange(timerOverrunSnoozeTime, setup.activityStartHour, setup.activityEndHour);
+    const [hours, minutes] = safeSnoozeTime.split(":").map(Number);
     const next = new Date();
     next.setHours(hours, minutes, 0, 0);
     if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1);
@@ -707,6 +713,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   estudios={estudios.contacts.filter((c) => c.active)}
                   onDisplayCategoryChange={setTimerDisplayCategory}
                   onEstudioSession={estudios.addSession}
+                  activityStartHour={setup.activityStartHour}
+                  activityEndHour={setup.activityEndHour}
                 />
               </div>
             </div>
@@ -745,6 +753,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 precursorHours={setup.precursorHours}
                 specialCampaignGoals={campaign.goals}
                 onSetSpecialCampaign={campaign.setGoal}
+                activityStartHour={setup.activityStartHour}
+                activityEndHour={setup.activityEndHour}
               />
             </Suspense>
           </>
@@ -893,7 +903,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 <input
                   type="time"
                   value={timerOverrunSnoozeTime}
+                  min={`${String(setup.activityStartHour).padStart(2, "0")}:00`}
+                  max={`${String(setup.activityEndHour).padStart(2, "0")}:00`}
                   onChange={(e) => setTimerOverrunSnoozeTime(e.target.value)}
+                  onBlur={() => setTimerOverrunSnoozeTime((value) => clampTimeValueToHourRange(value, setup.activityStartHour, setup.activityEndHour))}
                   className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
                 />
                 <button

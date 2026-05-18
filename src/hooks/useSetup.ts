@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Lang, detectLanguage } from "@/lib/i18n";
 import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
+import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR, normalizeActivityHours } from "@/lib/activityHours";
 
 export interface SetupData {
   name?: string;
@@ -8,6 +9,8 @@ export interface SetupData {
   precursorHours: number | null;
   travelTimeEnabled: boolean;
   travelTimeMinutes: number;
+  activityStartHour: number;
+  activityEndHour: number;
   hasBibleStudies: boolean;
   completed: boolean;
   language?: Lang;
@@ -18,6 +21,8 @@ const DEFAULT: SetupData = {
   precursorHours: null,
   travelTimeEnabled: false,
   travelTimeMinutes: 0,
+  activityStartHour: DEFAULT_ACTIVITY_START_HOUR,
+  activityEndHour: DEFAULT_ACTIVITY_END_HOUR,
   hasBibleStudies: false,
   completed: false,
   language: detectLanguage(),
@@ -43,6 +48,7 @@ function parseStoredSetup(value: unknown): SetupData {
   const travelTimeMinutes = typeof value.travelTimeMinutes === "number" && Number.isFinite(value.travelTimeMinutes)
     ? Math.min(180, Math.max(0, Math.round(value.travelTimeMinutes)))
     : DEFAULT.travelTimeMinutes;
+  const activityHours = normalizeActivityHours(value.activityStartHour, value.activityEndHour);
 
   return {
     name: typeof value.name === "string" ? value.name : undefined,
@@ -52,6 +58,8 @@ function parseStoredSetup(value: unknown): SetupData {
       : (value.isPrecursor === true ? 30 : DEFAULT.precursorHours),
     travelTimeEnabled: typeof value.travelTimeEnabled === "boolean" ? value.travelTimeEnabled : DEFAULT.travelTimeEnabled,
     travelTimeMinutes,
+    activityStartHour: activityHours.startHour,
+    activityEndHour: activityHours.endHour,
     hasBibleStudies: typeof value.hasBibleStudies === "boolean" ? value.hasBibleStudies : DEFAULT.hasBibleStudies,
     completed: typeof value.completed === "boolean" ? value.completed : DEFAULT.completed,
     language: isLanguage(value.language) ? value.language : DEFAULT.language,

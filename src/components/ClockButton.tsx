@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { useT } from "@/lib/LanguageContext";
+import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
 
 function getCurrentTimeStr(): string {
   const now = new Date();
@@ -22,6 +23,16 @@ function timeStrToDate(timeStr: string): Date {
   const date = new Date();
   date.setHours(hours, minutes, 0, 0);
   return date;
+}
+
+function clampTimeToActivityRange(value: string, startHour: number, endHour: number): string {
+  const [hours, minutes] = value.split(":").map(Number);
+  const totalMinutes = hours * 60 + minutes;
+  const startMinutes = startHour * 60;
+  const endMinutes = endHour * 60;
+  if (!Number.isFinite(totalMinutes) || totalMinutes < startMinutes) return `${String(startHour).padStart(2, "0")}:00`;
+  if (totalMinutes > endMinutes) return `${String(endHour).padStart(2, "0")}:00`;
+  return value;
 }
 
 function formatSessionDay(isoDate: string): string {
@@ -82,6 +93,8 @@ interface ClockButtonProps {
     contactId: string,
     data?: { time?: string; lesson?: string; notes?: string; files?: SessionFile[]; forceNew?: boolean }
   ) => void;
+  activityStartHour?: number;
+  activityEndHour?: number;
 }
 
 function detectCategoryFromEvents(events: CalendarEvent[]): WorkCategory | null {
@@ -106,6 +119,8 @@ export function ClockButton({
   isRunning, elapsed, onClockIn, onClockOut, onUpdateCategory, onUpdateStartTime,
   calendarEvents, activeCategory, activeEntryId, activeEntryStartTime,
   estudios = [], onDisplayCategoryChange, onEstudioSession,
+  activityStartHour = DEFAULT_ACTIVITY_START_HOUR,
+  activityEndHour = DEFAULT_ACTIVITY_END_HOUR,
 }: ClockButtonProps) {
   const t = useT();
   const detected = detectCategoryFromEvents(calendarEvents);
@@ -149,21 +164,28 @@ export function ClockButton({
     }
   }, [detected, isRunning]);
 
+  useEffect(() => {
+    setCustomTimeStr((value) => clampTimeToActivityRange(value, activityStartHour, activityEndHour));
+  }, [activityStartHour, activityEndHour]);
+
   const handleToggleEdit = () => {
     if (!editingTime) {
       if (isRunning && activeEntryStartTime) {
-        setCustomTimeStr(
-          `${String(activeEntryStartTime.getHours()).padStart(2, "0")}:${String(activeEntryStartTime.getMinutes()).padStart(2, "0")}`
-        );
+        setCustomTimeStr(clampTimeToActivityRange(
+          `${String(activeEntryStartTime.getHours()).padStart(2, "0")}:${String(activeEntryStartTime.getMinutes()).padStart(2, "0")}`,
+          activityStartHour,
+          activityEndHour
+        ));
       } else {
-        setCustomTimeStr(getCurrentTimeStr());
+        setCustomTimeStr(clampTimeToActivityRange(getCurrentTimeStr(), activityStartHour, activityEndHour));
       }
     }
     setEditingTime((v) => !v);
   };
 
   const handleSaveStartTime = () => {
-    onUpdateStartTime(timeStrToDate(customTimeStr));
+    const safeTime = clampTimeToActivityRange(customTimeStr, activityStartHour, activityEndHour);
+    onUpdateStartTime(timeStrToDate(safeTime));
     setEditingTime(false);
   };
 
@@ -189,7 +211,9 @@ export function ClockButton({
         }
       }
     } else {
-      const customTime = editingTime ? timeStrToDate(customTimeStr) : undefined;
+      const customTime = editingTime
+        ? timeStrToDate(clampTimeToActivityRange(customTimeStr, activityStartHour, activityEndHour))
+        : undefined;
       onClockIn(category, customTime);
       setEditingTime(false);
     }
@@ -443,8 +467,11 @@ export function ClockButton({
             <>
               <input
                 type="time"
+                min={`${String(activityStartHour).padStart(2, "0")}:00`}
+                max={`${String(activityEndHour).padStart(2, "0")}:00`}
                 value={customTimeStr}
                 onChange={(e) => setCustomTimeStr(e.target.value)}
+                onBlur={() => setCustomTimeStr((value) => clampTimeToActivityRange(value, activityStartHour, activityEndHour))}
                 className="text-center text-sm font-medium bg-muted border border-border rounded-xl px-3 py-1.5 text-foreground"
               />
               {isRunning && (

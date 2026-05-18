@@ -32,6 +32,7 @@ import { useT } from "@/lib/LanguageContext";
 import { getTravelReminderMinutes, type TravelReminderSettings } from "@/lib/eventReminders";
 import { formatFileSize, saveFile } from "@/lib/sessionFiles";
 import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
+import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
 
 import { CATEGORY_LIST as CATEGORIES, CATEGORY_META, CATEGORY_STYLE } from "@/lib/categories";
 
@@ -76,14 +77,12 @@ interface CalendarViewProps {
   precursorHours?: number | null;
   specialCampaignGoals?: Record<string, CampaignGoal>;
   onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
+  activityStartHour?: number;
+  activityEndHour?: number;
 }
 
 const DAY_NAMES_SHORT = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
-const TIMELINE_START_HOUR = 7;
-const TIMELINE_END_HOUR = 22;
 const HOUR_HEIGHT = 64;
-const HOURS = Array.from({ length: TIMELINE_END_HOUR - TIMELINE_START_HOUR }, (_, i) => i + TIMELINE_START_HOUR);
-const TIMELINE_HEIGHT = (TIMELINE_END_HOUR - TIMELINE_START_HOUR) * HOUR_HEIGHT;
 
 function formatHour(h: number) {
   if (h === 12) return "12 PM";
@@ -133,8 +132,8 @@ function formatMonthCellDuration(ms: number): string {
   return `${hrs}:${String(mins).padStart(2, "0")}`;
 }
 
-function minutesFromTimelineStart(date: Date): number {
-  return (date.getHours() - TIMELINE_START_HOUR) * 60 + date.getMinutes();
+function minutesFromTimelineStart(date: Date, startHour: number): number {
+  return (date.getHours() - startHour) * 60 + date.getMinutes();
 }
 
 function eventEndDate(event: CalendarEvent): Date {
@@ -168,6 +167,29 @@ function eventsOverlap(candidate: AddEventParams, event: CalendarEvent): boolean
 
 function timelineTopFromMinutes(minutes: number): number {
   return (minutes / 60) * HOUR_HEIGHT;
+}
+
+function timeMinutes(value: string): number | null {
+  const [hours, minutes] = value.split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
+function clampTimeToActivityRange(value: string, startHour: number, endHour: number): string {
+  const minutes = timeMinutes(value);
+  const start = startHour * 60;
+  const end = endHour * 60;
+  if (minutes === null || minutes < start) return `${String(startHour).padStart(2, "0")}:00`;
+  if (minutes > end) return `${String(endHour).padStart(2, "0")}:00`;
+  return value;
+}
+
+function activityTimeInputProps(startHour: number, endHour: number) {
+  return {
+    min: `${String(startHour).padStart(2, "0")}:00`,
+    max: `${String(endHour).padStart(2, "0")}:00`,
+    step: 60,
+  };
 }
 
 function dateInputValue(date: Date): string {
@@ -460,8 +482,13 @@ export function CalendarView({
   precursorHours,
   specialCampaignGoals,
   onSetSpecialCampaign,
+  activityStartHour = DEFAULT_ACTIVITY_START_HOUR,
+  activityEndHour = DEFAULT_ACTIVITY_END_HOUR,
 }: CalendarViewProps) {
   const t = useT();
+  const timelineHours = Array.from({ length: activityEndHour - activityStartHour }, (_, i) => i + activityStartHour);
+  const timelineDurationMinutes = (activityEndHour - activityStartHour) * 60;
+  const timelineHeight = (activityEndHour - activityStartHour) * HOUR_HEIGHT;
   const activeContacts = estudiosContacts.filter(hasActiveStudyWork);
   const singleActiveContactId = activeContacts.length === 1 ? activeContacts[0].id : "";
   const [mode, setMode] = useState<CalendarMode>("daily");
@@ -509,6 +536,14 @@ export function CalendarView({
   const [studySessionPendingFiles, setStudySessionPendingFiles] = useState<{ file: File; id: string }[]>([]);
   const [savingStudySession, setSavingStudySession] = useState(false);
 
+  useEffect(() => {
+    setTime((value) => clampTimeToActivityRange(value, activityStartHour, activityEndHour));
+    setEditTime((value) => clampTimeToActivityRange(value, activityStartHour, activityEndHour));
+    setEndTime((value) => value ? clampTimeToActivityRange(value, activityStartHour, activityEndHour) : value);
+    setEditEndTime((value) => value ? clampTimeToActivityRange(value, activityStartHour, activityEndHour) : value);
+    setStudySessionTime((value) => value ? clampTimeToActivityRange(value, activityStartHour, activityEndHour) : value);
+  }, [activityStartHour, activityEndHour]);
+
   // Filtered categories: hide Estudio if no active contacts
   const availableCategories = CATEGORIES.filter(
     (cat) => cat !== "Estudio" || activeContacts.length > 0
@@ -535,8 +570,8 @@ export function CalendarView({
     .sort((a, b) => a.time.localeCompare(b.time));
   const { hrs: dayTotalHrs, mins: dayTotalMins, ms: dayTotalMs } = dayTotalFromEvents(selectedEvents);
   const isSelectedToday = selectedDate.toDateString() === new Date().toDateString();
-  const nowMinutes = isSelectedToday ? minutesFromTimelineStart(new Date()) : null;
-  const nowTop = nowMinutes == null ? null : timelineTopFromMinutes(Math.max(0, Math.min((TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60, nowMinutes)));
+  const nowMinutes = isSelectedToday ? minutesFromTimelineStart(new Date(), activityStartHour) : null;
+  const nowTop = nowMinutes == null ? null : timelineTopFromMinutes(Math.max(0, Math.min(timelineDurationMinutes, nowMinutes)));
   const firstSelectedEventMs = selectedEvents[0]?.date.getTime() ?? null;
 
   const monthBase = new Date();
@@ -615,6 +650,7 @@ export function CalendarView({
 
   const saveSelectedStudySession = async () => {
     if (!selectedStudySession || savingStudySession) return;
+    const safeStudySessionTime = clampTimeToActivityRange(studySessionTime, activityStartHour, activityEndHour);
     setSavingStudySession(true);
     try {
       const files = [...studySessionFiles];
@@ -624,7 +660,7 @@ export function CalendarView({
       }
       onUpdateEstudioSession?.(selectedStudySession.contact.id, selectedStudySession.session.id, {
         date: studySessionDate,
-        time: studySessionTime,
+        time: safeStudySessionTime,
         lesson: studySessionLesson.trim() || undefined,
         notes: studySessionNotes.trim() || undefined,
         files,
@@ -637,7 +673,9 @@ export function CalendarView({
 
   const handleSaveEdit = () => {
     if (!editEvent) return;
-    const [h, m] = editTime.split(":").map(Number);
+    const safeEditTime = clampTimeToActivityRange(editTime, activityStartHour, activityEndHour);
+    const safeEditEndTime = editEndTime ? clampTimeToActivityRange(editEndTime, activityStartHour, activityEndHour) : "";
+    const [h, m] = safeEditTime.split(":").map(Number);
     const newDate = new Date(editEvent.date);
     newDate.setHours(h, m, 0, 0);
     const isPastEvent = newDate.getTime() < Date.now();
@@ -648,7 +686,7 @@ export function CalendarView({
       : parseInt(editReminder) || 15;
     onUpdateEvent(editEvent.id, {
       date: newDate,
-      endTime: editEndTime || undefined,
+      endTime: safeEditEndTime || undefined,
       category: editCategory,
       reminderMinutesBefore,
       notified: isPastEvent ? true : undefined,
@@ -745,9 +783,11 @@ export function CalendarView({
 
   const handleAdd = async () => {
     if (savingAdd) return;
-    const [hours, minutes] = time.split(":").map(Number);
+    const safeTime = clampTimeToActivityRange(time, activityStartHour, activityEndHour);
+    const safeEndTime = endTime ? clampTimeToActivityRange(endTime, activityStartHour, activityEndHour) : "";
+    const [safeHours, safeMinutes] = safeTime.split(":").map(Number);
     const date = new Date(selectedDate);
-    date.setHours(hours, minutes, 0, 0);
+    date.setHours(safeHours, safeMinutes, 0, 0);
     const eventLocation =
       locationMode === "custom"
         ? location
@@ -761,7 +801,7 @@ export function CalendarView({
       : travelReminder.enabled
       ? getTravelReminderMinutes(date, events, travelReminder)
       : manualReminder;
-    const params: AddEventParams = { date, endTime: endTime || undefined, category, reminderMinutesBefore, location: eventLocation, recurrence };
+    const params: AddEventParams = { date, endTime: safeEndTime || undefined, category, reminderMinutesBefore, location: eventLocation, recurrence };
 
     const studyContact = category === "Estudio"
       ? activeContacts.find((c) => c.id === selectedEstudioContactId) ?? (activeContacts.length === 1 ? activeContacts[0] : null)
@@ -841,13 +881,13 @@ export function CalendarView({
   useEffect(() => {
     if (mode !== "daily" || !timelineScrollRef.current) return;
     const targetMinutes = isSelectedToday
-      ? minutesFromTimelineStart(new Date())
+      ? minutesFromTimelineStart(new Date(), activityStartHour)
       : firstSelectedEventMs != null
-      ? minutesFromTimelineStart(new Date(firstSelectedEventMs))
+      ? minutesFromTimelineStart(new Date(firstSelectedEventMs), activityStartHour)
       : 0;
     const top = Math.max(0, timelineTopFromMinutes(targetMinutes) - 120);
     timelineScrollRef.current.scrollTo({ top, behavior: "smooth" });
-  }, [mode, selectedDate, isSelectedToday, firstSelectedEventMs]);
+  }, [mode, selectedDate, isSelectedToday, firstSelectedEventMs, activityStartHour]);
 
   return (
     <div className="flex flex-col pb-24">
@@ -984,15 +1024,15 @@ export function CalendarView({
             className="overflow-y-auto"
             style={{ maxHeight: "60vh" }}
           >
-            <div className="flex relative" style={{ minHeight: TIMELINE_HEIGHT }}>
+            <div className="flex relative" style={{ minHeight: timelineHeight }}>
 
               {/* Hour labels column */}
-              <div className="w-14 flex-shrink-0 relative" style={{ height: TIMELINE_HEIGHT }}>
-                {HOURS.map((h) => (
+              <div className="w-14 flex-shrink-0 relative" style={{ height: timelineHeight }}>
+                {timelineHours.map((h) => (
                   <div
                     key={h}
                     className="absolute left-0 right-0 flex items-start justify-end pr-3"
-                    style={{ top: (h - TIMELINE_START_HOUR) * HOUR_HEIGHT - 8 }}
+                    style={{ top: (h - activityStartHour) * HOUR_HEIGHT - 8 }}
                   >
                     <span className="text-[9px] text-muted-foreground/70 font-medium leading-none">
                       {formatHour(h)}
@@ -1002,14 +1042,14 @@ export function CalendarView({
               </div>
 
               {/* Contenido de la línea de tiempo con borde vertical */}
-              <div className="flex-1 relative border-l border-border" style={{ height: TIMELINE_HEIGHT }}>
+              <div className="flex-1 relative border-l border-border" style={{ height: timelineHeight }}>
 
                 {/* Hour grid lines */}
-                {HOURS.map((h) => (
+                {timelineHours.map((h) => (
                   <div
                     key={h}
                     className="absolute left-0 right-0 border-t border-border/30"
-                    style={{ top: (h - TIMELINE_START_HOUR) * HOUR_HEIGHT }}
+                    style={{ top: (h - activityStartHour) * HOUR_HEIGHT }}
                   />
                 ))}
 
@@ -1026,8 +1066,8 @@ export function CalendarView({
 
                 {/* Calendar events */}
                 {selectedEvents.map((event) => {
-                  const startMins = minutesFromTimelineStart(event.date);
-                  const clampedStart = Math.max(0, Math.min((TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60 - 30, startMins));
+                  const startMins = minutesFromTimelineStart(event.date, activityStartHour);
+                  const clampedStart = Math.max(0, Math.min(timelineDurationMinutes - 30, startMins));
                   const endDate = eventEndDate(event);
                   const durationMins = Math.max(30, (endDate.getTime() - event.date.getTime()) / 60000);
                   const top = timelineTopFromMinutes(clampedStart);
@@ -1092,8 +1132,8 @@ export function CalendarView({
                   const [hh, mm] = s.time.split(":").map(Number);
                   const sessionDate = new Date(selectedDate);
                   sessionDate.setHours(hh, mm, 0, 0);
-                  const startMins = minutesFromTimelineStart(sessionDate);
-                  if (startMins < 0 || startMins >= (TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60) return null;
+                  const startMins = minutesFromTimelineStart(sessionDate, activityStartHour);
+                  if (startMins < 0 || startMins >= timelineDurationMinutes) return null;
                   const top = timelineTopFromMinutes(startMins);
                   return (
                     <button
@@ -1235,11 +1275,23 @@ export function CalendarView({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>{t("cal_start_time")}</Label>
-                <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+                <Input
+                  type="time"
+                  {...activityTimeInputProps(activityStartHour, activityEndHour)}
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  onBlur={() => setTime((value) => clampTimeToActivityRange(value, activityStartHour, activityEndHour))}
+                />
               </div>
               <div className="space-y-2">
                 <Label>{t("cal_end_time")} <span className="text-muted-foreground text-xs">({t("cal_optional")})</span></Label>
-                <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+                <Input
+                  type="time"
+                  {...activityTimeInputProps(activityStartHour, activityEndHour)}
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  onBlur={() => setEndTime((value) => value ? clampTimeToActivityRange(value, activityStartHour, activityEndHour) : value)}
+                />
               </div>
             </div>
             <div className="space-y-2">
@@ -1375,7 +1427,13 @@ export function CalendarView({
                   </div>
                   <div className="space-y-2">
                     <Label>Hora</Label>
-                    <Input type="time" value={studySessionTime} onChange={(event) => setStudySessionTime(event.target.value)} />
+                    <Input
+                      type="time"
+                      {...activityTimeInputProps(activityStartHour, activityEndHour)}
+                      value={studySessionTime}
+                      onChange={(event) => setStudySessionTime(event.target.value)}
+                      onBlur={() => setStudySessionTime((value) => value ? clampTimeToActivityRange(value, activityStartHour, activityEndHour) : value)}
+                    />
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -1509,11 +1567,23 @@ export function CalendarView({
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label>{t("cal_start_time")}</Label>
-                    <Input type="time" value={editTime} onChange={(e) => setEditTime(e.target.value)} />
+                    <Input
+                      type="time"
+                      {...activityTimeInputProps(activityStartHour, activityEndHour)}
+                      value={editTime}
+                      onChange={(e) => setEditTime(e.target.value)}
+                      onBlur={() => setEditTime((value) => clampTimeToActivityRange(value, activityStartHour, activityEndHour))}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>{t("cal_end_time")} <span className="text-muted-foreground text-xs">({t("cal_optional")})</span></Label>
-                    <Input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} />
+                    <Input
+                      type="time"
+                      {...activityTimeInputProps(activityStartHour, activityEndHour)}
+                      value={editEndTime}
+                      onChange={(e) => setEditEndTime(e.target.value)}
+                      onBlur={() => setEditEndTime((value) => value ? clampTimeToActivityRange(value, activityStartHour, activityEndHour) : value)}
+                    />
                   </div>
                 </div>
                 {!isEditingPastEvent && (
