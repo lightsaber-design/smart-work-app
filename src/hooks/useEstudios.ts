@@ -189,6 +189,21 @@ function dateKey(date: Date): string {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
+function sessionSlotKey(session: Pick<EstudioSession, "date" | "time">): string {
+  return `${dateKey(new Date(session.date))}-${session.time}`;
+}
+
+function dedupePendingSessions(sessions: EstudioSession[]): EstudioSession[] {
+  const seen = new Set<string>();
+  return sessions.filter((session) => {
+      if (!session.pending) return true;
+      const key = sessionSlotKey(session);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 export function useEstudios() {
   const [contacts, setContacts] = useState<EstudioContact[]>([]);
 
@@ -200,7 +215,10 @@ export function useEstudios() {
     readJsonValue<unknown[]>("estudios", [])
       .then((value) => {
         if (!Array.isArray(value)) throw new Error("bad format");
-        const parsed = value.map(parseStoredContact).filter((contact): contact is EstudioContact => contact !== null);
+        const parsed = value
+          .map(parseStoredContact)
+          .filter((contact): contact is EstudioContact => contact !== null)
+          .map((contact) => ({ ...contact, sessions: dedupePendingSessions(contact.sessions) }));
         const filled = parsed.map(fillPendingSessions);
         setContacts(filled);
         if (filled.some((contact, index) => contact !== parsed[index])) {
@@ -352,7 +370,7 @@ export function useEstudios() {
         c.id === contactId
           ? (() => {
               let targetDate: Date | null = null;
-              const sessions = c.sessions
+              const sessions = dedupePendingSessions(c.sessions
                 .map((s) => {
                   if (s.id !== sessionId) return s;
                   const [year, month, day] = data.date.split("-").map(Number);
@@ -370,8 +388,8 @@ export function useEstudios() {
                 })
                 .filter((s) => {
                   if (!targetDate || s.id === sessionId || !s.pending) return true;
-                  return dateKey(new Date(s.date)) !== dateKey(targetDate);
-                });
+                  return sessionSlotKey(s) !== `${dateKey(targetDate)}-${data.time}`;
+                }));
               return { ...c, sessions };
             })()
           : c
@@ -403,23 +421,24 @@ export function useEstudios() {
               .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] ?? null;
 
         if (nextPending) {
+          const sessions = dedupePendingSessions(c.sessions.map((session) =>
+            session.id === nextPending.id ? { ...session, ...replacement } : session
+          ));
           return {
             ...c,
-            sessions: c.sessions.map((session) =>
-              session.id === nextPending.id ? { ...session, ...replacement } : session
-            ),
+            sessions,
           };
         }
 
         return {
           ...c,
-          sessions: [
+          sessions: dedupePendingSessions([
             ...c.sessions,
             {
               id: generateId(),
               ...replacement,
             },
-          ],
+          ]),
         };
       });
       persist(updated);

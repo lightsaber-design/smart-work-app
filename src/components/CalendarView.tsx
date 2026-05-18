@@ -266,7 +266,8 @@ function EventMonthGrid({
     (event) => event.completed && event.date.getMonth() === month && event.date.getFullYear() === year
   );
   const { ms: monthTotalMs } = dayTotalFromEvents(monthEvents);
-  const monthGoal = precursorHours != null ? precursorHours : specialCampaignGoals?.[currentMonthKey] ?? null;
+  const campaignGoal = specialCampaignGoals?.[currentMonthKey] ?? null;
+  const monthGoal = precursorHours != null ? precursorHours : campaignGoal;
   const monthGoalPct = monthGoal ? Math.min(100, Math.round((monthTotalMs / (monthGoal * 3_600_000)) * 100)) : 0;
   const canSetCampaign = precursorHours === null && typeof onSetSpecialCampaign === "function";
 
@@ -326,18 +327,18 @@ function EventMonthGrid({
               <span className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">Campaña especial</span>
             </div>
             <div className="flex items-center gap-2">
-            {([15, 30] as CampaignGoal[]).map((goal) => (
+            {([null, 15, 30] as const).map((goal) => (
               <button
-                key={goal}
+                key={String(goal)}
                 type="button"
-                onClick={() => onSetSpecialCampaign?.(currentMonthKey, specialCampaignGoals?.[currentMonthKey] === goal ? null : goal)}
+                onClick={() => onSetSpecialCampaign?.(currentMonthKey, goal as CampaignGoal | null)}
                 className={`rounded-full px-2.5 py-1 text-[10px] font-bold transition-colors ${
-                  specialCampaignGoals?.[currentMonthKey] === goal
+                  campaignGoal === goal
                     ? "bg-amber-500 text-white"
                     : "bg-background text-muted-foreground"
                 }`}
               >
-                {goal}h
+                {goal === null ? "No" : `${goal}h`}
               </button>
             ))}
             </div>

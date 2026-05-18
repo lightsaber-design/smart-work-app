@@ -335,7 +335,12 @@ export function StatsView({
           {/* Enviar Informe mensual */}
           {(() => {
             const estudiosCount = completedCountByCategory["Estudio"] ?? 0;
-            const msg = [`Horas: ${monthlyReport.reportedHours}h`, `Estudios: ${estudiosCount}`].join("\n");
+            const monthLabel = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+            const msg = [
+              `📊 Informe ${monthLabel}`,
+              `⏱️ Horas: ${monthlyReport.reportedHours}h`,
+              `📖 Estudios: ${estudiosCount}`,
+            ].join("\n");
             return (
               <button
                 onClick={() => {
