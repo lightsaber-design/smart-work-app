@@ -14,7 +14,13 @@ interface NominatimResult {
   display_name: string;
 }
 
-function distanceFromCenter(result: NominatimResult, center: { lat: number; lng: number }): number {
+interface SearchCenter {
+  lat: number;
+  lng: number;
+  name?: string;
+}
+
+function distanceFromCenter(result: NominatimResult, center: SearchCenter): number {
   const lat = parseFloat(result.lat);
   const lng = parseFloat(result.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return Number.POSITIVE_INFINITY;
@@ -29,9 +35,56 @@ function distanceFromCenter(result: NominatimResult, center: { lat: number; lng:
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function sortByNearestCity(results: NominatimResult[], center?: { lat: number; lng: number }): NominatimResult[] {
+function sortByNearestCity(results: NominatimResult[], center?: SearchCenter): NominatimResult[] {
   if (!center) return results;
   return results.slice().sort((a, b) => distanceFromCenter(a, center) - distanceFromCenter(b, center));
+}
+
+function cityViewbox(center: SearchCenter, radiusKm = 60): string {
+  const latDelta = radiusKm / 111;
+  const lngDelta = radiusKm / (111 * Math.max(0.2, Math.cos((center.lat * Math.PI) / 180)));
+  const left = center.lng - lngDelta;
+  const right = center.lng + lngDelta;
+  const top = center.lat + latDelta;
+  const bottom = center.lat - latDelta;
+  return `${left},${top},${right},${bottom}`;
+}
+
+function resultKey(result: NominatimResult): string {
+  return `${Number.parseFloat(result.lat).toFixed(5)}:${Number.parseFloat(result.lon).toFixed(5)}:${result.display_name}`;
+}
+
+function mergeResults(primary: NominatimResult[], fallback: NominatimResult[]): NominatimResult[] {
+  const seen = new Set<string>();
+  const merged: NominatimResult[] = [];
+  [...primary, ...fallback].forEach((result) => {
+    const key = resultKey(result);
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(result);
+  });
+  return merged;
+}
+
+async function fetchNominatim(query: string, options: { center?: SearchCenter; bounded?: boolean; limit?: number; signal?: AbortSignal }): Promise<NominatimResult[]> {
+  const params = new URLSearchParams({
+    format: "json",
+    addressdetails: "1",
+    limit: String(options.limit ?? 5),
+    q: query,
+  });
+
+  if (options.center) {
+    params.set("viewbox", cityViewbox(options.center));
+    if (options.bounded) params.set("bounded", "1");
+  }
+
+  const res = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+    referrerPolicy: "no-referrer",
+    signal: options.signal,
+  });
+  if (!res.ok) return [];
+  return (await res.json()) as NominatimResult[];
 }
 
 // Corrige el icono por defecto de Leaflet cuando se empaqueta con Vite.
@@ -45,7 +98,7 @@ L.Icon.Default.mergeOptions({
 interface LocationPickerProps {
   value?: { lat: number; lng: number };
   onChange: (location: { lat: number; lng: number } | undefined) => void;
-  defaultCenter?: { lat: number; lng: number };
+  defaultCenter?: SearchCenter;
 }
 
 function ClickHandler({ onClick }: { onClick: (lat: number, lng: number) => void }) {
@@ -86,15 +139,19 @@ export function LocationPicker({ value, onChange, defaultCenter }: LocationPicke
     const timeout = window.setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(query)}`,
-          { referrerPolicy: "no-referrer", signal: controller.signal }
+        const localResults = defaultCenter
+          ? sortByNearestCity(
+              await fetchNominatim(query, { center: defaultCenter, bounded: true, limit: 6, signal: controller.signal }),
+              defaultCenter
+            )
+          : [];
+        const broaderResults = sortByNearestCity(
+          await fetchNominatim(query, { center: defaultCenter, bounded: false, limit: 8, signal: controller.signal }),
+          defaultCenter
         );
-        if (!res.ok) return;
-        const data = (await res.json()) as NominatimResult[];
-        const sorted = sortByNearestCity(data, defaultCenter);
-        setSuggestions(sorted);
-        setSuggestionsOpen(sorted.length > 0);
+        const nextSuggestions = mergeResults(localResults, broaderResults).slice(0, 8);
+        setSuggestions(nextSuggestions);
+        setSuggestionsOpen(nextSuggestions.length > 0);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
         // La busqueda depende de red externa; si falla dejamos el campo tal como esta.
@@ -119,12 +176,11 @@ export function LocationPicker({ value, onChange, defaultCenter }: LocationPicke
     }
     setSearching(true);
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(search)}&limit=1`,
-        { referrerPolicy: "no-referrer" }
-      );
-      if (!res.ok) return;
-      const data = sortByNearestCity((await res.json()) as NominatimResult[], defaultCenter);
+      const localResults = defaultCenter
+        ? sortByNearestCity(await fetchNominatim(search, { center: defaultCenter, bounded: true, limit: 3 }), defaultCenter)
+        : [];
+      const broaderResults = sortByNearestCity(await fetchNominatim(search, { center: defaultCenter, bounded: false, limit: 5 }), defaultCenter);
+      const data = mergeResults(localResults, broaderResults);
       const firstResult = data[0];
       if (firstResult) {
         applyResult(firstResult);
