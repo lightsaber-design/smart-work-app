@@ -55,11 +55,11 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
     const protectedUpdates = categoryIsDefault && ("name" in updates || "color" in updates || "support" in updates);
     if (protectedUpdates) return;
     if (name === "Estudio" && updates.active === true && !hasActiveStudies) {
-      window.alert("Create at least one active study before enabling Study.");
+      window.alert(t("settings_category_study_required"));
       return;
     }
     if (updates.active === false && categories.filter((category) => category.active).length <= 1) {
-      window.alert("Keep at least one category active.");
+      window.alert(t("settings_category_keep_one"));
       return;
     }
     saveCategories(categories.map((category) => (category.name === name ? { ...category, ...updates } : category)));
@@ -73,7 +73,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
       return;
     }
     if (isDefaultCategoryName(nextName) || categories.some((category) => category.name.toLowerCase() === nextName.toLowerCase())) {
-      window.alert("A category with this name already exists.");
+      window.alert(t("settings_category_duplicate"));
       return;
     }
     saveCategories(categories.map((category) => (category.name === currentName ? { ...category, name: nextName } : category)));
@@ -84,10 +84,10 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
   const deleteCategory = (name: string) => {
     if (isDefaultCategoryName(name)) return;
     if (categories.find((category) => category.name === name)?.active && categories.filter((category) => category.active).length <= 1) {
-      window.alert("Keep at least one category active.");
+      window.alert(t("settings_category_keep_one"));
       return;
     }
-    if (!window.confirm("Delete this category? Existing activities keep their label.")) return;
+    if (!window.confirm(t("settings_category_delete_confirm"))) return;
     saveCategories(categories.filter((category) => category.name !== name));
   };
 
@@ -95,7 +95,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
     const name = newCategoryName.trim();
     if (!name) return;
     if (categories.some((category) => category.name.toLowerCase() === name.toLowerCase())) {
-      window.alert("A category with this name already exists.");
+      window.alert(t("settings_category_duplicate"));
       return;
     }
     saveCategories([...categories, { name, color: newCategoryColor, active: true, support: newCategorySupport }]);
@@ -180,10 +180,10 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
         >
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground">Categories</h3>
+              <h3 className="text-sm font-semibold text-foreground">{t("settings_categories")}</h3>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {activeCategoryCount} active · Timer, Calendar, Summary, and Stats
+              {t("settings_categories_summary", { count: activeCategoryCount })}
             </p>
             <div className="mt-2 flex gap-1.5">
               {visibleCategories.slice(0, 8).map((category) => (
@@ -229,11 +229,11 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                     />
                   </div>
                   {isDefaultCategoryName(category.name) ? (
-                    <p className="text-xs text-muted-foreground">Base category. You can only include or hide it.</p>
+                    <p className="text-xs text-muted-foreground">{t("settings_category_base_hint")}</p>
                   ) : (
                     <>
                       <div className="flex items-center justify-between gap-3">
-                        <Label className="text-xs text-muted-foreground">Color</Label>
+                        <Label className="text-xs text-muted-foreground">{t("settings_category_color")}</Label>
                         <div className="flex gap-1.5">
                           {CATEGORY_COLORS.map((color) => (
                             <button
@@ -242,7 +242,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                               onClick={() => updateCategory(category.name, { color })}
                               className="flex h-6 w-6 items-center justify-center rounded-full border border-border"
                               style={{ backgroundColor: color }}
-                              aria-label={`Use ${color}`}
+                              aria-label={t("settings_category_use_color", { color })}
                             >
                               {category.color === color && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
                             </button>
@@ -250,7 +250,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                         </div>
                       </div>
                       <div className="flex items-center justify-between gap-3">
-                        <Label className="text-xs text-muted-foreground">Support category, capped at 55h/month</Label>
+                        <Label className="text-xs text-muted-foreground">{t("settings_category_support_cap")}</Label>
                         <Switch
                           checked={category.support}
                           onCheckedChange={(support) => updateCategory(category.name, { support })}
@@ -268,7 +268,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                           }}
                         >
                           <Pencil className="h-3.5 w-3.5" />
-                          Rename
+                          {t("settings_category_rename")}
                         </Button>
                         <Button
                           type="button"
@@ -278,7 +278,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                           onClick={() => deleteCategory(category.name)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                          Delete
+                          {t("settings_category_delete")}
                         </Button>
                       </div>
                     </>
@@ -288,14 +288,14 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
             </div>
 
             <div className="rounded-lg border border-dashed border-border p-3 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground">Add category</Label>
+              <Label className="text-xs font-semibold text-muted-foreground">{t("settings_category_add")}</Label>
               <Input
                 value={newCategoryName}
                 onChange={(event) => setNewCategoryName(event.target.value)}
-                placeholder="Name"
+                placeholder={t("settings_category_name")}
               />
               <div className="flex items-center justify-between gap-3">
-                <Label className="text-xs text-muted-foreground">Color</Label>
+                <Label className="text-xs text-muted-foreground">{t("settings_category_color")}</Label>
                 <div className="flex gap-1.5">
                   {CATEGORY_COLORS.map((color) => (
                     <button
@@ -304,7 +304,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                       onClick={() => setNewCategoryColor(color)}
                       className="flex h-6 w-6 items-center justify-center rounded-full border border-border"
                       style={{ backgroundColor: color }}
-                      aria-label={`Use ${color}`}
+                      aria-label={t("settings_category_use_color", { color })}
                     >
                       {newCategoryColor === color && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
                     </button>
@@ -312,12 +312,12 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                 </div>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <Label className="text-xs text-muted-foreground">Support category by default</Label>
+                <Label className="text-xs text-muted-foreground">{t("settings_category_support_default")}</Label>
                 <Switch checked={newCategorySupport} onCheckedChange={setNewCategorySupport} />
               </div>
               <Button size="sm" onClick={addCategory} className="w-full">
                 <Plus className="h-4 w-4" />
-                Add category
+                {t("settings_category_add")}
               </Button>
             </div>
           </div>
@@ -354,7 +354,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
           <div className="flex items-center justify-between">
             <Label className="flex items-center gap-2 text-sm text-foreground cursor-pointer" htmlFor="dark-mode-toggle">
               <Moon className="w-4 h-4 text-primary" />
-              Modo nocturno
+              {t("settings_dark_mode")}
             </Label>
             <Switch id="dark-mode-toggle" checked={!!isDark} onCheckedChange={onToggleDark} />
           </div>
@@ -371,10 +371,10 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
             <FileJson className="h-4 w-4 text-primary" />
             <div className="min-w-0">
               <p className="text-sm font-medium text-foreground">
-                {storage.connected ? "JSON data file" : "Local browser storage"}
+                {storage.connected ? t("settings_json_file") : t("settings_local_storage")}
               </p>
               <p className="text-xs text-muted-foreground truncate">
-                {storage.fileName ?? "Data is saved on this device"}
+                {storage.fileName ?? t("settings_data_saved_device")}
               </p>
             </div>
           </div>
@@ -384,7 +384,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
               className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
             >
               <FolderOpen className="w-4 h-4" />
-              {storage.connected ? "Open another JSON file" : "Save data to a JSON file"}
+              {storage.connected ? t("settings_open_json_file") : t("settings_save_json_file")}
             </button>
           )}
         </div>

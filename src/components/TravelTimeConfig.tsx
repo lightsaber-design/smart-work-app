@@ -1,6 +1,7 @@
 import { Clock } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { useT } from "@/lib/LanguageContext";
 
 interface TravelTimeConfigProps {
   enabled: boolean;
@@ -14,6 +15,7 @@ function normalizeMinutes(value: number) {
 }
 
 export function TravelTimeConfig({ enabled, minutes, onChange }: TravelTimeConfigProps) {
+  const t = useT();
   const normalizedMinutes = normalizeMinutes(minutes);
 
   return (
@@ -21,7 +23,7 @@ export function TravelTimeConfig({ enabled, minutes, onChange }: TravelTimeConfi
       <div className="flex items-center justify-between gap-3">
         <Label className="flex items-center gap-2 text-sm text-foreground cursor-pointer" htmlFor="travel-time-toggle">
           <Clock className="w-4 h-4 text-primary" />
-          Count travel time reminders
+          {t("travel_time_title")}
         </Label>
         <Switch
           id="travel-time-toggle"
@@ -32,7 +34,7 @@ export function TravelTimeConfig({ enabled, minutes, onChange }: TravelTimeConfi
       {enabled && (
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground" htmlFor="travel-time-minutes">
-            Usual travel time
+            {t("travel_time_minutes")}
           </Label>
           <div className="flex items-center gap-2">
             <input
@@ -45,10 +47,10 @@ export function TravelTimeConfig({ enabled, minutes, onChange }: TravelTimeConfi
               value={normalizedMinutes}
               onChange={(event) => onChange({ enabled, minutes: normalizeMinutes(Number(event.target.value)) })}
             />
-            <span className="text-sm text-muted-foreground">minutes before each activity</span>
+            <span className="text-sm text-muted-foreground">{t("travel_time_before")}</span>
           </div>
           <p className="text-xs text-muted-foreground">
-            If activities are close together, the reminder is shortened so it does not overlap the previous activity.
+            {t("travel_time_hint")}
           </p>
         </div>
       )}

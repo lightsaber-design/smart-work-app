@@ -332,7 +332,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       .sort((a, b) => a.date.getTime() - b.date.getTime());
     const nextDayKey = upcoming[0]?.date.toDateString();
     return nextDayKey ? upcoming.filter((event) => event.date.toDateString() === nextDayKey) : [];
-  }, [calendarEvents, todayKey]);
+  }, [calendarEvents]);
   const summaryEvents = todayEvents.length > 0 ? todayEvents : upcomingSummaryEvents;
   const showingUpcomingEvents = todayEvents.length === 0 && upcomingSummaryEvents.length > 0;
   const groupedSummaryEvents = useMemo(() => {

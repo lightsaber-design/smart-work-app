@@ -114,7 +114,7 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="E.g.: Marco, Ana..."
+                placeholder={t("setup_name_placeholder")}
               />
             </div>
           )}
@@ -157,10 +157,10 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
         <div className="flex gap-2">
           <Button type="button" variant="outline" onClick={goBack} disabled={step === 0} className="flex-1" size="lg">
             <ChevronLeft className="h-4 w-4" />
-            Back
+            {t("setup_back")}
           </Button>
           <Button onClick={goNext} className="flex-1" size="lg">
-            {step === TOTAL_STEPS - 1 ? t("setup_start") : "Next"}
+            {step === TOTAL_STEPS - 1 ? t("setup_start") : t("setup_next")}
             {step !== TOTAL_STEPS - 1 && <ChevronRight className="h-4 w-4" />}
           </Button>
         </div>
