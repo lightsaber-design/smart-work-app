@@ -183,7 +183,7 @@ export function StatsView({
                           : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-transparent hover:border-amber-400"
                       }`}
                     >
-                      {opt === null ? "No" : `${opt}h`}
+                      {opt === null ? t("common_no") : `${opt}h`}
                     </button>
                   ))}
                 </div>
@@ -192,7 +192,9 @@ export function StatsView({
                     <div className="h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden mb-1.5">
                       <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${pct}%` }} />
                     </div>
-                    <p className="text-xs text-amber-700/70 dark:text-amber-400/70">{msToLabel(monthlyFilteredMs)} de {campaignGoal}h</p>
+                    <p className="text-xs text-amber-700/70 dark:text-amber-400/70">
+                      {t("stats_of_goal", { value: msToLabel(monthlyFilteredMs), goal: `${campaignGoal}h` })}
+                    </p>
                   </>
                 )}
               </div>
@@ -259,7 +261,7 @@ export function StatsView({
                       />
                     </div>
                     <p className={`text-xs mt-1.5 ${goalDone ? "text-green-600/70 dark:text-green-400/70" : "text-blue-600/70 dark:text-blue-400/70"}`}>
-                      {msToLabel(monthlyFilteredMs)} de {precursorHours}h
+                      {t("stats_of_goal", { value: msToLabel(monthlyFilteredMs), goal: `${precursorHours}h` })}
                     </p>
                   </div>
                 )}
