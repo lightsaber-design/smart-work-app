@@ -1,6 +1,7 @@
 import { Home, BarChart3, Clock, CalendarDays, User } from "lucide-react";
 import { CategoryConfig, getCategoryMeta } from "@/lib/categories";
 import { EventCategory } from "@/hooks/useCalendarEvents";
+import { useT } from "@/lib/LanguageContext";
 
 export type AppTab = "home" | "summary" | "timer" | "calendar" | "profile" | "estudios" | "map";
 
@@ -23,6 +24,7 @@ const RIGHT_TABS = [
 ] as const;
 
 export function BottomNav({ activeTab, onTabChange, isRunning, activeCategory = "Predi", categoryConfigs }: BottomNavProps) {
+  const t = useT();
   const profileActive = activeTab === "profile" || activeTab === "estudios" || activeTab === "map";
   const categoryMeta = getCategoryMeta(categoryConfigs, activeCategory);
   const timerButtonStyle = isRunning ? {
@@ -41,6 +43,7 @@ export function BottomNav({ activeTab, onTabChange, isRunning, activeCategory = 
               key={id}
               onClick={() => onTabChange(id)}
               className="flex-1 flex items-center justify-center py-3 transition-colors"
+              aria-label={id === "home" ? t("nav_home") : t("nav_stats")}
             >
               <Icon className={`w-6 h-6 transition-colors ${active ? "text-primary" : "text-muted-foreground"}`} />
             </button>
@@ -51,6 +54,7 @@ export function BottomNav({ activeTab, onTabChange, isRunning, activeCategory = 
         <div className="flex-1 flex justify-center">
           <button
             onClick={() => onTabChange("timer")}
+            aria-label={t("nav_timer")}
             className={`relative flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition-all active:scale-95 -mt-5 ${
               isRunning
                 ? ""
@@ -78,6 +82,7 @@ export function BottomNav({ activeTab, onTabChange, isRunning, activeCategory = 
               key={id}
               onClick={() => onTabChange(id)}
               className="flex-1 flex items-center justify-center py-3 transition-colors"
+              aria-label={id === "calendar" ? t("nav_calendar") : t("nav_settings")}
             >
               <Icon className={`w-6 h-6 transition-colors ${active ? "text-primary" : "text-muted-foreground"}`} />
             </button>

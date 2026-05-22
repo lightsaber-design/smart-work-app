@@ -84,9 +84,8 @@ interface CalendarViewProps {
 
 const HOUR_HEIGHT = 64;
 
-function formatHour(h: number) {
-  if (h === 12) return "12 PM";
-  return h > 12 ? `${h - 12} PM` : `${h} AM`;
+function formatHour(h: number, locale: string) {
+  return new Date(2024, 0, 1, h, 0).toLocaleTimeString(locale, { hour: "numeric" });
 }
 
 function formatEventTime(date: Date, locale: string) {
@@ -289,6 +288,9 @@ function EventMonthGrid({
   onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
   categoryConfigs: CategoryConfig[];
 }) {
+  const t = useT();
+  const lang = useLang();
+  const locale = localeForLang(lang);
   const year = monthBase.getFullYear();
   const month = monthBase.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -383,7 +385,7 @@ function EventMonthGrid({
                     : "bg-background text-muted-foreground"
                 }`}
               >
-                {goal === null ? "No" : `${goal}h`}
+                {goal === null ? t("common_no") : `${goal}h`}
               </button>
             ))}
             </div>
@@ -391,8 +393,10 @@ function EventMonthGrid({
         )}
       </div>
       <div className="grid grid-cols-7 mb-1">
-        {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
-          <div key={d} className="text-center text-[9px] font-semibold text-muted-foreground py-1">{d}</div>
+        {Array.from({ length: 7 }, (_, index) => new Date(2024, 0, 1 + index)).map((day) => (
+          <div key={day.toISOString()} className="text-center text-[9px] font-semibold text-muted-foreground py-1">
+            {day.toLocaleDateString(locale, { weekday: "short" })}
+          </div>
         ))}
       </div>
       <div className="space-y-1">
@@ -1068,7 +1072,7 @@ export function CalendarView({
                     style={{ top: (h - activityStartHour) * HOUR_HEIGHT - 8 }}
                   >
                     <span className="text-[9px] text-muted-foreground/70 font-medium leading-none">
-                      {formatHour(h)}
+                      {formatHour(h, locale)}
                     </span>
                   </div>
                 ))}
@@ -1400,7 +1404,7 @@ export function CalendarView({
           </div>
           <div className="flex-shrink-0 px-5 pt-3 pb-8 border-t border-border bg-card">
             <Button onClick={handleAdd} disabled={savingAdd} className="w-full">
-              {savingAdd ? "Guardando..." : t("cal_save_event")}
+              {savingAdd ? t("common_saving") : t("cal_save_event")}
             </Button>
           </div>
         </div>

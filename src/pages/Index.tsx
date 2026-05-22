@@ -6,7 +6,7 @@ import { useSetup, SetupData } from "@/hooks/useSetup";
 import { ClockButton } from "@/components/ClockButton";
 import { BottomNav, AppTab } from "@/components/BottomNav";
 import { LanguageProvider, localeForLang, useLang, useT } from "@/lib/LanguageContext";
-import { detectLanguage, Lang } from "@/lib/i18n";
+import { detectLanguage, Lang, translate } from "@/lib/i18n";
 import { ChevronLeft, ChevronRight, MapPin, BookOpen, Moon, Sun, Plus, Pencil, Trash2, CloudFog, CloudRain, CloudSun, Snowflake, Zap } from "lucide-react";
 import { hasActiveStudyWork, useEstudios } from "@/hooks/useEstudios";
 import { MissedStudyBanner } from "@/components/MissedStudyBanner";
@@ -1153,7 +1153,7 @@ const Index = () => {
   if (!storage.ready || setupLoading) {
     return (
       <div className="min-h-screen bg-background text-foreground max-w-md mx-auto flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading data...</p>
+        <p className="text-sm text-muted-foreground">{translate(lang, "common_loading_data")}</p>
       </div>
     );
   }

@@ -23,6 +23,7 @@ const translations: Record<Lang, TranslationMap> = {
   es: {
     // Navigation
     nav_timer: 'Marcar horas',
+    nav_home: 'Inicio',
     nav_map: 'Mapa',
     nav_calendar: 'Calendario',
     nav_stats: 'Resumen',
@@ -44,6 +45,7 @@ const translations: Record<Lang, TranslationMap> = {
     common_cancel: 'Cancelar',
     common_saving: 'Guardando...',
     common_loading: 'Cargando...',
+    common_loading_data: 'Cargando datos...',
     category_predi: 'Predicación',
     category_carrito: 'Carrito',
     category_ldc: 'LDC',
@@ -357,6 +359,7 @@ const translations: Record<Lang, TranslationMap> = {
   en: {
     // Navigation
     nav_timer: 'Start',
+    nav_home: 'Home',
     nav_map: 'Map',
     nav_calendar: 'Calendar',
     nav_stats: 'Summary',
@@ -378,6 +381,7 @@ const translations: Record<Lang, TranslationMap> = {
     common_cancel: 'Cancel',
     common_saving: 'Saving...',
     common_loading: 'Loading...',
+    common_loading_data: 'Loading data...',
     category_predi: 'Preaching',
     category_carrito: 'Cart',
     category_ldc: 'LDC',
@@ -691,6 +695,7 @@ const translations: Record<Lang, TranslationMap> = {
   pt: {
     // Navigation
     nav_timer: 'Começar',
+    nav_home: 'Início',
     nav_map: 'Mapa',
     nav_calendar: 'Calendário',
     nav_stats: 'Resumo',
@@ -712,6 +717,7 @@ const translations: Record<Lang, TranslationMap> = {
     common_cancel: 'Cancelar',
     common_saving: 'Salvando...',
     common_loading: 'Carregando...',
+    common_loading_data: 'Carregando dados...',
     category_predi: 'Pregação',
     category_carrito: 'Carrinho',
     category_ldc: 'LDC',
@@ -1025,6 +1031,7 @@ const translations: Record<Lang, TranslationMap> = {
   fr: {
     // Navigation
     nav_timer: 'Commencer',
+    nav_home: 'Accueil',
     nav_map: 'Carte',
     nav_calendar: 'Calendrier',
     nav_stats: 'Résumé',
@@ -1046,6 +1053,7 @@ const translations: Record<Lang, TranslationMap> = {
     common_cancel: 'Annuler',
     common_saving: 'Enregistrement...',
     common_loading: 'Chargement...',
+    common_loading_data: 'Chargement des données...',
     category_predi: 'Prédication',
     category_carrito: 'Présentoir',
     category_ldc: 'LDC',
@@ -1359,6 +1367,7 @@ const translations: Record<Lang, TranslationMap> = {
   it: {
     // Navigation
     nav_timer: 'Inizia',
+    nav_home: 'Home',
     nav_map: 'Mappa',
     nav_calendar: 'Calendario',
     nav_stats: 'Riepilogo',
@@ -1380,6 +1389,7 @@ const translations: Record<Lang, TranslationMap> = {
     common_cancel: 'Annulla',
     common_saving: 'Salvataggio...',
     common_loading: 'Caricamento...',
+    common_loading_data: 'Caricamento dati...',
     category_predi: 'Predicazione',
     category_carrito: 'Carretto',
     category_ldc: 'LDC',
@@ -1693,6 +1703,7 @@ const translations: Record<Lang, TranslationMap> = {
   de: {
     // Navigation
     nav_timer: 'Stempeln',
+    nav_home: 'Startseite',
     nav_map: 'Karte',
     nav_calendar: 'Kalender',
     nav_stats: 'Übersicht',
@@ -1714,6 +1725,7 @@ const translations: Record<Lang, TranslationMap> = {
     common_cancel: 'Abbrechen',
     common_saving: 'Speichern...',
     common_loading: 'Wird geladen...',
+    common_loading_data: 'Daten werden geladen...',
     category_predi: 'Predigen',
     category_carrito: 'Trolley',
     category_ldc: 'LDC',
