@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BookOpen, X, Calendar, Clock } from "lucide-react";
 import { EstudioContact, EstudioSession, SessionFile } from "@/hooks/useEstudios";
+import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 
 interface MissedStudyBannerProps {
   contacts: EstudioContact[];
@@ -27,42 +28,45 @@ function isoToDateStr(iso: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function formatMissedLabel(isoDate: string): string {
-  return new Date(isoDate).toLocaleDateString("es-ES", {
+function formatMissedLabel(isoDate: string, locale: string): string {
+  return new Date(isoDate).toLocaleDateString(locale, {
     weekday: "long", day: "numeric", month: "long",
   });
 }
 
 export function MissedStudyBanner({ contacts, onComplete, onReschedule }: MissedStudyBannerProps) {
-  // Dismissed session IDs this session (don't re-show without page reload)
+  const t = useT();
+  const lang = useLang();
+  const locale = localeForLang(lang);
+  // IDs descartados en esta sesión para no repetir avisos sin recargar.
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-  // Which session is being rescheduled
+  // Sesión que se está reprogramando.
   const [rescheduling, setRescheduling] = useState<string | null>(null);
   const [newDate, setNewDate] = useState(todayDateStr());
   const [newTime, setNewTime] = useState("10:00");
   const [now, setNow] = useState(Date.now());
 
-  // Refresh every minute so overdue sessions appear promptly
+  // Refresca cada minuto para mostrar sesiones vencidas a tiempo.
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(id);
   }, []);
 
-  // Collect overdue pending sessions (past their scheduled time by > 5 min)
+  // Reúne sesiones pendientes vencidas por más de cinco minutos.
   const missed: MissedEntry[] = [];
   for (const contact of contacts) {
     if (!contact.active) continue;
     for (const session of (contact.sessions ?? [])) {
       if (!session.pending) continue;
       const sessionMs = new Date(session.date).getTime();
-      // past by more than 5 minutes
+      // Vencida por más de cinco minutos.
       if (now - sessionMs > 5 * 60 * 1000 && !dismissed.has(session.id)) {
         missed.push({ contact, session });
       }
     }
   }
 
-  // Show the most overdue one at a time
+  // Muestra primero la sesión con mayor retraso.
   const current = missed.sort(
     (a, b) => new Date(a.session.date).getTime() - new Date(b.session.date).getTime()
   )[0] ?? null;
@@ -107,13 +111,13 @@ export function MissedStudyBanner({ contacts, onComplete, onReschedule }: Missed
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold text-orange-500 uppercase tracking-wider mb-0.5">
-              Estudio pendiente
+              {t("missed_study_title")}
             </p>
             <p className="text-sm text-foreground leading-snug">
-              ¿Hiciste el estudio con{" "}
+              {t("missed_study_question_prefix")}{" "}
               <span className="font-semibold">{contact.name}</span>
-              {" "}el{" "}
-              <span className="font-semibold capitalize">{formatMissedLabel(session.date)}</span>?
+              {" "}{t("missed_study_question_day")}{" "}
+              <span className="font-semibold capitalize">{formatMissedLabel(session.date, locale)}</span>?
             </p>
             {session.lesson && (
               <p className="text-xs text-muted-foreground mt-0.5">{session.lesson}</p>
@@ -127,11 +131,11 @@ export function MissedStudyBanner({ contacts, onComplete, onReschedule }: Missed
         {/* Reschedule form */}
         {isRescheduling ? (
           <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
-            <p className="text-xs font-medium text-muted-foreground">Nueva fecha y hora</p>
+            <p className="text-xs font-medium text-muted-foreground">{t("missed_study_new_datetime")}</p>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                  <Calendar className="w-3 h-3" /> Fecha
+                  <Calendar className="w-3 h-3" /> {t("date_label")}
                 </div>
                 <input
                   type="date"
@@ -142,7 +146,7 @@ export function MissedStudyBanner({ contacts, onComplete, onReschedule }: Missed
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                  <Clock className="w-3 h-3" /> Hora
+                  <Clock className="w-3 h-3" /> {t("time_label")}
                 </div>
                 <input
                   type="time"
@@ -157,13 +161,13 @@ export function MissedStudyBanner({ contacts, onComplete, onReschedule }: Missed
                 onClick={handleReschedule}
                 className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
               >
-                Confirmar
+                {t("common_confirm")}
               </button>
               <button
                 onClick={() => setRescheduling(null)}
                 className="flex-1 py-2 rounded-xl bg-muted text-foreground text-sm font-medium"
               >
-                Cancelar
+                {t("common_cancel")}
               </button>
             </div>
           </div>
@@ -173,13 +177,13 @@ export function MissedStudyBanner({ contacts, onComplete, onReschedule }: Missed
               onClick={handleComplete}
               className="flex-1 py-2 rounded-xl bg-green-500 text-white text-sm font-semibold"
             >
-              Sí, marcar hecha
+              {t("missed_study_mark_done")}
             </button>
             <button
               onClick={openReschedule}
               className="flex-1 py-2 rounded-xl bg-muted text-foreground text-sm font-medium"
             >
-              Posponer
+              {t("missed_study_postpone")}
             </button>
           </div>
         )}

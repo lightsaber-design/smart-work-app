@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
+import { useT } from "@/lib/LanguageContext";
 
 interface PrecursorHoursConfigProps {
   value: number | null;
@@ -9,12 +10,8 @@ interface PrecursorHoursConfigProps {
 const PRESETS = [null, 30, 50] as const;
 const MAX_CUSTOM = 999;
 
-/**
- * Renders the four-button preset selector (No / 30h / 50h / Custom) plus
- * a number input that appears when a custom value is active.
- * Manages its own `customStr` state so the text field stays stable while typing.
- */
 export function PrecursorHoursConfig({ value, onChange }: PrecursorHoursConfigProps) {
+  const t = useT();
   const isCustom = value !== null && !PRESETS.some((p) => p === value);
   const [customStr, setCustomStr] = useState(isCustom ? String(value) : "");
 
@@ -29,7 +26,7 @@ export function PrecursorHoursConfig({ value, onChange }: PrecursorHoursConfigPr
         {([...PRESETS, "custom"] as const).map((opt) => {
           const isOptCustom = opt === "custom";
           const active = isOptCustom ? isCustom : value === opt;
-          const label = opt === null ? "No" : opt === 30 ? "30h" : opt === 50 ? "50h" : "Custom";
+          const label = opt === null ? t("precursor_no") : opt === 30 ? "30h" : opt === 50 ? "50h" : t("precursor_custom");
           return (
             <button
               key={String(opt)}
@@ -59,7 +56,7 @@ export function PrecursorHoursConfig({ value, onChange }: PrecursorHoursConfigPr
           type="number"
           min={1}
           max={MAX_CUSTOM}
-          placeholder="Horas al mes"
+          placeholder={t("precursor_hours_placeholder")}
           value={customStr}
           onChange={(e) => {
             setCustomStr(e.target.value);

@@ -8,7 +8,7 @@ import { CategoryConfig, getActiveCategoryConfigs, getCategoryMeta, SUPPORT_CAP_
 import { applyMonthlySupportCap } from "@/lib/ldcCap";
 import { calculateMonthlyReport } from "@/lib/monthlyReport";
 import { msToLabel } from "@/lib/time";
-import { useT } from "@/lib/LanguageContext";
+import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { Pencil, Check, Send } from "lucide-react";
 
 interface StatsViewProps {
@@ -22,9 +22,6 @@ interface StatsViewProps {
   categoryConfigs: CategoryConfig[];
 }
 
-const MONTH_NAMES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-
-
 export function StatsView({
   entries,
   allEntries,
@@ -36,6 +33,8 @@ export function StatsView({
   categoryConfigs,
 }: StatsViewProps) {
   const t = useT();
+  const lang = useLang();
+  const locale = localeForLang(lang);
   const [mode, setMode] = useState<"mensual" | "anual">("mensual");
   const [editing, setEditing] = useState(false);
   const activeCategoryConfigs = useMemo(() => getActiveCategoryConfigs(categoryConfigs), [categoryConfigs]);
@@ -88,7 +87,7 @@ export function StatsView({
   const serviceYearStart = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
   const serviceYearFrom = new Date(serviceYearStart, 8, 1);
   const serviceYearTo   = new Date(serviceYearStart + 1, 8, 1);
-  const serviceYearLabel = `Sep ${serviceYearStart} – Ago ${serviceYearStart + 1}`;
+  const serviceYearLabel = `${new Date(serviceYearStart, 8, 1).toLocaleDateString(locale, { month: "short" })} ${serviceYearStart} - ${new Date(serviceYearStart + 1, 7, 1).toLocaleDateString(locale, { month: "short" })} ${serviceYearStart + 1}`;
 
   const serviceYearMonths = Array.from({ length: 12 }, (_, i) => {
     const calMonth = (8 + i) % 12;
@@ -150,7 +149,7 @@ export function StatsView({
               mode === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
             }`}
           >
-            {m === "mensual" ? "Mensual" : "Anual"}
+            {m === "mensual" ? t("stats_monthly") : t("stats_yearly")}
           </button>
         ))}
       </div>
@@ -169,7 +168,7 @@ export function StatsView({
               <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 px-5 py-4">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-sm">⚡</span>
-                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">Campaña especial</p>
+                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">{t("stats_special_campaign")}</p>
                 </div>
                 <div className="flex gap-2 mb-3">
                   {([null, 15, 30] as const).map((opt) => (
@@ -211,26 +210,30 @@ export function StatsView({
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-muted-foreground mb-0.5 capitalize">
-                      {now.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
-                      {hasExclusions && <span className="ml-1 text-primary/70">· filtrado</span>}
+                      {now.toLocaleDateString(locale, { month: "long", year: "numeric" })}
+                      {hasExclusions && <span className="ml-1 text-primary/70">· {t("stats_filtered")}</span>}
                     </p>
                     <p className="text-2xl font-bold text-foreground tabular-nums">
                       {monthlyFilteredMs > 0 ? msToLabel(monthlyFilteredMs) : "–"}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">horas registradas</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{t("stats_registered_hours")}</p>
                     {isMonthlySupportCapped && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        Support categories counted as {msToLabel(monthlySupportCountedMs)} of {msToLabel(monthlySupportRawMs)} real hours, capped at {SUPPORT_CAP_HOURS}h.
-                        Real selected total: {msToLabel(monthlyRawFilteredMs)}.
+                        {t("stats_support_cap_notice", {
+                          counted: msToLabel(monthlySupportCountedMs),
+                          real: msToLabel(monthlySupportRawMs),
+                          cap: SUPPORT_CAP_HOURS,
+                          total: msToLabel(monthlyRawFilteredMs),
+                        })}
                       </p>
                     )}
                     <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
                       <p>
-                        Report to send: <span className="font-semibold text-foreground tabular-nums">{monthlyReport.reportedHours}h</span>
+                        {t("stats_report_to_send")}: <span className="font-semibold text-foreground tabular-nums">{monthlyReport.reportedHours}h</span>
                       </p>
                       {(monthlyReport.carriedInMinutes > 0 || monthlyReport.carriedOutMinutes > 0) && (
                         <p>
-                          Carryover: +{monthlyReport.carriedInMinutes}m in · {monthlyReport.carriedOutMinutes}m saved
+                          {t("stats_carryover", { in: monthlyReport.carriedInMinutes, out: monthlyReport.carriedOutMinutes })}
                         </p>
                       )}
                     </div>
@@ -241,10 +244,10 @@ export function StatsView({
                   <div className="mt-4 border-t border-border pt-3">
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <p className={`text-xs font-semibold ${goalDone ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>
-                        Meta precursor · {precursorHours}h/mes
+                        {t("stats_pioneer_goal")} · {precursorHours}h/{t("stats_month_unit")}
                       </p>
                       <span className={`text-xs font-bold ${goalDone ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>
-                        {goalDone ? "Completado" : `Faltan ${msToLabel(goalRemaining)}`}
+                        {goalDone ? t("stats_completed") : t("stats_remaining", { value: msToLabel(goalRemaining) })}
                       </span>
                     </div>
                     <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -265,7 +268,7 @@ export function StatsView({
           {/* Por categoría mensual con edición */}
           <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-foreground">Por actividad</h3>
+              <h3 className="text-sm font-bold text-foreground">{t("stats_by_activity")}</h3>
               <button
                 onClick={() => setEditing((v) => !v)}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors border ${
@@ -275,7 +278,7 @@ export function StatsView({
                 }`}
               >
                 {editing ? <Check className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
-                {editing ? "Listo" : "Editar"}
+                {editing ? t("stats_done") : t("set_edit")}
               </button>
             </div>
             <div className="space-y-3">
@@ -314,7 +317,7 @@ export function StatsView({
                       <div className="flex justify-between mb-1.5">
                         <p className="text-[13px] font-semibold text-foreground">{cat}</p>
                         {isSupport && rawMs > ms && (
-                          <p className="text-[11px] text-muted-foreground">{msToLabel(rawMs)} real</p>
+                          <p className="text-[11px] text-muted-foreground">{t("stats_real_hours", { value: msToLabel(rawMs) })}</p>
                         )}
                       </div>
                       <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -333,7 +336,7 @@ export function StatsView({
                 );
               })}
               <div className="flex items-center justify-between border-t border-border pt-3">
-                <span className="text-[13px] font-bold text-foreground">Selected total</span>
+                <span className="text-[13px] font-bold text-foreground">{t("stats_selected_total")}</span>
                 <span className="text-[13px] font-bold text-foreground tabular-nums">
                   {monthlyFilteredMs > 0 ? msToLabel(monthlyFilteredMs) : "0m"}
                 </span>
@@ -344,11 +347,11 @@ export function StatsView({
           {/* Enviar Informe mensual */}
           {(() => {
             const estudiosCount = completedCountByCategory["Estudio"] ?? 0;
-            const monthLabel = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+            const monthLabel = now.toLocaleDateString(locale, { month: "long", year: "numeric" });
             const msg = [
-              `📊 Informe ${monthLabel}`,
-              `⏱️ Horas: ${monthlyReport.reportedHours}h`,
-              `📖 Estudios: ${estudiosCount}`,
+              `📊 ${t("stats_report")} ${monthLabel}`,
+              `⏱️ ${t("stats_hours")}: ${monthlyReport.reportedHours}h`,
+              `📖 ${t("stats_studies")}: ${estudiosCount}`,
             ].join("\n");
             return (
               <button
@@ -359,7 +362,7 @@ export function StatsView({
                 className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold text-sm transition-colors shadow-sm"
               >
                 <Send className="w-4 h-4" />
-                Enviar Informe
+                {t("stats_send_report")}
               </button>
             );
           })()}
@@ -383,13 +386,13 @@ export function StatsView({
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-muted-foreground mb-0.5">
-                      Total {serviceYearLabel}
-                      {hasExclusions && <span className="ml-1 text-primary/70">· filtrado</span>}
+                      {t("stats_total")} {serviceYearLabel}
+                      {hasExclusions && <span className="ml-1 text-primary/70">· {t("stats_filtered")}</span>}
                     </p>
                     <p className="text-2xl font-bold text-foreground tabular-nums">
                       {yearFilteredMs > 0 ? msToLabel(yearFilteredMs) : "–"}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">horas registradas</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{t("stats_registered_hours")}</p>
                   </div>
                   <div className="text-3xl">📅</div>
                 </div>
@@ -397,10 +400,10 @@ export function StatsView({
                   <div className="mt-4 border-t border-border pt-3">
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <p className={`text-xs font-semibold ${annualGoalDone ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>
-                        Meta anual precursor · 600h
+                        {t("stats_annual_pioneer_goal")} · 600h
                       </p>
                       <span className={`text-xs font-bold ${annualGoalDone ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>
-                        {annualGoalDone ? "Completado" : `Faltan ${msToLabel(annualGoalRemaining)}`}
+                        {annualGoalDone ? t("stats_completed") : t("stats_remaining", { value: msToLabel(annualGoalRemaining) })}
                       </span>
                     </div>
                     <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -410,7 +413,7 @@ export function StatsView({
                       />
                     </div>
                     <p className={`text-xs mt-1.5 ${annualGoalDone ? "text-green-600/70 dark:text-green-400/70" : "text-blue-600/70 dark:text-blue-400/70"}`}>
-                      {msToLabel(yearFilteredMs)} de 600h · {serviceYearLabel}
+                      {t("stats_of_goal", { value: msToLabel(yearFilteredMs), goal: "600h" })} · {serviceYearLabel}
                     </p>
                   </div>
                 )}
@@ -422,11 +425,11 @@ export function StatsView({
           <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4 overflow-hidden">
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
-                <h3 className="text-sm font-bold text-foreground">Por mes</h3>
+                <h3 className="text-sm font-bold text-foreground">{t("stats_by_month")}</h3>
                 <p className="mt-0.5 text-xs text-muted-foreground">{serviceYearLabel}</p>
               </div>
               <div className="rounded-xl bg-primary/10 px-3 py-1.5 text-right">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-primary/80">Total</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-primary/80">{t("stats_total")}</p>
                 <p className="text-sm font-black tabular-nums text-primary">{yearFilteredMs > 0 ? msToLabel(yearFilteredMs) : "0m"}</p>
               </div>
             </div>
@@ -436,7 +439,7 @@ export function StatsView({
               <div className="absolute inset-x-0 top-2/3 h-px bg-border/40" />
               <div className="absolute inset-x-0 bottom-8 h-px bg-border" />
               <div className="relative z-10 flex h-full items-end gap-1.5">
-              {monthBars.map(({ month, ms, isCurrentMonth }) => {
+              {monthBars.map(({ month, year, ms, isCurrentMonth }) => {
                 const barH = ms > 0 ? Math.max(10, (ms / maxMonthMs) * 118) : 5;
                 const label = ms > 0 ? msToLabel(ms) : "";
                 return (
@@ -458,10 +461,10 @@ export function StatsView({
                         backgroundColor: ms === 0 ? "hsl(var(--muted))" : undefined,
                         opacity: ms === 0 ? 0.35 : 1,
                       }}
-                      title={`${MONTH_NAMES[month]}: ${msToLabel(ms)}`}
+                      title={`${new Date(year, month, 1).toLocaleDateString(locale, { month: "short" })}: ${msToLabel(ms)}`}
                     />
                     <span className={`text-[8px] font-semibold ${isCurrentMonth ? "text-primary" : "text-muted-foreground"}`}>
-                      {MONTH_NAMES[month]}
+                      {new Date(year, month, 1).toLocaleDateString(locale, { month: "short" })}
                     </span>
                   </div>
                 );
@@ -473,7 +476,7 @@ export function StatsView({
           {/* Por categoría anual con edición */}
           <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-foreground">Por actividad</h3>
+              <h3 className="text-sm font-bold text-foreground">{t("stats_by_activity")}</h3>
               <button
                 onClick={() => setEditing((v) => !v)}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors border ${
@@ -483,7 +486,7 @@ export function StatsView({
                 }`}
               >
                 {editing ? <Check className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
-                {editing ? "Listo" : "Editar"}
+                {editing ? t("stats_done") : t("set_edit")}
               </button>
             </div>
             <div className="space-y-3">
@@ -535,7 +538,7 @@ export function StatsView({
                 );
               })}
               <div className="flex items-center justify-between border-t border-border pt-3">
-                <span className="text-[13px] font-bold text-foreground">Selected total</span>
+                <span className="text-[13px] font-bold text-foreground">{t("stats_selected_total")}</span>
                 <span className="text-[13px] font-bold text-foreground tabular-nums">
                   {yearFilteredMs > 0 ? msToLabel(yearFilteredMs) : "0m"}
                 </span>

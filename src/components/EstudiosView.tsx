@@ -21,6 +21,7 @@ import {
 import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { saveFile, getFileURL, formatFileSize } from "@/lib/sessionFiles";
 import { openGoogleMaps } from "@/lib/maps";
+import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 
 /* Constantes */
 const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -115,6 +116,9 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
   onSave: (data: ContactFormData) => void;
   onClose: () => void;
 }) {
+  const t = useT();
+  const lang = useLang();
+  const locale = localeForLang(lang);
   const [name, setName] = useState(contact?.name ?? "");
   const [address, setAddress] = useState(contact?.address ?? "");
   const [notes, setNotes] = useState(contact?.notes ?? "");
@@ -155,25 +159,25 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
           <div className="w-10 h-1 rounded-full bg-border" />
         </button>
         <div className="px-4 pb-3 flex-shrink-0">
-          <h2 className="text-base font-semibold">{contact ? "Editar estudio" : "Nuevo estudio"}</h2>
+          <h2 className="text-base font-semibold">{contact ? t("studies_edit") : t("studies_new")}</h2>
         </div>
 
         <div className="px-4 space-y-4 overflow-y-auto flex-1 pb-4">
           <div className="space-y-1.5">
-            <Label>Nombre *</Label>
-            <Input placeholder="Ej: Juan García" value={name} onChange={(e) => setName(e.target.value)} />
+            <Label>{t("settings_category_name")} *</Label>
+            <Input placeholder={t("studies_name_placeholder")} value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label>Dirección <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
-            <Input placeholder="Ej: Calle Mayor 12, 2ºA" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <Label>{t("studies_address")} <span className="text-muted-foreground font-normal text-xs">({t("cal_optional")})</span></Label>
+            <Input placeholder={t("studies_address_placeholder")} value={address} onChange={(e) => setAddress(e.target.value)} />
           </div>
           {favoritePlaces.length > 0 && (
             <div className="space-y-1.5">
-              <Label>Ubicación guardada <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+              <Label>{t("studies_saved_location")} <span className="text-muted-foreground font-normal text-xs">({t("cal_optional")})</span></Label>
               <Select value={placeId} onValueChange={setPlaceId}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar lugar..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("studies_select_place")} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Sin ubicación</SelectItem>
+                  <SelectItem value="none">{t("cal_no_location")}</SelectItem>
                   {favoritePlaces.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       <span className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5" />{p.name}</span>
@@ -184,22 +188,22 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
             </div>
           )}
           <div className="space-y-1.5">
-            <Label>Notas <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
-            <Input placeholder="Ej: Interesado en el libro de Juan" value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <Label>{t("study_notes")} <span className="text-muted-foreground font-normal text-xs">({t("cal_optional")})</span></Label>
+            <Input placeholder={t("studies_notes_placeholder")} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
 
           <div className="space-y-3 pt-2 border-t border-border">
             <div className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4 text-primary" />
-              <Label className="text-sm font-semibold">Repetición automática</Label>
+              <Label className="text-sm font-semibold">{t("studies_auto_repeat")}</Label>
             </div>
             <Select value={freq} onValueChange={(v) => setFreq(v as ScheduleFrequency | "none")}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Sin repetición</SelectItem>
-                <SelectItem value="weekly">Semanal</SelectItem>
-                <SelectItem value="fortnightly">Quincenal</SelectItem>
-                <SelectItem value="monthly">Mensual</SelectItem>
+                <SelectItem value="none">{t("cal_no_repeat")}</SelectItem>
+                <SelectItem value="weekly">{t("cal_weekly")}</SelectItem>
+                <SelectItem value="fortnightly">{t("studies_fortnightly")}</SelectItem>
+                <SelectItem value="monthly">{t("cal_monthly")}</SelectItem>
               </SelectContent>
             </Select>
 
@@ -207,7 +211,7 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
               <>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Día</Label>
+                    <Label>{t("studies_day")}</Label>
                     <Select value={String(schedDay)} onValueChange={(v) => setSchedDay(Number(v))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -218,7 +222,7 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Hora</Label>
+                    <Label>{t("time_label")}</Label>
                     <input
                       type="time"
                       value={schedTime}
@@ -228,18 +232,18 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Lección por defecto <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+                  <Label>{t("studies_default_lesson")} <span className="text-muted-foreground font-normal text-xs">({t("cal_optional")})</span></Label>
                   <Input
-                    placeholder="Ej: Estudio de la Biblia"
+                    placeholder={t("studies_default_lesson_placeholder")}
                     value={schedLesson}
                     onChange={(e) => setSchedLesson(e.target.value)}
                   />
                 </div>
                 <div className="rounded-xl bg-primary/5 border border-primary/20 px-3 py-2 space-y-1">
-                  <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">Próximas fechas generadas</p>
+                  <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">{t("studies_generated_dates")}</p>
                   {getNextOccurrences({ frequency: freq, dayOfWeek: schedDay, time: schedTime }, 3).map((d, i) => (
                     <p key={i} className="text-xs text-foreground capitalize">
-                      {d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })} · {schedTime}
+                      {d.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })} · {schedTime}
                     </p>
                   ))}
                 </div>
@@ -250,7 +254,7 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
 
         <div className="flex-shrink-0 px-4 pt-3 pb-6 border-t border-border bg-card">
           <Button onClick={handleSave} disabled={!name.trim()} className="w-full">
-            {contact ? "Guardar cambios" : "Guardar estudio"}
+            {contact ? t("cal_save_changes") : t("studies_save")}
           </Button>
         </div>
       </div>

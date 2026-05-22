@@ -28,7 +28,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { FavoritePlace } from "@/hooks/useFavoritePlaces";
-import { useT } from "@/lib/LanguageContext";
+import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { getTravelReminderMinutes, type TravelReminderSettings } from "@/lib/eventReminders";
 import { formatFileSize, saveFile } from "@/lib/sessionFiles";
 import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
@@ -251,6 +251,7 @@ function EventMonthGrid({
   onPreviousMonth,
   onNextMonth,
   onAddEvent,
+  addEventLabel,
   precursorHours,
   specialCampaignGoals,
   onSetSpecialCampaign,
@@ -264,6 +265,7 @@ function EventMonthGrid({
   onPreviousMonth: () => void;
   onNextMonth: () => void;
   onAddEvent: () => void;
+  addEventLabel: string;
   precursorHours?: number | null;
   specialCampaignGoals?: Record<string, CampaignGoal>;
   onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
@@ -321,7 +323,7 @@ function EventMonthGrid({
             type="button"
             onClick={onAddEvent}
             className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md shadow-primary/20"
-            aria-label="Añadir actividad"
+            aria-label={addEventLabel}
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -490,6 +492,8 @@ export function CalendarView({
   categoryConfigs,
 }: CalendarViewProps) {
   const t = useT();
+  const lang = useLang();
+  const locale = localeForLang(lang);
   const timelineHours = Array.from({ length: activityEndHour - activityStartHour }, (_, i) => i + activityStartHour);
   const timelineDurationMinutes = (activityEndHour - activityStartHour) * 60;
   const timelineHeight = (activityEndHour - activityStartHour) * HOUR_HEIGHT;
@@ -1187,6 +1191,7 @@ export function CalendarView({
             onPreviousMonth={() => setMonthOffset((v) => v - 1)}
             onNextMonth={() => setMonthOffset((v) => v + 1)}
             onAddEvent={() => setDialogOpen(true)}
+            addEventLabel={t("home_add_activity")}
             precursorHours={precursorHours}
             specialCampaignGoals={specialCampaignGoals}
             onSetSpecialCampaign={onSetSpecialCampaign}
@@ -1377,35 +1382,35 @@ export function CalendarView({
       <AlertDialog open={!!pendingAddConflict} onOpenChange={(open) => { if (!open) setPendingAddConflict(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Actividad ya programada</AlertDialogTitle>
+            <AlertDialogTitle>{t("cal_conflict_title")}</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingAddConflict && (
                 <span className="block space-y-2">
                   <span className="block">
-                    La nueva actividad se cruza con {pendingAddConflict.conflicts.length === 1 ? "esta actividad" : `${pendingAddConflict.conflicts.length} actividades`}.
+                    {t(pendingAddConflict.conflicts.length === 1 ? "cal_conflict_one" : "cal_conflict_many", { count: pendingAddConflict.conflicts.length })}
                   </span>
                   <span className="block rounded-lg border border-border bg-muted/40 px-3 py-2 text-foreground">
                     {pendingAddConflict.conflicts[0].category} · {formatEventTime(pendingAddConflict.conflicts[0].date)}
                     {pendingAddConflict.conflicts[0].endTime ? ` - ${pendingAddConflict.conflicts[0].endTime}` : ""}
                   </span>
                   <span className="block">
-                    Reemplázala, añade la actividad en paralelo o cancela.
+                    {t("cal_conflict_hint")}
                   </span>
                 </span>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-2">
-            <AlertDialogCancel onClick={() => setPendingAddConflict(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setPendingAddConflict(null)}>{t("common_cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-secondary text-secondary-foreground hover:bg-secondary/80"
               onClick={async () => {
                 if (pendingAddConflict) await commitAddWithStudySession(pendingAddConflict.params, pendingAddConflict.studyTarget);
               }}
             >
-              Añadir en paralelo
+              {t("cal_conflict_add_parallel")}
             </AlertDialogAction>
-            <AlertDialogAction onClick={overwriteAddConflict}>Reemplazar</AlertDialogAction>
+            <AlertDialogAction onClick={overwriteAddConflict}>{t("cal_conflict_replace")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1429,16 +1434,16 @@ export function CalendarView({
             <>
               <div className="px-5 space-y-4 overflow-y-auto flex-1 pb-2">
                 <div>
-                  <p className="text-xs text-muted-foreground">Sesión de estudio</p>
+                  <p className="text-xs text-muted-foreground">{t("study_session")}</p>
                   <h2 className="text-base font-bold text-foreground">{selectedStudySession.contact.name}</h2>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label>Fecha</Label>
+                    <Label>{t("date_label")}</Label>
                     <Input type="date" value={studySessionDate} onChange={(event) => setStudySessionDate(event.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Hora</Label>
+                    <Label>{t("time_label")}</Label>
                     <Input
                       type="time"
                       {...activityTimeInputProps(activityStartHour, activityEndHour)}
@@ -1449,16 +1454,16 @@ export function CalendarView({
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Lección <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                  <Label>{t("study_lesson")} <span className="text-muted-foreground text-xs">({t("cal_optional")})</span></Label>
                   <Input value={studySessionLesson} onChange={(event) => setStudySessionLesson(event.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Notas <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                  <Label>{t("study_notes")} <span className="text-muted-foreground text-xs">({t("cal_optional")})</span></Label>
                   <Input value={studySessionNotes} onChange={(event) => setStudySessionNotes(event.target.value)} />
                 </div>
                 {studySessionFiles.length > 0 && (
                   <div className="space-y-1.5">
-                    <Label>Archivos</Label>
+                    <Label>{t("study_files")}</Label>
                     {studySessionFiles.map((file) => (
                       <div key={file.id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-muted">
                         <div className="flex-1 min-w-0">
@@ -1473,13 +1478,13 @@ export function CalendarView({
                   </div>
                 )}
                 <div className="space-y-1.5">
-                  <Label>Añadir archivos</Label>
+                  <Label>{t("study_add_files")}</Label>
                   <StudyFilePicker files={studySessionPendingFiles} onChange={setStudySessionPendingFiles} />
                 </div>
               </div>
               <div className="flex-shrink-0 px-5 pt-3 pb-8 border-t border-border bg-card space-y-2">
                 <Button onClick={saveSelectedStudySession} disabled={savingStudySession} className="w-full">
-                  {savingStudySession ? "Guardando..." : "Guardar cambios"}
+                  {savingStudySession ? t("common_saving") : t("cal_save_changes")}
                 </Button>
                 {new Date(selectedStudySession.session.date).getTime() <= Date.now() && (
                   <Button
@@ -1490,7 +1495,7 @@ export function CalendarView({
                       closeStudySession();
                     }}
                   >
-                    Marcar como completada
+                    {t("study_mark_completed")}
                   </Button>
                 )}
                 <Button
@@ -1501,7 +1506,7 @@ export function CalendarView({
                     closeStudySession();
                   }}
                 >
-                  Eliminar sesión
+                  {t("study_delete_session")}
                 </Button>
               </div>
             </>
@@ -1647,20 +1652,21 @@ export function CalendarView({
       <AlertDialog open={!!pendingEstudioConflict} onOpenChange={(open) => { if (!open) setPendingEstudioConflict(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Ya hay una sesión para esa fecha</AlertDialogTitle>
+            <AlertDialogTitle>{t("cal_study_conflict_title")}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <span className="block space-y-2 text-sm text-muted-foreground">
                 {pendingEstudioConflict && (() => {
                   const { contact, session } = pendingEstudioConflict;
                   const sessionDate = new Date(session.date);
-                  const dateStr = sessionDate.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+                  const dateStr = sessionDate.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
                   return (
                     <>
                       <span className="block">
-                        <strong className="text-foreground">{contact.name}</strong> ya tiene una sesión programada el{" "}
-                        <strong className="text-foreground">{dateStr} a las {session.time}</strong>.
+                        {t("cal_study_conflict_prefix")} <strong className="text-foreground">{contact.name}</strong>{" "}
+                        {t("cal_study_conflict_middle")}{" "}
+                        <strong className="text-foreground">{t("cal_study_conflict_datetime", { date: dateStr, time: session.time })}</strong>.
                       </span>
-                      <span className="block">Puedes continuar rellenando esa sesión existente o añadir una sesión adicional.</span>
+                      <span className="block">{t("cal_study_conflict_hint")}</span>
                     </>
                   );
                 })()}
@@ -1668,15 +1674,15 @@ export function CalendarView({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-col">
-            <AlertDialogCancel onClick={() => setPendingEstudioConflict(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setPendingEstudioConflict(null)}>{t("common_cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-secondary text-secondary-foreground hover:bg-secondary/80"
               onClick={handleEstudioAddNew}
             >
-              Añadir como nueva
+              {t("cal_study_conflict_add_new")}
             </AlertDialogAction>
             <AlertDialogAction onClick={handleEstudioOverwrite}>
-              Continuar rellenando
+              {t("cal_study_conflict_continue")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

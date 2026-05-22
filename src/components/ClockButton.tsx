@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useMemo, useState, useEffect, useRef } from "react";
-import { useT } from "@/lib/LanguageContext";
+import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
 import { CategoryConfig, getActiveCategoryConfigs, getCategoryMeta } from "@/lib/categories";
 
@@ -36,14 +36,14 @@ function clampTimeToActivityRange(value: string, startHour: number, endHour: num
   return value;
 }
 
-function formatSessionDay(isoDate: string): string {
+function formatSessionDay(isoDate: string, t: (key: string) => string, locale: string): string {
   const d = new Date(isoDate);
   const now = new Date();
   const diffDays = Math.round((d.getTime() - now.setHours(0, 0, 0, 0)) / 86400000);
-  if (diffDays === 0) return "hoy";
-  if (diffDays === 1) return "mañana";
-  if (diffDays === -1) return "ayer";
-  return d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+  if (diffDays === 0) return t("date_today_lower");
+  if (diffDays === 1) return t("date_tomorrow_lower");
+  if (diffDays === -1) return t("date_yesterday_lower");
+  return d.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
 }
 
 const RING_RADIUS = 108;
@@ -116,6 +116,8 @@ export function ClockButton({
   activityEndHour = DEFAULT_ACTIVITY_END_HOUR,
 }: ClockButtonProps) {
   const t = useT();
+  const lang = useLang();
+  const locale = localeForLang(lang);
   const detected = detectCategoryFromEvents(calendarEvents);
   const [category, setCategory] = useState<WorkCategory>(detected || "Predi");
   const [editingTime, setEditingTime] = useState(false);
@@ -367,13 +369,13 @@ export function ClockButton({
               <>
                 {/* Reloj detenido */}
                 <p className={`text-[11px] font-semibold ${subtleCircleText} tracking-widest uppercase`}>
-                  {new Date().toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })}
+                  {new Date().toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" })}
                 </p>
                 <p className={`text-[50px] font-black tabular-nums ${circleText} leading-none tracking-tight`}>
                   {wallTime}
                 </p>
                 <p className={`text-[11px] ${mutedCircleText} font-medium`}>
-                  {currentCategory} · Toca para empezar
+                  {t("timer_touch_to_start", { category: currentCategory })}
                 </p>
 
                 {/* Botón de inicio */}
@@ -435,7 +437,7 @@ export function ClockButton({
             ) : (
               <Select value={selectedEstudioId} onValueChange={setSelectedEstudioId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar estudio…" />
+                  <SelectValue placeholder={t("clock_select_study")} />
                 </SelectTrigger>
                 <SelectContent>
                   {activeStudios.map((e) => (
@@ -493,11 +495,11 @@ export function ClockButton({
               <div className="flex items-start gap-2">
                 <BookOpen className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                 <p className="text-sm text-foreground leading-snug">
-                  Guardando sesión de{" "}
+                  {t("clock_saving_session_prefix")}{" "}
                   <span className="font-semibold">{pendingPrompt.contactName}</span>
-                  {" "}correspondiente al{" "}
+                  {" "}{t("clock_saving_session_day")}{" "}
                   <span className="font-semibold capitalize">
-                    {formatSessionDay(pendingPrompt.nextSession.date)}
+                    {formatSessionDay(pendingPrompt.nextSession.date, t, locale)}
                   </span>
                 </p>
               </div>
@@ -510,13 +512,13 @@ export function ClockButton({
                 onClick={() => { onEstudioSession?.(pendingPrompt.contactId, pendingPrompt.sessionData); setPendingPrompt(null); }}
                 className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold cursor-pointer"
               >
-                Sí
+                {t("common_yes")}
               </button>
               <button
                 onClick={() => { onEstudioSession?.(pendingPrompt.contactId, { ...pendingPrompt.sessionData, forceNew: true }); setPendingPrompt(null); }}
                 className="flex-1 py-2 rounded-xl bg-muted text-foreground text-sm font-medium cursor-pointer"
               >
-                No, sesión nueva
+                {t("clock_new_session")}
               </button>
             </div>
           </div>

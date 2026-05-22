@@ -5,9 +5,8 @@ import { useFavoritePlaces } from "@/hooks/useFavoritePlaces";
 import { useSetup, SetupData } from "@/hooks/useSetup";
 import { ClockButton } from "@/components/ClockButton";
 import { BottomNav, AppTab } from "@/components/BottomNav";
-import { LanguageProvider } from "@/lib/LanguageContext";
+import { LanguageProvider, localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { detectLanguage, Lang } from "@/lib/i18n";
-import { useT } from "@/lib/LanguageContext";
 import { ChevronLeft, ChevronRight, MapPin, BookOpen, Moon, Sun, Plus, Pencil, Trash2, CloudFog, CloudRain, CloudSun, Snowflake, Zap } from "lucide-react";
 import { hasActiveStudyWork, useEstudios } from "@/hooks/useEstudios";
 import { MissedStudyBanner } from "@/components/MissedStudyBanner";
@@ -36,11 +35,13 @@ interface AppContentProps {
   saveSetup: (data: Partial<SetupData>) => void;
 }
 
-function getGreeting(): string {
+type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
+
+function getGreeting(t: TranslateFn): string {
   const h = new Date().getHours();
-  if (h < 12) return "Buenos días ☀️";
-  if (h < 18) return "Buenas tardes 🌤️";
-  return "Buenas noches 🌙";
+  if (h < 12) return t("home_greeting_morning");
+  if (h < 18) return t("home_greeting_afternoon");
+  return t("home_greeting_night");
 }
 
 function weatherCodeToEmoji(code: number): string {
@@ -66,21 +67,21 @@ type CurrentWeather = {
   isDay: boolean | null;
 };
 
-function weatherCodeToLabel(code: number): string {
-  if (code === 0) return "despejado";
-  if (code <= 3) return "algo nublado";
-  if (code <= 48) return "con niebla";
-  if (code <= 67) return "con lluvia";
-  if (code <= 77) return "con nieve";
-  if (code <= 82) return "con chubascos";
-  return "con tormenta";
+function weatherCodeToLabel(code: number, t: TranslateFn): string {
+  if (code === 0) return t("weather_clear");
+  if (code <= 3) return t("weather_cloudy");
+  if (code <= 48) return t("weather_fog");
+  if (code <= 67) return t("weather_rain");
+  if (code <= 77) return t("weather_snow");
+  if (code <= 82) return t("weather_showers");
+  return t("weather_storm");
 }
 
-function hourLabel(date: Date): string {
+function hourLabel(date: Date, t: TranslateFn): string {
   const hour = date.getHours();
-  if (hour === 0) return "medianoche";
-  if (hour === 12) return "mediodía";
-  return `${hour % 12 || 12} de la ${hour < 12 ? "mañana" : "tarde"}`;
+  if (hour === 0) return t("time_midnight");
+  if (hour === 12) return t("time_noon");
+  return t(hour < 12 ? "time_hour_morning" : "time_hour_afternoon", { hour: hour % 12 || 12 });
 }
 
 function isRainyWeather(code: number, probability: number | null): boolean {
@@ -94,15 +95,15 @@ function getWeatherForDate(hourlyWeather: HourlyWeather[], date: Date): HourlyWe
     .sort((a, b) => Math.abs(a.date.getTime() - date.getTime()) - Math.abs(b.date.getTime() - date.getTime()))[0] ?? null;
 }
 
-function formatActivityWeather(hourlyWeather: HourlyWeather[], date: Date): string | null {
+function formatActivityWeather(hourlyWeather: HourlyWeather[], date: Date, t: TranslateFn): string | null {
   const forecast = getWeatherForDate(hourlyWeather, date);
   if (!forecast) return null;
   const rain = isRainyWeather(forecast.code, forecast.precipitationProbability);
-  const probability = forecast.precipitationProbability != null ? ` · ${forecast.precipitationProbability}% lluvia` : "";
-  return `${weatherCodeToEmoji(forecast.code)} ${forecast.temp}° · ${rain ? "posible lluvia" : weatherCodeToLabel(forecast.code)}${probability}`;
+  const probability = forecast.precipitationProbability != null ? ` · ${t("weather_rain_probability", { probability: forecast.precipitationProbability })}` : "";
+  return `${weatherCodeToEmoji(forecast.code)} ${forecast.temp}° · ${rain ? t("weather_possible_rain") : weatherCodeToLabel(forecast.code, t)}${probability}`;
 }
 
-function formatDayWeatherSummary(hourlyWeather: HourlyWeather[], events: { date: Date }[]): string | null {
+function formatDayWeatherSummary(hourlyWeather: HourlyWeather[], events: { date: Date }[], t: TranslateFn): string | null {
   const anchorDate = events[0]?.date ?? new Date();
   const eventForecasts = events
     .map((event) => ({ event, forecast: getWeatherForDate(hourlyWeather, event.date) }))
@@ -110,7 +111,7 @@ function formatDayWeatherSummary(hourlyWeather: HourlyWeather[], events: { date:
 
   const rainy = eventForecasts.find((item) => isRainyWeather(item.forecast.code, item.forecast.precipitationProbability));
   if (rainy) {
-    return `${weatherCodeToEmoji(rainy.forecast.code)} Luego, sobre las ${hourLabel(rainy.event.date)}, puede llover.`;
+    return `${weatherCodeToEmoji(rainy.forecast.code)} ${t("weather_later_rain", { time: hourLabel(rainy.event.date, t) })}`;
   }
 
   const dayForecasts = hourlyWeather.filter((item) => (
@@ -123,10 +124,10 @@ function formatDayWeatherSummary(hourlyWeather: HourlyWeather[], events: { date:
   if (forecasts.length === 0) return null;
 
   const dayRain = dayForecasts.find((item) => isRainyWeather(item.code, item.precipitationProbability));
-  if (dayRain) return `${weatherCodeToEmoji(dayRain.code)} Luego, sobre las ${hourLabel(dayRain.date)}, puede llover.`;
+  if (dayRain) return `${weatherCodeToEmoji(dayRain.code)} ${t("weather_later_rain", { time: hourLabel(dayRain.date, t) })}`;
 
   const warmest = forecasts.slice().sort((a, b) => b.temp - a.temp)[0];
-  return `${weatherCodeToEmoji(warmest.code)} Durante el día estará ${weatherCodeToLabel(warmest.code)}, cerca de ${warmest.temp}°.`;
+  return `${weatherCodeToEmoji(warmest.code)} ${t("weather_day_summary", { condition: weatherCodeToLabel(warmest.code, t), temp: warmest.temp })}`;
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -220,6 +221,8 @@ function TabLoading() {
 
 function AppContent({ setup, saveSetup }: AppContentProps) {
   const t = useT();
+  const lang = useLang();
+  const locale = localeForLang(lang);
   const { isDark, toggle: toggleDark } = useDarkMode();
   const [activeTab, setActiveTab] = useState<Tab>("timer");
   const [timerDisplayCategory, setTimerDisplayCategory] = useState<Category>("Predi");
@@ -295,8 +298,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       calendarEvents.forEach((event) => {
         if (shouldNotifyEvent(now, event)) {
           if (!tracker.isRunning) {
-            showBrowserNotification("⏰ Actividad próxima", {
-              body: `${event.category} empieza pronto. Marca horas cuando haga falta.`,
+            showBrowserNotification(t("notif_activity_upcoming"), {
+              body: t("notif_activity_upcoming_body", { category: event.category }),
             });
           }
           markNotified(event.id);
@@ -306,15 +309,15 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     check();
     const interval = setInterval(check, 30_000);
     return () => clearInterval(interval);
-  }, [calendarEvents, tracker.isRunning, markNotified]);
+  }, [calendarEvents, tracker.isRunning, markNotified, t]);
 
   useEffect(() => {
     if (!showTimerOverrunPrompt || !activeScheduledEvent || timerOverrunNotifiedId === activeScheduledEvent.id) return;
-    showBrowserNotification("⏰ Timer still running", {
-      body: `${activeScheduledEvent.category} has passed its scheduled end time.`,
+    showBrowserNotification(t("timer_overrun_title"), {
+      body: t("timer_overrun_notification_body", { category: activeScheduledEvent.category }),
     });
     setTimerOverrunNotifiedId(activeScheduledEvent.id);
-  }, [activeScheduledEvent, showTimerOverrunPrompt, timerOverrunNotifiedId]);
+  }, [activeScheduledEvent, showTimerOverrunPrompt, t, timerOverrunNotifiedId]);
 
   const todayKey = new Date().toDateString();
   const now = useMemo(() => new Date(todayKey), [todayKey]);
@@ -340,8 +343,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       const key = event.date.toDateString();
       const existing = groups.find((group) => group.key === key);
       const label = key === todayKey
-        ? "Hoy"
-        : event.date.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+        ? t("day_today")
+        : event.date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
       if (existing) {
         existing.events.push(event);
       } else {
@@ -349,7 +352,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       }
       return groups;
     }, []);
-  }, [summaryEvents, todayKey]);
+  }, [locale, summaryEvents, t, todayKey]);
 
   // Sheet drag logic
   const todayEventCount = summaryEvents.length;
@@ -543,8 +546,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             const key = item.date.toDateString();
             const existing = groups.find((group) => group.key === key);
             const label = key === todayKey
-              ? "Hoy"
-              : item.date.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+              ? t("day_today")
+              : item.date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
             if (existing) {
               existing.events.push(item);
             } else if (groups.length < 2) {
@@ -569,7 +572,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 </div>
                 <div className="flex items-start justify-between">
                   <div className="relative z-10">
-                    <p className="text-white/80 text-sm font-medium">{getGreeting()}</p>
+                    <p className="text-white/80 text-sm font-medium">{getGreeting(t)}</p>
                     <h1 className="text-3xl font-black text-white leading-tight mt-0.5">{userName},</h1>
                     {setup.city && (
                       <p className="text-white/75 text-[13px] mt-2 flex items-center gap-1.5">
@@ -587,7 +590,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   <button
                     onClick={toggleDark}
                     className="relative z-10 w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:opacity-70 backdrop-blur mt-1 flex-shrink-0"
-                    aria-label="Cambiar modo"
+                    aria-label={t("theme_toggle")}
                   >
                     {isDark ? <Sun className="w-4 h-4 text-yellow-300" /> : <Moon className="w-4 h-4 text-white" />}
                   </button>
@@ -603,7 +606,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   onClick={openMonthlyCalendar}
                   className="w-full rounded-3xl border border-border bg-card shadow-xl p-5 mb-6 text-left transition-transform active:scale-[0.98]"
                 >
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Total del mes</p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t("stats_month_total")}</p>
                   <div className="flex items-end gap-1.5 mt-1.5">
                     <span className="text-4xl font-black text-foreground leading-none">{monthTotalHrs}</span>
                     <span className="text-xl font-bold text-muted-foreground mb-0.5">h</span>
@@ -619,7 +622,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                         />
                       </div>
                       <p className="text-[10px] text-muted-foreground">
-                        Meta: {setup.precursorHours}h · {Math.round(Math.min(100, (monthTotalHrs / setup.precursorHours) * 100))}%
+                        {t("stats_pioneer_goal")}: {setup.precursorHours}h · {Math.round(Math.min(100, (monthTotalHrs / setup.precursorHours) * 100))}%
                       </p>
                     </div>
                   )}
@@ -628,24 +631,24 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 {/* Upcoming activities */}
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-sm font-bold text-foreground">
-                    Próximas actividades
+                    {t("home_upcoming_activities")}
                   </h2>
                   <button
                     onClick={() => navigate("calendar")}
                     className="text-xs text-primary font-semibold flex items-center gap-0.5"
                   >
-                    Ver todo <ChevronRight className="w-3 h-3" />
+                    {t("home_see_all")} <ChevronRight className="w-3 h-3" />
                   </button>
                 </div>
 
                 {totalUpcoming === 0 ? (
                   <div className="rounded-2xl border border-border bg-muted/30 px-4 py-6 text-center">
-                    <p className="text-sm text-muted-foreground">Sin actividades próximas</p>
+                    <p className="text-sm text-muted-foreground">{t("home_no_upcoming_activities")}</p>
                     <button
                       onClick={() => navigate("calendar")}
                       className="mt-2 text-xs font-semibold text-primary flex items-center gap-1 mx-auto"
                     >
-                      <Plus className="w-3 h-3" /> Añadir actividad
+                      <Plus className="w-3 h-3" /> {t("home_add_activity")}
                     </button>
                   </div>
                 ) : (
@@ -659,7 +662,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                           const style = getCategoryStyle(setup.categorySettings, item.category);
                           const meta = getCategoryMeta(setup.categorySettings, item.category);
                           const timeStr = `${String(item.date.getHours()).padStart(2, "0")}:${String(item.date.getMinutes()).padStart(2, "0")}`;
-                          const forecast = formatActivityWeather(hourlyWeather, item.date);
+                          const forecast = formatActivityWeather(hourlyWeather, item.date, t);
                           return (
                             <button
                               key={item.id}
@@ -689,7 +692,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                         onClick={() => navigate("calendar")}
                         className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-primary"
                       >
-                        Ver {allUpcoming.length - displayedUpcomingCount} más en el calendario <ChevronRight className="w-3.5 h-3.5" />
+                        {t("home_see_more_calendar", { count: allUpcoming.length - displayedUpcomingCount })} <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
@@ -727,7 +730,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             <div className="px-5 pt-5 flex-shrink-0">
               <div className="flex items-center gap-3">
                 <div className="flex-1">
-                  <p className="text-sm text-slate-700 font-medium">{getGreeting()}</p>
+                  <p className="text-sm text-slate-700 font-medium">{getGreeting(t)}</p>
                   <h1 className="text-xl font-bold text-slate-950 leading-tight">{userName}</h1>
                   {setup.city && (
                     <p className="text-[11px] text-slate-700">
@@ -775,26 +778,26 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 </button>
                 <div className="px-5 flex items-center justify-between mb-2 cursor-pointer" onClick={toggleSummary}>
                   <p className="text-sm font-bold text-foreground">
-                    {showingUpcomingEvents ? "Próximas actividades" : "Hoy"}
+                    {showingUpcomingEvents ? t("home_upcoming_activities") : t("day_today")}
                   </p>
                 </div>
 
                 {summaryEvents.length === 0 ? (
                   <div className="px-5 pb-4 pt-1">
-                    <p className="text-sm font-semibold text-foreground">Para hoy nada</p>
-                    {formatDayWeatherSummary(hourlyWeather, summaryEvents) && (
-                      <p className="mt-1 text-xs text-muted-foreground">{formatDayWeatherSummary(hourlyWeather, summaryEvents)}</p>
+                    <p className="text-sm font-semibold text-foreground">{t("home_nothing_today")}</p>
+                    {formatDayWeatherSummary(hourlyWeather, summaryEvents, t) && (
+                      <p className="mt-1 text-xs text-muted-foreground">{formatDayWeatherSummary(hourlyWeather, summaryEvents, t)}</p>
                     )}
                   </div>
                 ) : (
                   <div className="px-5 pb-3 space-y-3">
-                    {formatDayWeatherSummary(hourlyWeather, summaryEvents) && (
+                    {formatDayWeatherSummary(hourlyWeather, summaryEvents, t) && (
                       <p className="rounded-xl bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
-                        {formatDayWeatherSummary(hourlyWeather, summaryEvents)}
+                        {formatDayWeatherSummary(hourlyWeather, summaryEvents, t)}
                       </p>
                     )}
                     {showingUpcomingEvents && (
-                      <p className="text-sm font-semibold text-foreground">Para hoy nada</p>
+                      <p className="text-sm font-semibold text-foreground">{t("home_nothing_today")}</p>
                     )}
                     {groupedSummaryEvents.map((group) => (
                       <div key={group.key} className="space-y-2">
@@ -805,7 +808,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                           const style = getCategoryStyle(setup.categorySettings, event.category);
                           const meta = getCategoryMeta(setup.categorySettings, event.category);
                           const timeStr = `${String(event.date.getHours()).padStart(2, "0")}:${String(event.date.getMinutes()).padStart(2, "0")}`;
-                          const forecast = formatActivityWeather(hourlyWeather, event.date);
+                          const forecast = formatActivityWeather(hourlyWeather, event.date, t);
                           return (
                             <button
                               key={event.id}
@@ -839,7 +842,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                                     calendar.deleteEvent(event.id);
                                   }}
                                   className="w-7 h-7 rounded-full bg-background/70 border border-border flex items-center justify-center"
-                                  aria-label="Delete event"
+                                  aria-label={t("home_delete_activity")}
                                 >
                                   <Trash2 className="w-3.5 h-3.5 text-destructive" />
                                 </span>
@@ -857,7 +860,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                     onClick={() => navigate("calendar")}
                     className="w-full rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20"
                   >
-                    Añadir actividad
+                    {t("home_add_activity")}
                   </button>
                 </div>
               </div>
@@ -959,13 +962,13 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-muted-foreground font-medium">Configuración</p>
+                  <p className="text-xs text-muted-foreground font-medium">{t("nav_settings")}</p>
                   <h1 className="text-xl font-bold text-foreground leading-tight">{userName}</h1>
                 </div>
                 <button
                   onClick={toggleDark}
                   className="w-9 h-9 rounded-full bg-muted flex items-center justify-center active:opacity-70"
-                  aria-label="Cambiar modo"
+                  aria-label={t("theme_toggle")}
                 >
                   {isDark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
                 </button>
@@ -981,7 +984,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 <div className="w-9 h-9 rounded-xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0">
                   <BookOpen className="w-4 h-4 text-pink-500" />
                 </div>
-                <span className="text-sm font-semibold text-foreground">Estudios</span>
+                <span className="text-sm font-semibold text-foreground">{t("nav_studies")}</span>
               </button>
               <button
                 onClick={() => navigate("map")}
@@ -1016,11 +1019,11 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 <button
                   onClick={() => navigate("profile")}
                   className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
-                  aria-label="Volver"
+                  aria-label={t("common_back")}
                 >
                   <ChevronLeft className="w-4 h-4 text-muted-foreground" />
                 </button>
-                <h1 className="text-xl font-bold text-foreground">Estudios</h1>
+                <h1 className="text-xl font-bold text-foreground">{t("nav_studies")}</h1>
               </div>
             </header>
             <Suspense fallback={<TabLoading />}>
@@ -1051,7 +1054,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 <button
                   onClick={() => navigate("profile")}
                   className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
-                  aria-label="Volver"
+                  aria-label={t("common_back")}
                 >
                   <ChevronLeft className="w-4 h-4 text-muted-foreground" />
                 </button>
@@ -1081,14 +1084,14 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       {/* Timer overrun prompt */}
       {showTimerOverrunPrompt && activeScheduledEvent && (() => {
         const end = getEventEndDate(activeScheduledEvent);
-        const endLabel = end?.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) ?? "";
+        const endLabel = end?.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }) ?? "";
         return (
           <div className="fixed bottom-24 left-0 right-0 px-4 max-w-md mx-auto z-50">
             <div className="rounded-2xl border border-amber-500/30 bg-card p-4 shadow-xl">
               <div className="mb-3">
-                <p className="text-sm font-bold text-foreground">Timer still running</p>
+                <p className="text-sm font-bold text-foreground">{t("timer_overrun_title")}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {activeScheduledEvent.category} was scheduled to finish at {endLabel}.
+                  {t("timer_overrun_body", { category: activeScheduledEvent.category, time: endLabel })}
                 </p>
               </div>
               <div className="grid grid-cols-[1fr_auto] gap-2 mb-2">
@@ -1105,7 +1108,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   onClick={postponeTimerOverrunPrompt}
                   className="rounded-xl bg-muted px-3 py-2 text-sm font-semibold text-foreground"
                 >
-                  Postpone
+                  {t("timer_overrun_postpone")}
                 </button>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -1113,13 +1116,13 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   onClick={stopActiveTimer}
                   className="rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
                 >
-                  Stop timer
+                  {t("timer_overrun_stop")}
                 </button>
                 <button
                   onClick={() => setTimerOverrunDismissedId(activeScheduledEvent.id)}
                   className="rounded-xl border border-border px-3 py-2 text-sm font-semibold text-foreground"
                 >
-                  Keep running
+                  {t("timer_overrun_keep_running")}
                 </button>
               </div>
             </div>
