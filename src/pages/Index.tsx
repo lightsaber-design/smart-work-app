@@ -8,7 +8,7 @@ import { BottomNav, AppTab } from "@/components/BottomNav";
 import { LanguageProvider } from "@/lib/LanguageContext";
 import { detectLanguage, Lang } from "@/lib/i18n";
 import { useT } from "@/lib/LanguageContext";
-import { ChevronLeft, ChevronRight, MapPin, BookOpen, Moon, Sun, Plus, Pencil, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, BookOpen, Moon, Sun, Plus, Pencil, Trash2, CloudFog, CloudRain, CloudSun, Snowflake, Zap } from "lucide-react";
 import { hasActiveStudyWork, useEstudios } from "@/hooks/useEstudios";
 import { MissedStudyBanner } from "@/components/MissedStudyBanner";
 import { useDarkMode } from "@/hooks/useDarkMode";
@@ -58,6 +58,12 @@ type HourlyWeather = {
   temp: number;
   code: number;
   precipitationProbability: number | null;
+};
+
+type CurrentWeather = {
+  temp: number;
+  code: number;
+  isDay: boolean | null;
 };
 
 function weatherCodeToLabel(code: number): string {
@@ -129,6 +135,79 @@ function hexToRgba(hex: string, alpha: number): string {
   const g = parseInt(value.slice(2, 4), 16);
   const b = parseInt(value.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function getWeatherHeroTheme(weather: CurrentWeather | null) {
+  const hour = new Date().getHours();
+  const weatherIsDay = weather?.isDay;
+  const isNight = weatherIsDay === false || (weatherIsDay !== true && (hour < 7 || hour >= 20));
+  const code = weather?.code ?? (isNight ? 1 : 0);
+  const rainy = isRainyWeather(code, null);
+  const stormy = code >= 95;
+  const snowy = code >= 71 && code <= 77;
+  const foggy = code >= 45 && code <= 48;
+  const cloudy = code >= 1 && code <= 3;
+
+  if (stormy) {
+    return {
+      background: "linear-gradient(160deg, #283142 0%, #516070 54%, #64748b 100%)",
+      overlay: "repeating-linear-gradient(105deg, rgba(255,255,255,0.22) 0 1px, transparent 1px 16px)",
+      Icon: Zap,
+      label: "Stormy",
+    };
+  }
+  if (rainy) {
+    return {
+      background: isNight
+        ? "linear-gradient(160deg, #152238 0%, #24445b 58%, #2f6f73 100%)"
+        : "linear-gradient(160deg, #236b80 0%, #47a7ad 58%, #7bbfba 100%)",
+      overlay: "repeating-linear-gradient(102deg, rgba(255,255,255,0.28) 0 1px, transparent 1px 13px)",
+      Icon: CloudRain,
+      label: "Rainy",
+    };
+  }
+  if (snowy) {
+    return {
+      background: isNight
+        ? "linear-gradient(160deg, #1e293b 0%, #475569 58%, #94a3b8 100%)"
+        : "linear-gradient(160deg, #7aa8bc 0%, #c2dce5 100%)",
+      overlay: "radial-gradient(circle at 20% 20%, rgba(255,255,255,0.42) 0 1px, transparent 2px), radial-gradient(circle at 75% 38%, rgba(255,255,255,0.34) 0 1px, transparent 2px)",
+      Icon: Snowflake,
+      label: "Snowy",
+    };
+  }
+  if (foggy) {
+    return {
+      background: isNight
+        ? "linear-gradient(160deg, #1f2937 0%, #4b5563 100%)"
+        : "linear-gradient(160deg, #6aa5ab 0%, #b7cbc9 100%)",
+      overlay: "repeating-linear-gradient(0deg, rgba(255,255,255,0.18) 0 2px, transparent 2px 24px)",
+      Icon: CloudFog,
+      label: "Foggy",
+    };
+  }
+  if (isNight) {
+    return {
+      background: "linear-gradient(160deg, #0f172a 0%, #164e63 58%, #0f766e 100%)",
+      overlay: "linear-gradient(180deg, rgba(255,255,255,0.08), transparent 42%)",
+      Icon: Moon,
+      label: cloudy ? "Cloudy night" : "Night",
+    };
+  }
+  if (cloudy) {
+    return {
+      background: "linear-gradient(160deg, #189ca7 0%, #6bc7c3 100%)",
+      overlay: "linear-gradient(135deg, rgba(255,255,255,0.2), transparent 45%)",
+      Icon: CloudSun,
+      label: "Partly cloudy",
+    };
+  }
+  return {
+    background: "linear-gradient(160deg, #18a6b6 0%, #64c8bf 58%, #f0c15b 100%)",
+    overlay: "linear-gradient(135deg, rgba(255,255,255,0.24), transparent 48%)",
+    Icon: Sun,
+    label: "Sunny",
+  };
 }
 
 function TabLoading() {
@@ -346,7 +425,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const userName = setup.name || setup.city?.name || "Amigo";
 
   // Weather
-  const [weather, setWeather] = useState<{ temp: number; code: number } | null>(null);
+  const [weather, setWeather] = useState<CurrentWeather | null>(null);
   const [hourlyWeather, setHourlyWeather] = useState<HourlyWeather[]>([]);
   useEffect(() => {
     if (!setup.city) {
@@ -359,7 +438,13 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       .then((r) => r.json())
       .then((data) => {
         const cw = data?.current_weather;
-        if (cw) setWeather({ temp: Math.round(cw.temperature), code: cw.weathercode });
+        if (cw) {
+          setWeather({
+            temp: Math.round(cw.temperature),
+            code: cw.weathercode,
+            isDay: typeof cw.is_day === "number" ? cw.is_day === 1 : null,
+          });
+        }
         const hourly = data?.hourly;
         if (Array.isArray(hourly?.time) && Array.isArray(hourly?.temperature_2m) && Array.isArray(hourly?.weather_code)) {
           setHourlyWeather(hourly.time.map((time: string, index: number) => ({
@@ -469,15 +554,21 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
           }, []);
           const displayedUpcomingCount = nextDayGroups.reduce((count, group) => count + group.events.length, 0);
           const hasMore = allUpcoming.length > displayedUpcomingCount;
+          const heroTheme = getWeatherHeroTheme(weather);
+          const WeatherHeroIcon = heroTheme.Icon;
           return (
             <div className="min-h-screen bg-background pb-24">
               {/* Gradient hero */}
               <div
-                className="relative px-5 pt-14 pb-20"
-                style={{ background: "linear-gradient(160deg, #17A2B8 0%, #5EC3C2 100%)" }}
+                className="relative overflow-hidden px-5 pt-14 pb-20"
+                style={{ background: heroTheme.background }}
               >
+                <div className="absolute inset-0 opacity-70 pointer-events-none" style={{ backgroundImage: heroTheme.overlay }} />
+                <div className="absolute right-5 top-16 pointer-events-none">
+                  <WeatherHeroIcon className="h-20 w-20 text-white/18" strokeWidth={1.4} />
+                </div>
                 <div className="flex items-start justify-between">
-                  <div>
+                  <div className="relative z-10">
                     <p className="text-white/80 text-sm font-medium">{getGreeting()}</p>
                     <h1 className="text-3xl font-black text-white leading-tight mt-0.5">{userName},</h1>
                     {setup.city && (
@@ -486,10 +577,16 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                         {setup.city.name}{weather ? ` · ${weatherCodeToEmoji(weather.code)} ${weather.temp}°` : ""}
                       </p>
                     )}
+                    {weather && (
+                      <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/16 px-2.5 py-1 text-[11px] font-semibold text-white/85 backdrop-blur">
+                        <WeatherHeroIcon className="h-3.5 w-3.5" />
+                        {heroTheme.label}
+                      </p>
+                    )}
                   </div>
                   <button
                     onClick={toggleDark}
-                    className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:opacity-70 backdrop-blur mt-1 flex-shrink-0"
+                    className="relative z-10 w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:opacity-70 backdrop-blur mt-1 flex-shrink-0"
                     aria-label="Cambiar modo"
                   >
                     {isDark ? <Sun className="w-4 h-4 text-yellow-300" /> : <Moon className="w-4 h-4 text-white" />}

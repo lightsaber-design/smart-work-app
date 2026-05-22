@@ -17,6 +17,12 @@ export const DEFAULT_CATEGORY_CONFIGS: CategoryConfig[] = [
   { name: "Estudio", color: "#D07D7D", active: true, support: false },
 ];
 
+export const DEFAULT_CATEGORY_NAMES = DEFAULT_CATEGORY_CONFIGS.map((category) => category.name);
+
+export function isDefaultCategoryName(name: string): boolean {
+  return DEFAULT_CATEGORY_NAMES.some((categoryName) => categoryName === name);
+}
+
 const DEFAULT_ICONS: Record<string, string> = {
   Predi: "🏠",
   Carrito: "🪧",

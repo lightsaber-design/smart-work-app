@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Trash2, MapPin, User, Globe, Moon, FileJson, FolderOpen, Plus, Check, ChevronRight } from "lucide-react";
+import { Trash2, MapPin, User, Globe, Moon, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -12,7 +12,7 @@ import { SetupData } from "@/hooks/useSetup";
 import { useT } from "@/lib/LanguageContext";
 import { LANGUAGES, Lang } from "@/lib/i18n";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
-import { CategoryConfig } from "@/lib/categories";
+import { CategoryConfig, isDefaultCategoryName } from "@/lib/categories";
 
 interface SettingsViewProps {
   onClearAll: () => void;
@@ -35,6 +35,8 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
   const [newCategoryColor, setNewCategoryColor] = useState(CATEGORY_COLORS[0]);
   const [newCategorySupport, setNewCategorySupport] = useState(true);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [editingCategoryName, setEditingCategoryName] = useState<string | null>(null);
+  const [categoryNameDraft, setCategoryNameDraft] = useState("");
 
   const handleSaveCity = () => {
     if (cityDraft) onSaveSetup({ city: cityDraft });
@@ -48,6 +50,9 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
   const saveCategories = (categorySettings: CategoryConfig[]) => onSaveSetup({ categorySettings });
 
   const updateCategory = (name: string, updates: Partial<CategoryConfig>) => {
+    const categoryIsDefault = isDefaultCategoryName(name);
+    const protectedUpdates = categoryIsDefault && ("name" in updates || "color" in updates || "support" in updates);
+    if (protectedUpdates) return;
     if (name === "Estudio" && updates.active === true && !hasActiveStudies) {
       window.alert("Create at least one active study before enabling Study.");
       return;
@@ -57,6 +62,32 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
       return;
     }
     saveCategories(categories.map((category) => (category.name === name ? { ...category, ...updates } : category)));
+  };
+
+  const renameCategory = (currentName: string) => {
+    if (isDefaultCategoryName(currentName)) return;
+    const nextName = categoryNameDraft.trim();
+    if (!nextName || nextName === currentName) {
+      setEditingCategoryName(null);
+      return;
+    }
+    if (isDefaultCategoryName(nextName) || categories.some((category) => category.name.toLowerCase() === nextName.toLowerCase())) {
+      window.alert("A category with this name already exists.");
+      return;
+    }
+    saveCategories(categories.map((category) => (category.name === currentName ? { ...category, name: nextName } : category)));
+    setEditingCategoryName(null);
+    setCategoryNameDraft("");
+  };
+
+  const deleteCategory = (name: string) => {
+    if (isDefaultCategoryName(name)) return;
+    if (categories.find((category) => category.name === name)?.active && categories.filter((category) => category.active).length <= 1) {
+      window.alert("Keep at least one category active.");
+      return;
+    }
+    if (!window.confirm("Delete this category? Existing activities keep their label.")) return;
+    saveCategories(categories.filter((category) => category.name !== name));
   };
 
   const addCategory = () => {
@@ -175,37 +206,82 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: category.color }} />
-                      <span className="truncate text-sm font-semibold text-foreground">{category.name}</span>
+                      {editingCategoryName === category.name ? (
+                        <Input
+                          value={categoryNameDraft}
+                          onChange={(event) => setCategoryNameDraft(event.target.value)}
+                          onBlur={() => renameCategory(category.name)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") renameCategory(category.name);
+                            if (event.key === "Escape") setEditingCategoryName(null);
+                          }}
+                          className="h-8"
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="truncate text-sm font-semibold text-foreground">{category.name}</span>
+                      )}
                     </div>
                     <Switch
                       checked={category.active}
                       onCheckedChange={(active) => updateCategory(category.name, { active })}
                     />
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <Label className="text-xs text-muted-foreground">Color</Label>
-                    <div className="flex gap-1.5">
-                      {CATEGORY_COLORS.map((color) => (
-                        <button
-                          key={color}
+                  {isDefaultCategoryName(category.name) ? (
+                    <p className="text-xs text-muted-foreground">Base category. You can only include or hide it.</p>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between gap-3">
+                        <Label className="text-xs text-muted-foreground">Color</Label>
+                        <div className="flex gap-1.5">
+                          {CATEGORY_COLORS.map((color) => (
+                            <button
+                              key={color}
+                              type="button"
+                              onClick={() => updateCategory(category.name, { color })}
+                              className="flex h-6 w-6 items-center justify-center rounded-full border border-border"
+                              style={{ backgroundColor: color }}
+                              aria-label={`Use ${color}`}
+                            >
+                              {category.color === color && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <Label className="text-xs text-muted-foreground">Support category, capped at 55h/month</Label>
+                        <Switch
+                          checked={category.support}
+                          onCheckedChange={(support) => updateCategory(category.name, { support })}
+                        />
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <Button
                           type="button"
-                          onClick={() => updateCategory(category.name, { color })}
-                          className="flex h-6 w-6 items-center justify-center rounded-full border border-border"
-                          style={{ backgroundColor: color }}
-                          aria-label={`Use ${color}`}
+                          size="sm"
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => {
+                            setEditingCategoryName(category.name);
+                            setCategoryNameDraft(category.name);
+                          }}
                         >
-                          {category.color === color && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <Label className="text-xs text-muted-foreground">Support category, capped at 55h/month</Label>
-                    <Switch
-                      checked={category.support}
-                      onCheckedChange={(support) => updateCategory(category.name, { support })}
-                    />
-                  </div>
+                          <Pencil className="h-3.5 w-3.5" />
+                          Rename
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 text-destructive hover:text-destructive"
+                          onClick={() => deleteCategory(category.name)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
