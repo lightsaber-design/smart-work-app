@@ -12,13 +12,14 @@ import { hasActiveStudyWork, useEstudios } from "@/hooks/useEstudios";
 import { MissedStudyBanner } from "@/components/MissedStudyBanner";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { useSpecialCampaign } from "@/hooks/useSpecialCampaign";
-import { getCategoryMeta, getCategoryStyle } from "@/lib/categories";
+import { getCategoryLabel, getCategoryMeta, getCategoryStyle } from "@/lib/categories";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 import { removeJsonValue } from "@/lib/jsonFileStorage";
 import { shouldNotifyEvent } from "@/lib/eventReminders";
 import { findActiveScheduledEvent, getEventEndDate, shouldShowTimerOverrunPrompt } from "@/lib/timerOverrun";
 import { showBrowserNotification } from "@/lib/notifications";
 import { clampTimeValueToHourRange } from "@/lib/activityHours";
+import { formatPlaceName } from "@/lib/placeNames";
 
 const StatsView = lazy(() => import("@/components/StatsView").then((module) => ({ default: module.StatsView })));
 const CalendarView = lazy(() => import("@/components/CalendarView").then((module) => ({ default: module.CalendarView })));
@@ -154,7 +155,7 @@ function getWeatherHeroTheme(weather: CurrentWeather | null) {
       background: "linear-gradient(160deg, #283142 0%, #516070 54%, #64748b 100%)",
       overlay: "repeating-linear-gradient(105deg, rgba(255,255,255,0.22) 0 1px, transparent 1px 16px)",
       Icon: Zap,
-      label: "Stormy",
+      label: "weather_storm",
     };
   }
   if (rainy) {
@@ -164,7 +165,7 @@ function getWeatherHeroTheme(weather: CurrentWeather | null) {
         : "linear-gradient(160deg, #236b80 0%, #47a7ad 58%, #7bbfba 100%)",
       overlay: "repeating-linear-gradient(102deg, rgba(255,255,255,0.28) 0 1px, transparent 1px 13px)",
       Icon: CloudRain,
-      label: "Rainy",
+      label: "weather_rain",
     };
   }
   if (snowy) {
@@ -174,7 +175,7 @@ function getWeatherHeroTheme(weather: CurrentWeather | null) {
         : "linear-gradient(160deg, #7aa8bc 0%, #c2dce5 100%)",
       overlay: "radial-gradient(circle at 20% 20%, rgba(255,255,255,0.42) 0 1px, transparent 2px), radial-gradient(circle at 75% 38%, rgba(255,255,255,0.34) 0 1px, transparent 2px)",
       Icon: Snowflake,
-      label: "Snowy",
+      label: "weather_snow",
     };
   }
   if (foggy) {
@@ -184,7 +185,7 @@ function getWeatherHeroTheme(weather: CurrentWeather | null) {
         : "linear-gradient(160deg, #6aa5ab 0%, #b7cbc9 100%)",
       overlay: "repeating-linear-gradient(0deg, rgba(255,255,255,0.18) 0 2px, transparent 2px 24px)",
       Icon: CloudFog,
-      label: "Foggy",
+      label: "weather_fog",
     };
   }
   if (isNight) {
@@ -192,7 +193,7 @@ function getWeatherHeroTheme(weather: CurrentWeather | null) {
       background: "linear-gradient(160deg, #0f172a 0%, #164e63 58%, #0f766e 100%)",
       overlay: "linear-gradient(180deg, rgba(255,255,255,0.08), transparent 42%)",
       Icon: Moon,
-      label: cloudy ? "Cloudy night" : "Night",
+      label: cloudy ? "weather_cloudy_night" : "weather_night",
     };
   }
   if (cloudy) {
@@ -200,21 +201,22 @@ function getWeatherHeroTheme(weather: CurrentWeather | null) {
       background: "linear-gradient(160deg, #189ca7 0%, #6bc7c3 100%)",
       overlay: "linear-gradient(135deg, rgba(255,255,255,0.2), transparent 45%)",
       Icon: CloudSun,
-      label: "Partly cloudy",
+      label: "weather_cloudy",
     };
   }
   return {
     background: "linear-gradient(160deg, #18a6b6 0%, #64c8bf 58%, #f0c15b 100%)",
     overlay: "linear-gradient(135deg, rgba(255,255,255,0.24), transparent 48%)",
     Icon: Sun,
-    label: "Sunny",
+    label: "weather_sunny",
   };
 }
 
 function TabLoading() {
+  const t = useT();
   return (
     <div className="px-5 py-6 text-sm font-medium text-muted-foreground">
-      Cargando...
+      {t("common_loading")}
     </div>
   );
 }
@@ -299,7 +301,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         if (shouldNotifyEvent(now, event)) {
           if (!tracker.isRunning) {
             showBrowserNotification(t("notif_activity_upcoming"), {
-              body: t("notif_activity_upcoming_body", { category: event.category }),
+              body: t("notif_activity_upcoming_body", { category: getCategoryLabel(event.category, t) }),
             });
           }
           markNotified(event.id);
@@ -425,7 +427,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     setCalendarFocusMonthDate(monthDate);
     setActiveTab("calendar");
   };
-  const userName = setup.name || setup.city?.name || "Amigo";
+  const displayCityName = setup.city ? formatPlaceName(setup.city.name, t) : "";
+  const userName = setup.name || displayCityName || t("friend_name");
 
   // Weather
   const [weather, setWeather] = useState<CurrentWeather | null>(null);
@@ -505,7 +508,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               id: e.id,
               date: e.date,
               category: e.category as import("@/hooks/useCalendarEvents").EventCategory,
-              label: e.category,
+              label: getCategoryLabel(e.category, t),
               contactName: undefined as string | undefined,
               contactId: undefined as string | undefined,
               sessionId: undefined as string | undefined,
@@ -529,7 +532,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                     id: s.id,
                     date: d,
                     category: "Estudio" as import("@/hooks/useCalendarEvents").EventCategory,
-                    label: `Estudio – ${c.name}`,
+                    label: `${getCategoryLabel("Estudio", t)} – ${c.name}`,
                     contactName: c.name,
                     contactId: c.id,
                     sessionId: s.id,
@@ -577,13 +580,13 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                     {setup.city && (
                       <p className="text-white/75 text-[13px] mt-2 flex items-center gap-1.5">
                         <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-                        {setup.city.name}{weather ? ` · ${weatherCodeToEmoji(weather.code)} ${weather.temp}°` : ""}
+                        {displayCityName}{weather ? ` · ${weatherCodeToEmoji(weather.code)} ${weather.temp}°` : ""}
                       </p>
                     )}
                     {weather && (
                       <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/16 px-2.5 py-1 text-[11px] font-semibold text-white/85 backdrop-blur">
                         <WeatherHeroIcon className="h-3.5 w-3.5" />
-                        {heroTheme.label}
+                        {t(heroTheme.label)}
                       </p>
                     )}
                   </div>
@@ -734,14 +737,14 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   <h1 className="text-xl font-bold text-slate-950 leading-tight">{userName}</h1>
                   {setup.city && (
                     <p className="text-[11px] text-slate-700">
-                      {setup.city.name}{weather ? ` · ${weatherCodeToEmoji(weather.code)} ${weather.temp}°` : ""}
+                      {displayCityName}{weather ? ` · ${weatherCodeToEmoji(weather.code)} ${weather.temp}°` : ""}
                     </p>
                   )}
                 </div>
                 <button
                   onClick={toggleDark}
                   className="w-9 h-9 rounded-full bg-white/18 flex items-center justify-center active:opacity-70 backdrop-blur"
-                  aria-label="Cambiar modo"
+                  aria-label={t("theme_toggle")}
                 >
                   {isDark ? <Sun className="w-4 h-4 text-yellow-500" /> : <Moon className="w-4 h-4 text-slate-700" />}
                 </button>
@@ -819,7 +822,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                             >
                               <span className="text-lg leading-none">{meta.icon}</span>
                               <div className="flex-1 min-w-0">
-                                <p className={`text-[13px] font-semibold text-foreground truncate ${event.completed ? "line-through opacity-50" : ""}`}>{event.category}</p>
+                                <p className={`text-[13px] font-semibold text-foreground truncate ${event.completed ? "line-through opacity-50" : ""}`}>{getCategoryLabel(event.category, t)}</p>
                                 <p className="text-[10px] text-muted-foreground">{timeStr}{event.endTime ? ` – ${event.endTime}` : ""}</p>
                                 {!event.completed && forecast && <p className="text-[10px] text-muted-foreground truncate">{forecast}</p>}
                               </div>
@@ -993,7 +996,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
                   <MapPin className="w-4 h-4 text-blue-500" />
                 </div>
-                <span className="text-sm font-semibold text-foreground">Mapa</span>
+                <span className="text-sm font-semibold text-foreground">{t("nav_map")}</span>
               </button>
             </div>
 

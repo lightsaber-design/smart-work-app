@@ -12,7 +12,8 @@ import { SetupData } from "@/hooks/useSetup";
 import { useT } from "@/lib/LanguageContext";
 import { LANGUAGES, Lang } from "@/lib/i18n";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
-import { CategoryConfig, isDefaultCategoryName } from "@/lib/categories";
+import { CategoryConfig, getCategoryLabel, isDefaultCategoryName } from "@/lib/categories";
+import { formatPlaceName } from "@/lib/placeNames";
 
 interface SettingsViewProps {
   onClearAll: () => void;
@@ -139,7 +140,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              {setup.city ? setup.city.name : t('set_no_city')}
+              {setup.city ? formatPlaceName(setup.city.name, t) : t('set_no_city')}
             </p>
           )}
         </div>
@@ -191,7 +192,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                   key={category.name}
                   className={`h-2.5 w-2.5 rounded-full border border-border ${category.active ? "" : "opacity-35"}`}
                   style={{ backgroundColor: category.color }}
-                  title={category.name}
+                  title={getCategoryLabel(category.name, t)}
                 />
               ))}
             </div>
@@ -220,7 +221,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                           autoFocus
                         />
                       ) : (
-                        <span className="truncate text-sm font-semibold text-foreground">{category.name}</span>
+                        <span className="truncate text-sm font-semibold text-foreground">{getCategoryLabel(category.name, t)}</span>
                       )}
                     </div>
                     <Switch

@@ -1,5 +1,6 @@
 import { Trash2 } from "lucide-react";
 import { TimeEntry, formatTime, formatDuration } from "@/hooks/useTimeTracker";
+import { useT } from "@/lib/LanguageContext";
 
 interface TimeEntryListProps {
   entries: TimeEntry[];
@@ -8,10 +9,12 @@ interface TimeEntryListProps {
 }
 
 export function TimeEntryList({ entries, onDelete, onUpdateDescription }: TimeEntryListProps) {
+  const t = useT();
+
   if (entries.length === 0) {
     return (
       <div className="px-4 py-12 text-center">
-        <p className="text-muted-foreground text-sm">No hay registros hoy</p>
+        <p className="text-muted-foreground text-sm">{t("time_entries_empty")}</p>
       </div>
     );
   }
@@ -19,7 +22,7 @@ export function TimeEntryList({ entries, onDelete, onUpdateDescription }: TimeEn
   return (
     <div className="px-4 space-y-3">
       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-        Registros de hoy
+        {t("time_entries_today")}
       </h3>
       {entries.map((entry) => {
         const duration = entry.endTime
@@ -41,12 +44,12 @@ export function TimeEntryList({ entries, onDelete, onUpdateDescription }: TimeEn
                 type="text"
                 value={entry.description}
                 onChange={(e) => onUpdateDescription(entry.id, e.target.value)}
-                placeholder="Añadir descripción..."
+                placeholder={t("time_entries_description_placeholder")}
                 className="text-sm font-medium text-foreground bg-transparent border-none outline-none w-full placeholder:text-muted-foreground/50"
               />
               <p className="text-xs text-muted-foreground mt-0.5">
                 {formatTime(entry.startTime)}
-                {entry.endTime ? ` — ${formatTime(entry.endTime)}` : " — en curso"}
+                {entry.endTime ? ` - ${formatTime(entry.endTime)}` : ` - ${t("time_entries_running")}`}
               </p>
             </div>
             <p className="text-sm font-semibold text-foreground tabular-nums">

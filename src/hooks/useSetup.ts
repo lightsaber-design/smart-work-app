@@ -36,7 +36,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isLanguage(value: unknown): value is Lang {
-  return value === "es" || value === "en" || value === "pt";
+  return value === "es" || value === "en" || value === "pt" || value === "fr" || value === "it" || value === "de";
 }
 
 function parseStoredCity(value: unknown): SetupData["city"] {

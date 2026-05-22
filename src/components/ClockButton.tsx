@@ -12,7 +12,7 @@ import {
 import { useMemo, useState, useEffect, useRef } from "react";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
-import { CategoryConfig, getActiveCategoryConfigs, getCategoryMeta } from "@/lib/categories";
+import { CategoryConfig, getActiveCategoryConfigs, getCategoryLabel, getCategoryMeta } from "@/lib/categories";
 
 function getCurrentTimeStr(): string {
   const now = new Date();
@@ -335,7 +335,7 @@ export function ClockButton({
                   style={{ background: "rgba(255,255,255,0.18)" }}
                 >
                   <span>{meta.icon}</span>
-                  <span>{currentCategory}</span>
+                  <span>{getCategoryLabel(currentCategory, t)}</span>
                 </div>
 
                 {/* Tiempo transcurrido grande */}
@@ -375,7 +375,7 @@ export function ClockButton({
                   {wallTime}
                 </p>
                 <p className={`text-[11px] ${mutedCircleText} font-medium`}>
-                  {t("timer_touch_to_start", { category: currentCategory })}
+                  {t("timer_touch_to_start", { category: getCategoryLabel(currentCategory, t) })}
                 </p>
 
                 {/* Botón de inicio */}
@@ -419,7 +419,7 @@ export function ClockButton({
                   {m.icon}
                 </div>
                 <span className={`text-[10px] font-semibold ${isStrong ? "text-white" : "text-slate-700"}`}>
-                  {cat}
+                  {getCategoryLabel(cat, t)}
                 </span>
               </button>
             );

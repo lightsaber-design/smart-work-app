@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { MapPin, Loader2 } from "lucide-react";
+import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 
 interface CityResult {
   place_id: number;
@@ -20,7 +21,10 @@ function formatName(result: CityResult): string {
   return parts.slice(0, 3).join(", ");
 }
 
-export function CitySearch({ value, onChange, placeholder = "Buscar ciudad..." }: CitySearchProps) {
+export function CitySearch({ value, onChange, placeholder }: CitySearchProps) {
+  const t = useT();
+  const lang = useLang();
+  const locale = localeForLang(lang);
   const [query, setQuery] = useState(value?.name ?? "");
   const [suggestions, setSuggestions] = useState<CityResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,7 +38,7 @@ export function CitySearch({ value, onChange, placeholder = "Buscar ciudad..." }
       setLoading(true);
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&addressdetails=1`,
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&addressdetails=1&accept-language=${encodeURIComponent(locale)}`,
           { referrerPolicy: "no-referrer" }
         );
         const data: CityResult[] = await res.json();
@@ -64,7 +68,7 @@ export function CitySearch({ value, onChange, placeholder = "Buscar ciudad..." }
           onChange={(e) => { setQuery(e.target.value); search(e.target.value); }}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onFocus={() => suggestions.length > 0 && setOpen(true)}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t("city_search_placeholder")}
           className="pl-9 pr-9"
         />
         {loading && (

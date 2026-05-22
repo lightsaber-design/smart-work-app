@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { useT } from "@/lib/LanguageContext";
+import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { openGoogleMaps } from "@/lib/maps";
 
 interface LeafletDefaultIconPrototype extends L.Icon.Default {
@@ -67,13 +67,14 @@ function mergeResults(primary: NominatimResult[], fallback: NominatimResult[]): 
   return merged;
 }
 
-async function fetchNominatim(query: string, options: { center?: SearchCenter; bounded?: boolean; limit?: number; signal?: AbortSignal }): Promise<NominatimResult[]> {
+async function fetchNominatim(query: string, options: { center?: SearchCenter; bounded?: boolean; limit?: number; signal?: AbortSignal; locale?: string }): Promise<NominatimResult[]> {
   const params = new URLSearchParams({
     format: "json",
     addressdetails: "1",
     limit: String(options.limit ?? 5),
     q: query,
   });
+  if (options.locale) params.set("accept-language", options.locale);
 
   if (options.center) {
     params.set("viewbox", cityViewbox(options.center));
@@ -113,6 +114,8 @@ function ClickHandler({ onClick }: { onClick: (lat: number, lng: number) => void
 
 export function LocationPicker({ value, onChange, defaultCenter }: LocationPickerProps) {
   const t = useT();
+  const lang = useLang();
+  const locale = localeForLang(lang);
   const [search, setSearch] = useState("");
   const [searching, setSearching] = useState(false);
   const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
@@ -142,12 +145,12 @@ export function LocationPicker({ value, onChange, defaultCenter }: LocationPicke
       try {
         const localResults = defaultCenter
           ? sortByNearestCity(
-              await fetchNominatim(query, { center: defaultCenter, bounded: true, limit: 6, signal: controller.signal }),
+              await fetchNominatim(query, { center: defaultCenter, bounded: true, limit: 6, signal: controller.signal, locale }),
               defaultCenter
             )
           : [];
         const broaderResults = sortByNearestCity(
-          await fetchNominatim(query, { center: defaultCenter, bounded: false, limit: 8, signal: controller.signal }),
+          await fetchNominatim(query, { center: defaultCenter, bounded: false, limit: 8, signal: controller.signal, locale }),
           defaultCenter
         );
         const nextSuggestions = mergeResults(localResults, broaderResults).slice(0, 8);
@@ -167,7 +170,7 @@ export function LocationPicker({ value, onChange, defaultCenter }: LocationPicke
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [search]);
+  }, [defaultCenter, locale, search]);
 
   const handleSearch = async () => {
     if (!search.trim()) return;
@@ -178,9 +181,9 @@ export function LocationPicker({ value, onChange, defaultCenter }: LocationPicke
     setSearching(true);
     try {
       const localResults = defaultCenter
-        ? sortByNearestCity(await fetchNominatim(search, { center: defaultCenter, bounded: true, limit: 3 }), defaultCenter)
+        ? sortByNearestCity(await fetchNominatim(search, { center: defaultCenter, bounded: true, limit: 3, locale }), defaultCenter)
         : [];
-      const broaderResults = sortByNearestCity(await fetchNominatim(search, { center: defaultCenter, bounded: false, limit: 5 }), defaultCenter);
+      const broaderResults = sortByNearestCity(await fetchNominatim(search, { center: defaultCenter, bounded: false, limit: 5, locale }), defaultCenter);
       const data = mergeResults(localResults, broaderResults);
       const firstResult = data[0];
       if (firstResult) {

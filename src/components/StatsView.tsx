@@ -4,7 +4,7 @@ import { TimeEntry } from "@/hooks/useTimeTracker";
 import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { useCategoryFilter } from "@/hooks/useCategoryFilter";
 import { useMonthlyReportCarryover } from "@/hooks/useMonthlyReportCarryover";
-import { CategoryConfig, getActiveCategoryConfigs, getCategoryMeta, SUPPORT_CAP_HOURS } from "@/lib/categories";
+import { CategoryConfig, getActiveCategoryConfigs, getCategoryLabel, getCategoryMeta, SUPPORT_CAP_HOURS } from "@/lib/categories";
 import { applyMonthlySupportCap } from "@/lib/ldcCap";
 import { calculateMonthlyReport } from "@/lib/monthlyReport";
 import { msToLabel } from "@/lib/time";
@@ -42,6 +42,8 @@ export function StatsView({
   const { excluded, toggle, isIncluded } = useCategoryFilter(activeCategoryNames);
   const { carryover, saveMonthlyReport } = useMonthlyReportCarryover();
   const now = new Date();
+  const formatMonthYear = (date: Date) => date.toLocaleDateString(locale, { month: "long", year: "numeric" });
+  const formatShortMonth = (date: Date) => date.toLocaleDateString(locale, { month: "short" });
 
   // ── MENSUAL ──────────────────────────────────────────────────────────────
   const monthCompletedEvents = calendarEvents.filter(
@@ -87,7 +89,7 @@ export function StatsView({
   const serviceYearStart = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
   const serviceYearFrom = new Date(serviceYearStart, 8, 1);
   const serviceYearTo   = new Date(serviceYearStart + 1, 8, 1);
-  const serviceYearLabel = `${new Date(serviceYearStart, 8, 1).toLocaleDateString(locale, { month: "short" })} ${serviceYearStart} - ${new Date(serviceYearStart + 1, 7, 1).toLocaleDateString(locale, { month: "short" })} ${serviceYearStart + 1}`;
+  const serviceYearLabel = `${formatShortMonth(new Date(serviceYearStart, 8, 1))} ${serviceYearStart} - ${formatShortMonth(new Date(serviceYearStart + 1, 7, 1))} ${serviceYearStart + 1}`;
 
   const serviceYearMonths = Array.from({ length: 12 }, (_, i) => {
     const calMonth = (8 + i) % 12;
@@ -210,7 +212,7 @@ export function StatsView({
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-muted-foreground mb-0.5 capitalize">
-                      {now.toLocaleDateString(locale, { month: "long", year: "numeric" })}
+                      {formatMonthYear(now)}
                       {hasExclusions && <span className="ml-1 text-primary/70">· {t("stats_filtered")}</span>}
                     </p>
                     <p className="text-2xl font-bold text-foreground tabular-nums">
@@ -315,7 +317,7 @@ export function StatsView({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between mb-1.5">
-                        <p className="text-[13px] font-semibold text-foreground">{cat}</p>
+                        <p className="text-[13px] font-semibold text-foreground">{getCategoryLabel(cat, t)}</p>
                         {isSupport && rawMs > ms && (
                           <p className="text-[11px] text-muted-foreground">{t("stats_real_hours", { value: msToLabel(rawMs) })}</p>
                         )}
@@ -347,7 +349,7 @@ export function StatsView({
           {/* Enviar Informe mensual */}
           {(() => {
             const estudiosCount = completedCountByCategory["Estudio"] ?? 0;
-            const monthLabel = now.toLocaleDateString(locale, { month: "long", year: "numeric" });
+            const monthLabel = formatMonthYear(now);
             const msg = [
               `📊 ${t("stats_report")} ${monthLabel}`,
               `⏱️ ${t("stats_hours")}: ${monthlyReport.reportedHours}h`,
@@ -461,10 +463,10 @@ export function StatsView({
                         backgroundColor: ms === 0 ? "hsl(var(--muted))" : undefined,
                         opacity: ms === 0 ? 0.35 : 1,
                       }}
-                      title={`${new Date(year, month, 1).toLocaleDateString(locale, { month: "short" })}: ${msToLabel(ms)}`}
+                      title={`${formatShortMonth(new Date(year, month, 1))}: ${msToLabel(ms)}`}
                     />
                     <span className={`text-[8px] font-semibold ${isCurrentMonth ? "text-primary" : "text-muted-foreground"}`}>
-                      {new Date(year, month, 1).toLocaleDateString(locale, { month: "short" })}
+                      {formatShortMonth(new Date(year, month, 1))}
                     </span>
                   </div>
                 );
@@ -520,7 +522,7 @@ export function StatsView({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between mb-1.5">
-                        <p className="text-[13px] font-semibold text-foreground">{cat}</p>
+                        <p className="text-[13px] font-semibold text-foreground">{getCategoryLabel(cat, t)}</p>
                       </div>
                       <div className="h-2 rounded-full bg-muted overflow-hidden">
                         {ms > 0 && (

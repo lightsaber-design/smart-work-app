@@ -23,6 +23,11 @@ export function isDefaultCategoryName(name: string): boolean {
   return DEFAULT_CATEGORY_NAMES.some((categoryName) => categoryName === name);
 }
 
+export function getCategoryLabel(name: string, t: (key: string) => string): string {
+  if (!isDefaultCategoryName(name)) return name;
+  return t(`category_${name.toLowerCase()}`);
+}
+
 const DEFAULT_ICONS: Record<string, string> = {
   Predi: "🏠",
   Carrito: "🪧",

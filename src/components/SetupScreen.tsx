@@ -10,6 +10,7 @@ import { LANGUAGES, Lang, detectLanguage } from "@/lib/i18n";
 import { useT } from "@/lib/LanguageContext";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
 import { DEFAULT_CATEGORY_CONFIGS } from "@/lib/categories";
+import { formatPlaceName } from "@/lib/placeNames";
 
 interface SetupScreenProps {
   onComplete: (data: Omit<SetupData, "completed">) => void;
@@ -126,7 +127,7 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
                 <h2 className="text-sm font-semibold text-foreground">{t("setup_where")}</h2>
               </div>
               <CitySearch value={city ?? undefined} onChange={setCity} placeholder={t("setup_city_placeholder")} />
-              {city && <p className="text-xs text-muted-foreground">{city.name}</p>}
+              {city && <p className="text-xs text-muted-foreground">{formatPlaceName(city.name, t)}</p>}
             </div>
           )}
 

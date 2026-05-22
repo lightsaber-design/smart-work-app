@@ -24,30 +24,23 @@ import { openGoogleMaps } from "@/lib/maps";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 
 /* Constantes */
-const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-const FREQ_LABELS: Record<ScheduleFrequency, string> = {
-  weekly: "Semanal",
-  fortnightly: "Quincenal",
-  monthly: "Mensual",
-};
-
 /* Ayudantes */
-function formatRelative(isoDate: string): string {
+function formatRelative(isoDate: string, t: (key: string, vars?: Record<string, string | number>) => string): string {
   try {
     const diff = Date.now() - new Date(isoDate).getTime();
     const days = Math.floor(diff / 86400000);
-    if (days === 0) return "hoy";
-    if (days === 1) return "ayer";
-    if (days < 7) return `hace ${days} días`;
+    if (days === 0) return t("date_today_lower");
+    if (days === 1) return t("date_yesterday_lower");
+    if (days < 7) return t("studies_days_ago", { count: days });
     const weeks = Math.floor(days / 7);
-    if (weeks < 5) return `hace ${weeks} semana${weeks > 1 ? "s" : ""}`;
+    if (weeks < 5) return t(weeks === 1 ? "studies_week_ago" : "studies_weeks_ago", { count: weeks });
     const months = Math.floor(days / 30);
-    return `hace ${months} mes${months > 1 ? "es" : ""}`;
+    return t(months === 1 ? "studies_month_ago" : "studies_months_ago", { count: months });
   } catch { return ""; }
 }
 
-function formatDateLabel(isoDate: string): string {
-  return new Date(isoDate).toLocaleDateString("es-ES", {
+function formatDateLabel(isoDate: string, locale: string): string {
+  return new Date(isoDate).toLocaleDateString(locale, {
     weekday: "short", day: "numeric", month: "long", year: "numeric",
   });
 }
@@ -78,6 +71,7 @@ function FilePicker({ files, onChange }: {
   files: { file: File; id: string }[];
   onChange: (files: { file: File; id: string }[]) => void;
 }) {
+  const t = useT();
   const ref = useRef<HTMLInputElement>(null);
   const add = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newFiles = Array.from(e.target.files ?? []);
@@ -91,7 +85,7 @@ function FilePicker({ files, onChange }: {
         onClick={() => ref.current?.click()}
         className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl py-3 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors"
       >
-        <Paperclip className="w-4 h-4" /> Adjuntar archivo
+        <Paperclip className="w-4 h-4" /> {t("study_attach_file")}
       </button>
       {files.map(({ file, id }) => (
         <div key={id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-muted">
@@ -215,8 +209,10 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
                     <Select value={String(schedDay)} onValueChange={(v) => setSchedDay(Number(v))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {DAY_NAMES.map((d, i) => (
-                          <SelectItem key={d} value={String(i)}>{d}</SelectItem>
+                        {Array.from({ length: 7 }, (_, i) => (
+                          <SelectItem key={i} value={String(i)}>
+                            {new Date(2024, 0, 7 + i).toLocaleDateString(locale, { weekday: "long" })}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -426,6 +422,9 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
 
 /* Tarjeta de sesion historica */
 function HistorySessionCard({ session, onOpen }: { session: EstudioSession; onOpen: () => void }) {
+  const t = useT();
+  const lang = useLang();
+  const locale = localeForLang(lang);
   return (
     <button
       onClick={onOpen}
@@ -433,10 +432,10 @@ function HistorySessionCard({ session, onOpen }: { session: EstudioSession; onOp
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-muted-foreground capitalize">{formatDateLabel(session.date)}</p>
+          <p className="text-xs text-muted-foreground capitalize">{formatDateLabel(session.date, locale)}</p>
           {session.lesson
             ? <p className="text-sm font-medium text-foreground mt-0.5">{session.lesson}</p>
-            : <p className="text-sm text-muted-foreground mt-0.5 italic">Sin lección registrada</p>
+            : <p className="text-sm text-muted-foreground mt-0.5 italic">{t("studies_no_lesson")}</p>
           }
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -444,7 +443,7 @@ function HistorySessionCard({ session, onOpen }: { session: EstudioSession; onOp
           {session.notes && <StickyNote className="w-3.5 h-3.5 text-muted-foreground" />}
           {(session.files ?? []).length > 0 && (
             <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full font-medium">
-              {session.files.length} archivo{session.files.length !== 1 ? "s" : ""}
+              {t(session.files.length === 1 ? "study_file_count_one" : "study_file_count_many", { count: session.files.length })}
             </span>
           )}
           <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -473,6 +472,8 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
   onFocusedSessionHandled?: () => void;
 }) {
   const t = useT();
+  const lang = useLang();
+  const locale = localeForLang(lang);
   const [newSessionOpen, setNewSessionOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -521,7 +522,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
               <h2 className="text-base font-bold text-foreground truncate">{contact.name}</h2>
               {!contact.active && (
                 <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium flex-shrink-0">
-                  Archivado
+                  {t("studies_archived")}
                 </span>
               )}
             </div>
@@ -533,8 +534,8 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                   <button
                     type="button"
                     onClick={() => openGoogleMaps(googleMapsTarget)}
-                    aria-label="Open in Google Maps"
-                    title="Open in Google Maps"
+                    aria-label={t("map_open_google")}
+                    title={t("map_open_google")}
                     className="p-0.5 rounded text-muted-foreground hover:text-primary"
                   >
                     <ExternalLink className="w-3 h-3" />
@@ -566,7 +567,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                       className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left active:bg-muted"
                     >
                       <Archive className="w-4 h-4 text-muted-foreground" />
-                      Archivar estudio
+                      {t("studies_archive")}
                     </button>
                   ) : (
                     <button
@@ -574,7 +575,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                       className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left active:bg-muted"
                     >
                       <CheckCircle2 className="w-4 h-4 text-green-500" />
-                      Reactivar estudio
+                      {t("studies_reactivate")}
                     </button>
                   )}
                   {!hasSessions && (
@@ -585,7 +586,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                         className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-destructive active:bg-destructive/10"
                       >
                         <Trash2 className="w-4 h-4" />
-                        Eliminar
+                        {t("settings_category_delete")}
                       </button>
                     </>
                   )}
@@ -637,7 +638,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground capitalize">{formatDateLabel(s.date)}</p>
+                        <p className="text-xs text-muted-foreground capitalize">{formatDateLabel(s.date, locale)}</p>
                         {s.lesson && <p className="text-sm font-medium text-foreground mt-0.5">{s.lesson}</p>}
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
@@ -687,7 +688,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                   onClick={() => setShowAllHistory(true)}
                   className="w-full text-center text-xs font-medium text-muted-foreground py-2"
                 >
-                  Ver {doneSessions.length - 1} más
+                  {t("studies_see_more", { count: doneSessions.length - 1 })}
                 </button>
               )}
             </div>
@@ -731,6 +732,7 @@ function ContactCard({ contact, favoritePlaces, onClick }: {
   favoritePlaces: FavoritePlace[];
   onClick: () => void;
 }) {
+  const t = useT();
   const doneSessions = (contact.sessions ?? []).filter((s) => !s.pending)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const lastSession = doneSessions[0] ?? null;
@@ -755,13 +757,13 @@ function ContactCard({ contact, favoritePlaces, onClick }: {
           </span>
           {!contact.active && (
             <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full flex-shrink-0">
-              Archivado
+              {t("studies_archived")}
             </span>
           )}
           {contact.schedule && (
             <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full flex-shrink-0 flex items-center gap-0.5">
               <RefreshCw className="w-2.5 h-2.5" />
-              {FREQ_LABELS[contact.schedule.frequency]}
+              {t(`studies_frequency_${contact.schedule.frequency}`)}
             </span>
           )}
         </div>
@@ -776,18 +778,18 @@ function ContactCard({ contact, favoritePlaces, onClick }: {
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
           <BookOpen className="w-3 h-3" />
-          {doneSessions.length} sesión{doneSessions.length !== 1 ? "es" : ""}
+          {t(doneSessions.length === 1 ? "studies_session_count_one" : "studies_session_count_many", { count: doneSessions.length })}
         </span>
         {lastSession && (
           <span className="flex items-center gap-1">
             <Clock className="w-3 h-3" />
-            {formatRelative(lastSession.date)}
+            {formatRelative(lastSession.date, t)}
           </span>
         )}
         {upcomingCount > 0 && (
           <span className="flex items-center gap-1 text-primary font-medium">
             <CalendarPlus className="w-3 h-3" />
-            {upcomingCount} próxima{upcomingCount !== 1 ? "s" : ""}
+            {t(upcomingCount === 1 ? "studies_upcoming_count_one" : "studies_upcoming_count_many", { count: upcomingCount })}
           </span>
         )}
       </div>

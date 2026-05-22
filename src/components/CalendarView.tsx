@@ -34,7 +34,7 @@ import { formatFileSize, saveFile } from "@/lib/sessionFiles";
 import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
 
-import { CategoryConfig, getActiveCategoryConfigs, getCategoryMeta, getCategoryStyle } from "@/lib/categories";
+import { CategoryConfig, getActiveCategoryConfigs, getCategoryLabel, getCategoryMeta, getCategoryStyle } from "@/lib/categories";
 
 const SHEET_POSITION_CLASS = "bottom-16";
 const SHEET_MAX_HEIGHT_CLASS = "max-h-[80vh]";
@@ -82,7 +82,6 @@ interface CalendarViewProps {
   categoryConfigs: CategoryConfig[];
 }
 
-const DAY_NAMES_SHORT = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
 const HOUR_HEIGHT = 64;
 
 function formatHour(h: number) {
@@ -90,8 +89,8 @@ function formatHour(h: number) {
   return h > 12 ? `${h - 12} PM` : `${h} AM`;
 }
 
-function formatEventTime(date: Date) {
-  return date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+function formatEventTime(date: Date, locale: string) {
+  return date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 }
 
 function getWeekDates(anchorDate: Date): Date[] {
@@ -204,6 +203,7 @@ function StudyFilePicker({
   files: { file: File; id: string }[];
   onChange: (files: { file: File; id: string }[]) => void;
 }) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   return (
     <div className="space-y-1.5">
@@ -223,7 +223,7 @@ function StudyFilePicker({
         onClick={() => inputRef.current?.click()}
         className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl py-3 text-sm text-muted-foreground active:opacity-75"
       >
-        <Paperclip className="w-4 h-4" /> Adjuntar archivo
+        <Paperclip className="w-4 h-4" /> {t("study_attach_file")}
       </button>
       {files.map(({ file, id }) => (
         <div key={id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-muted">
@@ -256,6 +256,11 @@ function EventMonthGrid({
   doneLabel,
   pendingLabel,
   currentDayLabel,
+  monthHoursLabel,
+  goalLabel,
+  specialCampaignLabel,
+  previousMonthLabel,
+  nextMonthLabel,
   precursorHours,
   specialCampaignGoals,
   onSetSpecialCampaign,
@@ -274,6 +279,11 @@ function EventMonthGrid({
   doneLabel: string;
   pendingLabel: string;
   currentDayLabel: string;
+  monthHoursLabel: string;
+  goalLabel: string;
+  specialCampaignLabel: string;
+  previousMonthLabel: string;
+  nextMonthLabel: string;
   precursorHours?: number | null;
   specialCampaignGoals?: Record<string, CampaignGoal>;
   onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
@@ -315,7 +325,7 @@ function EventMonthGrid({
             type="button"
             onClick={onPreviousMonth}
             className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
-            aria-label="Mes anterior"
+            aria-label={previousMonthLabel}
           >
             <ChevronLeft className="w-4 h-4 text-muted-foreground" />
           </button>
@@ -323,7 +333,7 @@ function EventMonthGrid({
             type="button"
             onClick={onNextMonth}
             className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
-            aria-label="Mes siguiente"
+            aria-label={nextMonthLabel}
           >
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </button>
@@ -340,12 +350,12 @@ function EventMonthGrid({
       <div className="mb-3 rounded-2xl border border-border bg-muted/30 px-3 py-2.5">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Horas del mes</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{monthHoursLabel}</p>
             <p className="text-xl font-black text-foreground tabular-nums">{formatDurationLabel(monthTotalMs)}</p>
           </div>
           {monthGoal && (
             <div className="text-right">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Meta</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{goalLabel}</p>
               <p className="text-sm font-bold text-foreground">{monthGoalPct}% · {monthGoal}h</p>
             </div>
           )}
@@ -359,7 +369,7 @@ function EventMonthGrid({
           <div className="mt-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-2.5 py-2">
             <div className="mb-2 flex items-center gap-1.5">
               <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">Campaña especial</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">{specialCampaignLabel}</span>
             </div>
             <div className="flex items-center gap-2">
             {([null, 15, 30] as const).map((goal) => (
@@ -600,7 +610,7 @@ export function CalendarView({
   const monthBase = new Date();
   monthBase.setDate(1);
   monthBase.setMonth(monthBase.getMonth() + monthOffset);
-  const monthLabel = monthBase.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+  const monthLabel = monthBase.toLocaleDateString(locale, { month: "long", year: "numeric" });
 
   const previewDate = new Date(selectedDate);
   const [previewHours, previewMinutes] = time.split(":").map(Number);
@@ -934,8 +944,8 @@ export function CalendarView({
         <div className="flex rounded-full bg-muted/70 p-1 gap-1 border border-border/40">
           {(["daily", "monthly"] as CalendarMode[]).map((m) => {
             const meta: Record<CalendarMode, { label: string }> = {
-              daily: { label: "Día" },
-              monthly: { label: "Mes" },
+              daily: { label: t("calendar_daily") },
+              monthly: { label: t("day_month") },
             };
             return (
               <button
@@ -967,7 +977,7 @@ export function CalendarView({
                   {selectedDate.getFullYear()}
                 </p>
                 <p className="text-lg font-bold text-foreground leading-none capitalize">
-                  {selectedDate.toLocaleDateString("es-ES", { month: "long" })}
+                  {selectedDate.toLocaleDateString(locale, { month: "long" })}
                 </p>
               </div>
             </div>
@@ -975,7 +985,7 @@ export function CalendarView({
               <button
                 onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() - 7); setSelectedDate(d); }}
                 className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
-                aria-label="Previous week"
+                aria-label={t("calendar_previous_week")}
               >
                 <ChevronLeft className="w-4 h-4 text-muted-foreground" />
               </button>
@@ -988,7 +998,7 @@ export function CalendarView({
               <button
                 onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() + 7); setSelectedDate(d); }}
                 className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
-                aria-label="Next week"
+                aria-label={t("calendar_next_week")}
               >
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </button>
@@ -1008,7 +1018,7 @@ export function CalendarView({
                   className="flex flex-col items-center gap-1 flex-1"
                 >
                   <span className={`text-[10px] font-semibold ${isSelected ? "text-primary" : "text-muted-foreground"}`}>
-                    {DAY_NAMES_SHORT[d.getDay()]}
+                    {d.toLocaleDateString(locale, { weekday: "short" })}
                   </span>
                   <span
                     className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black transition-all ${
@@ -1035,7 +1045,7 @@ export function CalendarView({
             <button
               onClick={() => setDialogOpen(true)}
               className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md shadow-primary/25"
-              aria-label="Add event"
+              aria-label={t("home_add_activity")}
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -1118,13 +1128,13 @@ export function CalendarView({
                           <div className="flex items-center gap-1">
                             <span className="text-sm leading-none">{meta.icon}</span>
                             <p className={`text-[11px] font-bold text-foreground leading-tight truncate ${event.completed ? "line-through" : ""}`}>
-                              {event.category}
+                              {getCategoryLabel(event.category, t)}
                             </p>
                             {event.recurrence !== "none" && <Repeat className="w-2.5 h-2.5 opacity-50 flex-shrink-0" />}
                           </div>
                           {height > 54 && (
                             <p className="text-[9px] text-foreground/60 mt-0.5 leading-none">
-                              {formatEventTime(event.date)}{event.endTime ? ` - ${event.endTime}` : ""}
+                              {formatEventTime(event.date, locale)}{event.endTime ? ` - ${event.endTime}` : ""}
                             </p>
                           )}
                         </div>
@@ -1204,6 +1214,11 @@ export function CalendarView({
             doneLabel={t("cal_done")}
             pendingLabel={t("cal_pending")}
             currentDayLabel={t("cal_current_day")}
+            monthHoursLabel={t("calendar_month_hours")}
+            goalLabel={t("stats_pioneer_goal")}
+            specialCampaignLabel={t("stats_special_campaign")}
+            previousMonthLabel={t("calendar_previous_month")}
+            nextMonthLabel={t("calendar_next_month")}
             precursorHours={precursorHours}
             specialCampaignGoals={specialCampaignGoals}
             onSetSpecialCampaign={onSetSpecialCampaign}
@@ -1231,7 +1246,7 @@ export function CalendarView({
           <div className="px-5 space-y-4 overflow-y-auto flex-1 pb-2">
             <h2 className="text-base font-bold text-foreground">{t("cal_new_event")}</h2>
             <p className="text-sm text-muted-foreground capitalize -mt-2">
-              {selectedDate.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+              {selectedDate.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
             </p>
             <div className="space-y-2">
               <Label>{t("cal_category")}</Label>
@@ -1249,16 +1264,16 @@ export function CalendarView({
                 <SelectTrigger>
                   <SelectValue>
                     {category === "Estudio" && activeContacts.length === 1
-                      ? `Estudio - ${activeContacts[0].name}`
-                      : category}
+                      ? `${getCategoryLabel("Estudio", t)} - ${activeContacts[0].name}`
+                      : getCategoryLabel(category, t)}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {availableCategories.map((cat) => (
                     <SelectItem key={cat} value={cat}>
                       {cat === "Estudio" && activeContacts.length === 1
-                        ? `Estudio - ${activeContacts[0].name}`
-                        : cat}
+                        ? `${getCategoryLabel("Estudio", t)} - ${activeContacts[0].name}`
+                        : getCategoryLabel(cat, t)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1266,7 +1281,7 @@ export function CalendarView({
             </div>
             {category === "Estudio" && activeContacts.length > 1 && (
               <div className="space-y-2">
-                <Label>Contacto de estudio</Label>
+                <Label>{t("studies_contact")}</Label>
                 <Select value={selectedEstudioContactId} onValueChange={setSelectedEstudioContactId}>
                   <SelectTrigger><SelectValue placeholder={t("studies_select_contact")} /></SelectTrigger>
                   <SelectContent>
@@ -1282,21 +1297,21 @@ export function CalendarView({
                 <div className="space-y-1.5">
                   <Label>{t("study_lesson")} <span className="text-muted-foreground font-normal text-xs">({t("cal_optional")})</span></Label>
                   <Input
-                    placeholder="Ej: Cap. 3 - La esperanza de la resurrección"
+                    placeholder={t("studies_lesson_placeholder")}
                     value={studyLesson}
                     onChange={(event) => setStudyLesson(event.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Notas <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+                  <Label>{t("study_notes")} <span className="text-muted-foreground font-normal text-xs">({t("cal_optional")})</span></Label>
                   <Input
-                    placeholder="Ej: Mostró interés en el tema de la familia"
+                    placeholder={t("studies_session_notes_placeholder")}
                     value={studyNotes}
                     onChange={(event) => setStudyNotes(event.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Archivos <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+                  <Label>{t("study_files")} <span className="text-muted-foreground font-normal text-xs">({t("cal_optional")})</span></Label>
                   <StudyFilePicker files={studyFiles} onChange={setStudyFiles} />
                 </div>
               </div>
@@ -1340,10 +1355,10 @@ export function CalendarView({
                 {travelReminder.enabled ? (
                   <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
                     <p className="text-sm font-medium text-foreground">
-                      {travelReminderPreview > 0 ? `${travelReminderPreview} minutes before` : "At start time"}
+                      {travelReminderPreview > 0 ? t("cal_min_before", { n: travelReminderPreview }) : t("calendar_at_start_time")}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Adjusted from travel time so it stays after the previous event.
+                      {t("calendar_travel_adjusted")}
                     </p>
                   </div>
                 ) : (
@@ -1402,7 +1417,7 @@ export function CalendarView({
                     {t(pendingAddConflict.conflicts.length === 1 ? "cal_conflict_one" : "cal_conflict_many", { count: pendingAddConflict.conflicts.length })}
                   </span>
                   <span className="block rounded-lg border border-border bg-muted/40 px-3 py-2 text-foreground">
-                    {pendingAddConflict.conflicts[0].category} · {formatEventTime(pendingAddConflict.conflicts[0].date)}
+                    {getCategoryLabel(pendingAddConflict.conflicts[0].category, t)} · {formatEventTime(pendingAddConflict.conflicts[0].date, locale)}
                     {pendingAddConflict.conflicts[0].endTime ? ` - ${pendingAddConflict.conflicts[0].endTime}` : ""}
                   </span>
                   <span className="block">
@@ -1547,7 +1562,7 @@ export function CalendarView({
               <div className="px-5 space-y-4 overflow-y-auto flex-1 pb-2">
                 <h2 className="text-base font-bold text-foreground">{t("cal_edit_event")}</h2>
                 <p className="text-sm text-muted-foreground capitalize -mt-2">
-                  {editEvent.date.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+                  {editEvent.date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
                 </p>
                 <div className="space-y-2">
                   <Label>{t("cal_category")}</Label>
@@ -1564,17 +1579,17 @@ export function CalendarView({
                   >
                     <SelectTrigger>
                       <SelectValue>
-                        {editCategory === "Estudio" && activeContacts.length === 1
-                          ? `Estudio - ${activeContacts[0].name}`
-                          : editCategory}
+                          {editCategory === "Estudio" && activeContacts.length === 1
+                          ? `${getCategoryLabel("Estudio", t)} - ${activeContacts[0].name}`
+                          : getCategoryLabel(editCategory, t)}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {availableCategories.map((cat) => (
                         <SelectItem key={cat} value={cat}>
                           {cat === "Estudio" && activeContacts.length === 1
-                            ? `Estudio - ${activeContacts[0].name}`
-                            : cat}
+                            ? `${getCategoryLabel("Estudio", t)} - ${activeContacts[0].name}`
+                            : getCategoryLabel(cat, t)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1582,7 +1597,7 @@ export function CalendarView({
                 </div>
                 {editCategory === "Estudio" && activeContacts.length > 1 && (
                   <div className="space-y-2">
-                    <Label>Contacto de estudio</Label>
+                    <Label>{t("studies_contact")}</Label>
                     <Select value={editEstudioContactId} onValueChange={setEditEstudioContactId}>
                       <SelectTrigger><SelectValue placeholder={t("studies_select_contact")} /></SelectTrigger>
                       <SelectContent>
@@ -1621,10 +1636,10 @@ export function CalendarView({
                     {travelReminder.enabled ? (
                       <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
                         <p className="text-sm font-medium text-foreground">
-                          {editTravelReminderPreview > 0 ? `${editTravelReminderPreview} minutes before` : "At start time"}
+                          {editTravelReminderPreview > 0 ? t("cal_min_before", { n: editTravelReminderPreview }) : t("calendar_at_start_time")}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Adjusted from travel time so it stays after the previous event.
+                          {t("calendar_travel_adjusted")}
                         </p>
                       </div>
                     ) : (
@@ -1652,7 +1667,7 @@ export function CalendarView({
                     setEditEvent(null);
                   }}
                 >
-                  Eliminar actividad
+                  {t("home_delete_activity")}
                 </Button>
               </div>
             </>
