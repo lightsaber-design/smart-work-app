@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useState, useEffect, useRef } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState, useEffect, useRef } from "react";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
 import { EstudioContact, EstudioSession, ScheduledSessionData, SessionFile, hasActiveStudyWork } from "@/hooks/useEstudios";
@@ -34,7 +34,7 @@ import { formatFileSize, saveFile } from "@/lib/sessionFiles";
 import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
 
-import { CATEGORY_LIST as CATEGORIES, CATEGORY_META, CATEGORY_STYLE } from "@/lib/categories";
+import { CategoryConfig, getActiveCategoryConfigs, getCategoryMeta, getCategoryStyle } from "@/lib/categories";
 
 const SHEET_POSITION_CLASS = "bottom-16";
 const SHEET_MAX_HEIGHT_CLASS = "max-h-[80vh]";
@@ -79,6 +79,7 @@ interface CalendarViewProps {
   onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
   activityStartHour?: number;
   activityEndHour?: number;
+  categoryConfigs: CategoryConfig[];
 }
 
 const DAY_NAMES_SHORT = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
@@ -253,6 +254,7 @@ function EventMonthGrid({
   precursorHours,
   specialCampaignGoals,
   onSetSpecialCampaign,
+  categoryConfigs,
 }: {
   monthBase: Date;
   monthLabel: string;
@@ -265,6 +267,7 @@ function EventMonthGrid({
   precursorHours?: number | null;
   specialCampaignGoals?: Record<string, CampaignGoal>;
   onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
+  categoryConfigs: CategoryConfig[];
 }) {
   const year = monthBase.getFullYear();
   const month = monthBase.getMonth();
@@ -318,7 +321,7 @@ function EventMonthGrid({
             type="button"
             onClick={onAddEvent}
             className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md shadow-primary/20"
-            aria-label="Añadir evento"
+            aria-label="Añadir actividad"
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -426,7 +429,7 @@ function EventMonthGrid({
                         <span
                           key={cat}
                           className="w-[4px] h-[4px] rounded-full flex-shrink-0"
-                          style={{ backgroundColor: isSelected ? "rgba(255,255,255,0.7)" : CATEGORY_STYLE[cat]?.dotColor ?? "#888" }}
+                          style={{ backgroundColor: isSelected ? "rgba(255,255,255,0.7)" : getCategoryStyle(categoryConfigs, cat).dotColor }}
                         />
                       ))}
                     </div>
@@ -484,6 +487,7 @@ export function CalendarView({
   onSetSpecialCampaign,
   activityStartHour = DEFAULT_ACTIVITY_START_HOUR,
   activityEndHour = DEFAULT_ACTIVITY_END_HOUR,
+  categoryConfigs,
 }: CalendarViewProps) {
   const t = useT();
   const timelineHours = Array.from({ length: activityEndHour - activityStartHour }, (_, i) => i + activityStartHour);
@@ -544,17 +548,24 @@ export function CalendarView({
     setStudySessionTime((value) => value ? clampTimeToActivityRange(value, activityStartHour, activityEndHour) : value);
   }, [activityStartHour, activityEndHour]);
 
-  // Filtered categories: hide Estudio if no active contacts
-  const availableCategories = CATEGORIES.filter(
-    (cat) => cat !== "Estudio" || activeContacts.length > 0
+  // Filtra Study cuando no hay contactos activos.
+  const availableCategories = useMemo(
+    () => getActiveCategoryConfigs(categoryConfigs).map((item) => item.name).filter(
+      (cat) => cat !== "Estudio" || activeContacts.length > 0
+    ),
+    [activeContacts.length, categoryConfigs]
   );
 
   useEffect(() => {
-    if (category === "Estudio" && activeContacts.length === 0) {
-      setCategory("Predi");
+    if (!availableCategories.includes(category)) {
+      setCategory(availableCategories[0] ?? "Predi");
       setSelectedEstudioContactId("");
     }
-  }, [category, activeContacts.length]);
+    if (!availableCategories.includes(editCategory)) {
+      setEditCategory(availableCategories[0] ?? "Predi");
+      setEditEstudioContactId("");
+    }
+  }, [availableCategories, category, editCategory]);
 
   useScrollLock(dialogOpen || !!editEvent || !!pendingAddConflict || !!selectedStudySession);
 
@@ -695,7 +706,7 @@ export function CalendarView({
   };
 
   const resetAddForm = () => {
-    setTime("09:00"); setEndTime(""); setCategory("Predi"); setReminder("15");
+    setTime("09:00"); setEndTime(""); setCategory(availableCategories[0] ?? "Predi"); setReminder("15");
     setSelectedEstudioContactId("");
     setStudyLesson(""); setStudyNotes(""); setStudyFiles([]);
     setLocation(undefined); setLocationMode("none"); setSelectedFavoriteId(""); setRecurrence("none");
@@ -1072,8 +1083,8 @@ export function CalendarView({
                   const durationMins = Math.max(30, (endDate.getTime() - event.date.getTime()) / 60000);
                   const top = timelineTopFromMinutes(clampedStart);
                   const height = Math.max(44, (durationMins / 60) * HOUR_HEIGHT);
-                  const style = CATEGORY_STYLE[event.category] ?? { accent: "hsl(var(--primary))" };
-                  const meta = CATEGORY_META[event.category] ?? { icon: "•", gradient: ["#93c5fd", "#a5b4fc"] as [string, string] };
+                  const style = getCategoryStyle(categoryConfigs, event.category);
+                  const meta = getCategoryMeta(categoryConfigs, event.category);
                   const opacity = event.completed ? 0.45 : 1;
                   const cannotMarkCompleted = !event.completed && event.date.getTime() > Date.now();
                   return (
@@ -1179,6 +1190,7 @@ export function CalendarView({
             precursorHours={precursorHours}
             specialCampaignGoals={specialCampaignGoals}
             onSetSpecialCampaign={onSetSpecialCampaign}
+            categoryConfigs={categoryConfigs}
           />
         </div>
       )}
@@ -1365,35 +1377,35 @@ export function CalendarView({
       <AlertDialog open={!!pendingAddConflict} onOpenChange={(open) => { if (!open) setPendingAddConflict(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Event already scheduled</AlertDialogTitle>
+            <AlertDialogTitle>Actividad ya programada</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingAddConflict && (
                 <span className="block space-y-2">
                   <span className="block">
-                    The new event overlaps with {pendingAddConflict.conflicts.length === 1 ? "this event" : `${pendingAddConflict.conflicts.length} events`}.
+                    La nueva actividad se cruza con {pendingAddConflict.conflicts.length === 1 ? "esta actividad" : `${pendingAddConflict.conflicts.length} actividades`}.
                   </span>
                   <span className="block rounded-lg border border-border bg-muted/40 px-3 py-2 text-foreground">
                     {pendingAddConflict.conflicts[0].category} · {formatEventTime(pendingAddConflict.conflicts[0].date)}
                     {pendingAddConflict.conflicts[0].endTime ? ` - ${pendingAddConflict.conflicts[0].endTime}` : ""}
                   </span>
                   <span className="block">
-                    Overwrite it, add the new event in parallel, or cancel.
+                    Reemplázala, añade la actividad en paralelo o cancela.
                   </span>
                 </span>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-2">
-            <AlertDialogCancel onClick={() => setPendingAddConflict(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setPendingAddConflict(null)}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-secondary text-secondary-foreground hover:bg-secondary/80"
               onClick={async () => {
                 if (pendingAddConflict) await commitAddWithStudySession(pendingAddConflict.params, pendingAddConflict.studyTarget);
               }}
             >
-              Add in parallel
+              Añadir en paralelo
             </AlertDialogAction>
-            <AlertDialogAction onClick={overwriteAddConflict}>Overwrite</AlertDialogAction>
+            <AlertDialogAction onClick={overwriteAddConflict}>Reemplazar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1623,7 +1635,7 @@ export function CalendarView({
                     setEditEvent(null);
                   }}
                 >
-                  Eliminar evento
+                  Eliminar actividad
                 </Button>
               </div>
             </>

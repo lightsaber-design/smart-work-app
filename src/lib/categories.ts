@@ -1,24 +1,106 @@
 import { EventCategory } from "@/hooks/useCalendarEvents";
 
-export const CATEGORY_LIST: EventCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
-
-/** Icon + gradient colours used in stats bars and timeline chips. */
-export const CATEGORY_META: Record<EventCategory, { icon: string; gradient: [string, string] }> = {
-  Predi:   { icon: "🏠", gradient: ["#34B1AF", "#7BD4D2"] },
-  Carrito: { icon: "🪧", gradient: ["#7CC67E", "#B3E0A4"] },
-  LDC:     { icon: "🛠️", gradient: ["#9668A2", "#C29ACC"] },
-  Visitas: { icon: "🚶", gradient: ["#F4CFA4", "#F7DFB8"] },
-  Estudio: { icon: "📖", gradient: ["#D07D7D", "#E6A3A3"] },
+export type CategoryConfig = {
+  name: EventCategory;
+  color: string;
+  active: boolean;
+  support: boolean;
 };
 
-/** Tailwind class sets used in calendar event cards. */
-export const CATEGORY_STYLE: Record<
-  EventCategory,
-  { card: string; border: string; dot: string; dotColor: string; accent: string }
-> = {
-  Predi:   { card: "bg-cyan-50 dark:bg-cyan-950/30 border-cyan-200 dark:border-cyan-800/50",       border: "border-cyan-200 dark:border-cyan-800/50",       dot: "bg-cyan-500",   dotColor: "#34B1AF", accent: "#34B1AF" },
-  Carrito: { card: "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800/50",    border: "border-green-200 dark:border-green-800/50",    dot: "bg-green-500",  dotColor: "#7CC67E", accent: "#7CC67E" },
-  LDC:     { card: "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800/50", border: "border-purple-200 dark:border-purple-800/50", dot: "bg-purple-500", dotColor: "#9668A2", accent: "#9668A2" },
-  Visitas: { card: "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800/50", border: "border-orange-200 dark:border-orange-800/50", dot: "bg-orange-500", dotColor: "#F4CFA4", accent: "#F4CFA4" },
-  Estudio: { card: "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/50",       border: "border-rose-200 dark:border-rose-800/50",       dot: "bg-rose-500",   dotColor: "#D07D7D", accent: "#D07D7D" },
+export const SUPPORT_CAP_HOURS = 55;
+
+export const DEFAULT_CATEGORY_CONFIGS: CategoryConfig[] = [
+  { name: "Predi", color: "#34B1AF", active: true, support: false },
+  { name: "Carrito", color: "#7CC67E", active: true, support: false },
+  { name: "LDC", color: "#9668A2", active: true, support: true },
+  { name: "Visitas", color: "#F4CFA4", active: true, support: false },
+  { name: "Estudio", color: "#D07D7D", active: true, support: false },
+];
+
+const DEFAULT_ICONS: Record<string, string> = {
+  Predi: "🏠",
+  Carrito: "🪧",
+  LDC: "🛠️",
+  Visitas: "🚶",
+  Estudio: "📖",
 };
+
+const FALLBACK_COLORS = ["#34B1AF", "#7CC67E", "#9668A2", "#F4CFA4", "#D07D7D", "#5B8DEF", "#E17A47", "#607D8B"];
+
+export const CATEGORY_LIST: EventCategory[] = DEFAULT_CATEGORY_CONFIGS.map((category) => category.name);
+
+function isHexColor(value: unknown): value is string {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
+}
+
+function lightenColor(hex: string, amount = 0.34): string {
+  const value = hex.replace("#", "");
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  const mix = (channel: number) => Math.round(channel + (255 - channel) * amount);
+  return `#${[mix(r), mix(g), mix(b)].map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+
+export function normalizeCategoryConfigs(value: unknown): CategoryConfig[] {
+  if (!Array.isArray(value)) return DEFAULT_CATEGORY_CONFIGS;
+  const parsed = value
+    .map((item, index): CategoryConfig | null => {
+      if (typeof item !== "object" || item === null) return null;
+      const record = item as Record<string, unknown>;
+      const name = typeof record.name === "string" ? record.name.trim() : "";
+      if (!name) return null;
+      return {
+        name,
+        color: isHexColor(record.color) ? record.color : FALLBACK_COLORS[index % FALLBACK_COLORS.length],
+        active: typeof record.active === "boolean" ? record.active : true,
+        support: typeof record.support === "boolean" ? record.support : name === "LDC",
+      };
+    })
+    .filter((category): category is CategoryConfig => category !== null);
+
+  const withDefaults = DEFAULT_CATEGORY_CONFIGS.map((category) => {
+    const stored = parsed.find((item) => item.name === category.name);
+    return stored ? { ...category, ...stored } : category;
+  });
+  const custom = parsed.filter((category) => !DEFAULT_CATEGORY_CONFIGS.some((item) => item.name === category.name));
+  return [...withDefaults, ...custom];
+}
+
+export function getActiveCategoryConfigs(configs: CategoryConfig[]): CategoryConfig[] {
+  return configs.filter((category) => category.active);
+}
+
+export function findCategoryConfig(configs: CategoryConfig[], name: EventCategory): CategoryConfig {
+  return configs.find((category) => category.name === name) ?? {
+    name,
+    color: FALLBACK_COLORS[Math.abs(name.length) % FALLBACK_COLORS.length],
+    active: true,
+    support: false,
+  };
+}
+
+export function getCategoryMeta(configs: CategoryConfig[], name: EventCategory): { icon: string; gradient: [string, string]; ring: string } {
+  const config = findCategoryConfig(configs, name);
+  const icon = DEFAULT_ICONS[config.name] ?? config.name.trim().charAt(0).toUpperCase();
+  return { icon, gradient: [config.color, lightenColor(config.color)], ring: config.color };
+}
+
+export function getCategoryStyle(configs: CategoryConfig[], name: EventCategory) {
+  const config = findCategoryConfig(configs, name);
+  return {
+    card: "bg-card border-border",
+    border: "border-border",
+    dot: "",
+    dotColor: config.color,
+    accent: config.color,
+  };
+}
+
+export const CATEGORY_META = Object.fromEntries(
+  DEFAULT_CATEGORY_CONFIGS.map((category) => [category.name, getCategoryMeta(DEFAULT_CATEGORY_CONFIGS, category.name)])
+) as Record<EventCategory, { icon: string; gradient: [string, string]; ring: string }>;
+
+export const CATEGORY_STYLE = Object.fromEntries(
+  DEFAULT_CATEGORY_CONFIGS.map((category) => [category.name, getCategoryStyle(DEFAULT_CATEGORY_CONFIGS, category.name)])
+) as Record<EventCategory, { card: string; border: string; dot: string; dotColor: string; accent: string }>;

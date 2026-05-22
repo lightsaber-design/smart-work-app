@@ -45,10 +45,10 @@ export function TravelTimeConfig({ enabled, minutes, onChange }: TravelTimeConfi
               value={normalizedMinutes}
               onChange={(event) => onChange({ enabled, minutes: normalizeMinutes(Number(event.target.value)) })}
             />
-            <span className="text-sm text-muted-foreground">minutes before each event</span>
+            <span className="text-sm text-muted-foreground">minutes before each activity</span>
           </div>
           <p className="text-xs text-muted-foreground">
-            If events are close together, the reminder is shortened so it does not overlap the previous activity.
+            If activities are close together, the reminder is shortened so it does not overlap the previous activity.
           </p>
         </div>
       )}

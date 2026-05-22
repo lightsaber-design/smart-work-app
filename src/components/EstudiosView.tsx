@@ -5,7 +5,7 @@ import {
   BookOpen, Plus, Trash2, CheckCircle2, MapPin, Clock,
   Paperclip, X, FileText, Image, File,
   CalendarPlus, History, ArrowLeft, MoreVertical,
-  StickyNote, Pencil, RefreshCw, Archive, ChevronRight,
+  StickyNote, Pencil, RefreshCw, Archive, ChevronRight, ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import {
 } from "@/hooks/useEstudios";
 import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { saveFile, getFileURL, formatFileSize } from "@/lib/sessionFiles";
+import { openGoogleMaps } from "@/lib/maps";
 
 /* Constantes */
 const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -485,6 +486,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
     ? favoritePlaces.find((p) => p.id === contact.favoritePlaceId)
     : null;
   const locationLabel = savedPlace?.name ?? contact.address ?? null;
+  const googleMapsTarget = savedPlace?.location ?? contact.address ?? null;
   const sessionToday = doneSessions.some((s) => new Date(s.date).toDateString() === new Date().toDateString());
 
   useEffect(() => {
@@ -518,9 +520,21 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
               )}
             </div>
             {locationLabel && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                <MapPin className="w-3 h-3" />{locationLabel}
-              </p>
+              <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                <MapPin className="w-3 h-3 flex-shrink-0" />
+                <span className="truncate">{locationLabel}</span>
+                {googleMapsTarget && (
+                  <button
+                    type="button"
+                    onClick={() => openGoogleMaps(googleMapsTarget)}
+                    aria-label="Open in Google Maps"
+                    title="Open in Google Maps"
+                    className="p-0.5 rounded text-muted-foreground hover:text-primary"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             )}
           </div>
           <button

@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Trash2, MapPin, User, Globe, Moon, FileJson, FolderOpen } from "lucide-react";
+import { Trash2, MapPin, User, Globe, Moon, FileJson, FolderOpen, Plus, Check } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
 import { CitySearch } from "@/components/CitySearch";
 import { PrecursorHoursConfig } from "@/components/PrecursorHoursConfig";
 import { TravelTimeConfig } from "@/components/TravelTimeConfig";
@@ -11,6 +12,7 @@ import { SetupData } from "@/hooks/useSetup";
 import { useT } from "@/lib/LanguageContext";
 import { LANGUAGES, Lang } from "@/lib/i18n";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
+import { CategoryConfig } from "@/lib/categories";
 
 interface SettingsViewProps {
   onClearAll: () => void;
@@ -19,13 +21,19 @@ interface SettingsViewProps {
   onSaveSetup: (data: Partial<SetupData>) => void;
   isDark?: boolean;
   onToggleDark?: () => void;
+  hasActiveStudies?: boolean;
 }
 
-export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDark, onToggleDark }: SettingsViewProps) {
+const CATEGORY_COLORS = ["#34B1AF", "#7CC67E", "#9668A2", "#F4CFA4", "#D07D7D", "#5B8DEF", "#E17A47", "#607D8B"];
+
+export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDark, onToggleDark, hasActiveStudies = false }: SettingsViewProps) {
   const t = useT();
   const storage = useJsonStorageStatus();
   const [editingCity, setEditingCity] = useState(false);
   const [cityDraft, setCityDraft] = useState(setup.city ?? undefined);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryColor, setNewCategoryColor] = useState(CATEGORY_COLORS[0]);
+  const [newCategorySupport, setNewCategorySupport] = useState(true);
 
   const handleSaveCity = () => {
     if (cityDraft) onSaveSetup({ city: cityDraft });
@@ -33,6 +41,34 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
   };
 
   const currentLang = (setup.language ?? "es") as Lang;
+  const categories = setup.categorySettings;
+
+  const saveCategories = (categorySettings: CategoryConfig[]) => onSaveSetup({ categorySettings });
+
+  const updateCategory = (name: string, updates: Partial<CategoryConfig>) => {
+    if (name === "Estudio" && updates.active === true && !hasActiveStudies) {
+      window.alert("Create at least one active study before enabling Study.");
+      return;
+    }
+    if (updates.active === false && categories.filter((category) => category.active).length <= 1) {
+      window.alert("Keep at least one category active.");
+      return;
+    }
+    saveCategories(categories.map((category) => (category.name === name ? { ...category, ...updates } : category)));
+  };
+
+  const addCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    if (categories.some((category) => category.name.toLowerCase() === name.toLowerCase())) {
+      window.alert("A category with this name already exists.");
+      return;
+    }
+    saveCategories([...categories, { name, color: newCategoryColor, active: true, support: newCategorySupport }]);
+    setNewCategoryName("");
+    setNewCategoryColor(CATEGORY_COLORS[0]);
+    setNewCategorySupport(true);
+  };
 
   return (
     <div className="px-4 space-y-4 pb-24">
@@ -98,6 +134,88 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
             endHour={setup.activityEndHour}
             onChange={(value) => onSaveSetup({ activityStartHour: value.startHour, activityEndHour: value.endHour })}
           />
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-card p-5 shadow-sm border border-border space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Categories</h3>
+          <p className="mt-1 text-xs text-muted-foreground">These categories control Timer, Calendar, Summary, and Stats.</p>
+        </div>
+
+        <div className="space-y-2">
+          {categories.map((category) => (
+            <div key={category.name} className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: category.color }} />
+                  <span className="truncate text-sm font-semibold text-foreground">{category.name}</span>
+                </div>
+                <Switch
+                  checked={category.active}
+                  onCheckedChange={(active) => updateCategory(category.name, { active })}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <Label className="text-xs text-muted-foreground">Color</Label>
+                <div className="flex gap-1.5">
+                  {CATEGORY_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => updateCategory(category.name, { color })}
+                      className="flex h-6 w-6 items-center justify-center rounded-full border border-border"
+                      style={{ backgroundColor: color }}
+                      aria-label={`Use ${color}`}
+                    >
+                      {category.color === color && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <Label className="text-xs text-muted-foreground">Support category, capped at 55h/month</Label>
+                <Switch
+                  checked={category.support}
+                  onCheckedChange={(support) => updateCategory(category.name, { support })}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-lg border border-dashed border-border p-3 space-y-3">
+          <Label className="text-xs font-semibold text-muted-foreground">Add category</Label>
+          <Input
+            value={newCategoryName}
+            onChange={(event) => setNewCategoryName(event.target.value)}
+            placeholder="Name"
+          />
+          <div className="flex items-center justify-between gap-3">
+            <Label className="text-xs text-muted-foreground">Color</Label>
+            <div className="flex gap-1.5">
+              {CATEGORY_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => setNewCategoryColor(color)}
+                  className="flex h-6 w-6 items-center justify-center rounded-full border border-border"
+                  style={{ backgroundColor: color }}
+                  aria-label={`Use ${color}`}
+                >
+                  {newCategoryColor === color && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <Label className="text-xs text-muted-foreground">Support category by default</Label>
+            <Switch checked={newCategorySupport} onCheckedChange={setNewCategorySupport} />
+          </div>
+          <Button size="sm" onClick={addCategory} className="w-full">
+            <Plus className="h-4 w-4" />
+            Add category
+          </Button>
         </div>
       </div>
 

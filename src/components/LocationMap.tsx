@@ -3,8 +3,9 @@ import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Star, Trash2, Plus } from "lucide-react";
+import { ExternalLink, Star, Trash2, Plus } from "lucide-react";
 import { useT } from "@/lib/LanguageContext";
+import { openGoogleMaps } from "@/lib/maps";
 
 const LocationPicker = lazy(() => import("@/components/LocationPicker").then((module) => ({ default: module.LocationPicker })));
 
@@ -63,12 +64,24 @@ export function LocationMap({ favoritePlaces, onAddFavorite, onDeleteFavorite, d
                   <div className="w-2.5 h-2.5 rounded-full bg-amber-500 flex-shrink-0" />
                   <span className="text-sm text-foreground">{place.name}</span>
                 </div>
-                <button
-                  onClick={() => onDeleteFavorite(place.id)}
-                  className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => openGoogleMaps(place.location)}
+                    aria-label={t('map_open_google')}
+                    title={t('map_open_google')}
+                    className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteFavorite(place.id)}
+                    className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>

@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useT } from "@/lib/LanguageContext";
+import { openGoogleMaps } from "@/lib/maps";
 
 interface LeafletDefaultIconPrototype extends L.Icon.Default {
   _getIconUrl?: () => string;
@@ -253,16 +254,23 @@ export function LocationPicker({ value, onChange, defaultCenter }: LocationPicke
         </MapContainer>
       </div>
       {value && (
-        <p className="text-xs text-muted-foreground">
-          📍 {value.lat.toFixed(4)}, {value.lng.toFixed(4)}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span>{value.lat.toFixed(4)}, {value.lng.toFixed(4)}</span>
+          <button
+            type="button"
+            onClick={() => openGoogleMaps(value)}
+            className="text-primary hover:underline"
+          >
+            {t('picker_open_google')}
+          </button>
           <button
             type="button"
             onClick={() => onChange(undefined)}
-            className="ml-2 text-destructive hover:underline"
+            className="text-destructive hover:underline"
           >
             {t('picker_remove')}
           </button>
-        </p>
+        </div>
       )}
     </div>
   );

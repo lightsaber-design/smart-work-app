@@ -9,6 +9,7 @@ import { MapPin, Clock, User } from "lucide-react";
 import { LANGUAGES, Lang, detectLanguage } from "@/lib/i18n";
 import { useT } from "@/lib/LanguageContext";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
+import { DEFAULT_CATEGORY_CONFIGS } from "@/lib/categories";
 
 interface SetupScreenProps {
   onComplete: (data: Omit<SetupData, "completed">) => void;
@@ -39,6 +40,7 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
       activityStartHour: DEFAULT_ACTIVITY_START_HOUR,
       activityEndHour: DEFAULT_ACTIVITY_END_HOUR,
       hasBibleStudies: false,
+      categorySettings: DEFAULT_CATEGORY_CONFIGS,
       language: selectedLang,
     });
   };

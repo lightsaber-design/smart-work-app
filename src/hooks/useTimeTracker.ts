@@ -7,7 +7,7 @@ export interface GeoLocation {
   lng: number;
 }
 
-export type WorkCategory = "Predi" | "Carrito" | "LDC" | "Visitas" | "Estudio";
+export type WorkCategory = string;
 
 export interface TimeEntry {
   id: string;
@@ -25,7 +25,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isWorkCategory(value: unknown): value is WorkCategory {
-  return value === "Predi" || value === "Carrito" || value === "LDC" || value === "Visitas" || value === "Estudio";
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function parseGeoLocation(value: unknown): GeoLocation | null {

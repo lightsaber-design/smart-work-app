@@ -9,11 +9,11 @@ import { LanguageProvider } from "@/lib/LanguageContext";
 import { detectLanguage, Lang } from "@/lib/i18n";
 import { useT } from "@/lib/LanguageContext";
 import { ChevronLeft, ChevronRight, MapPin, BookOpen, Moon, Sun, Plus, Pencil, Trash2 } from "lucide-react";
-import { useEstudios } from "@/hooks/useEstudios";
+import { hasActiveStudyWork, useEstudios } from "@/hooks/useEstudios";
 import { MissedStudyBanner } from "@/components/MissedStudyBanner";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { useSpecialCampaign } from "@/hooks/useSpecialCampaign";
-import { CATEGORY_META, CATEGORY_STYLE } from "@/lib/categories";
+import { getCategoryMeta, getCategoryStyle } from "@/lib/categories";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 import { removeJsonValue } from "@/lib/jsonFileStorage";
 import { shouldNotifyEvent } from "@/lib/eventReminders";
@@ -51,6 +51,76 @@ function weatherCodeToEmoji(code: number): string {
   if (code <= 77) return "❄️";
   if (code <= 82) return "🌦️";
   return "⛈️";
+}
+
+type HourlyWeather = {
+  date: Date;
+  temp: number;
+  code: number;
+  precipitationProbability: number | null;
+};
+
+function weatherCodeToLabel(code: number): string {
+  if (code === 0) return "despejado";
+  if (code <= 3) return "algo nublado";
+  if (code <= 48) return "con niebla";
+  if (code <= 67) return "con lluvia";
+  if (code <= 77) return "con nieve";
+  if (code <= 82) return "con chubascos";
+  return "con tormenta";
+}
+
+function hourLabel(date: Date): string {
+  const hour = date.getHours();
+  if (hour === 0) return "medianoche";
+  if (hour === 12) return "mediodía";
+  return `${hour % 12 || 12} de la ${hour < 12 ? "mañana" : "tarde"}`;
+}
+
+function isRainyWeather(code: number, probability: number | null): boolean {
+  return (code >= 51 && code <= 99) || (probability ?? 0) >= 45;
+}
+
+function getWeatherForDate(hourlyWeather: HourlyWeather[], date: Date): HourlyWeather | null {
+  if (hourlyWeather.length === 0) return null;
+  return hourlyWeather
+    .filter((item) => Math.abs(item.date.getTime() - date.getTime()) <= 90 * 60_000)
+    .sort((a, b) => Math.abs(a.date.getTime() - date.getTime()) - Math.abs(b.date.getTime() - date.getTime()))[0] ?? null;
+}
+
+function formatActivityWeather(hourlyWeather: HourlyWeather[], date: Date): string | null {
+  const forecast = getWeatherForDate(hourlyWeather, date);
+  if (!forecast) return null;
+  const rain = isRainyWeather(forecast.code, forecast.precipitationProbability);
+  const probability = forecast.precipitationProbability != null ? ` · ${forecast.precipitationProbability}% lluvia` : "";
+  return `${weatherCodeToEmoji(forecast.code)} ${forecast.temp}° · ${rain ? "posible lluvia" : weatherCodeToLabel(forecast.code)}${probability}`;
+}
+
+function formatDayWeatherSummary(hourlyWeather: HourlyWeather[], events: { date: Date }[]): string | null {
+  const anchorDate = events[0]?.date ?? new Date();
+  const eventForecasts = events
+    .map((event) => ({ event, forecast: getWeatherForDate(hourlyWeather, event.date) }))
+    .filter((item): item is { event: { date: Date }; forecast: HourlyWeather } => item.forecast !== null);
+
+  const rainy = eventForecasts.find((item) => isRainyWeather(item.forecast.code, item.forecast.precipitationProbability));
+  if (rainy) {
+    return `${weatherCodeToEmoji(rainy.forecast.code)} Luego, sobre las ${hourLabel(rainy.event.date)}, puede llover.`;
+  }
+
+  const dayForecasts = hourlyWeather.filter((item) => (
+    item.date.toDateString() === anchorDate.toDateString() &&
+    item.date.getHours() >= 7 &&
+    item.date.getHours() <= 22
+  ));
+  const usableForecasts = eventForecasts.map((item) => item.forecast);
+  const forecasts = usableForecasts.length > 0 ? usableForecasts : dayForecasts;
+  if (forecasts.length === 0) return null;
+
+  const dayRain = dayForecasts.find((item) => isRainyWeather(item.code, item.precipitationProbability));
+  if (dayRain) return `${weatherCodeToEmoji(dayRain.code)} Luego, sobre las ${hourLabel(dayRain.date)}, puede llover.`;
+
+  const warmest = forecasts.slice().sort((a, b) => b.temp - a.temp)[0];
+  return `${weatherCodeToEmoji(warmest.code)} Durante el día estará ${weatherCodeToLabel(warmest.code)}, cerca de ${warmest.temp}°.`;
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -146,8 +216,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       calendarEvents.forEach((event) => {
         if (shouldNotifyEvent(now, event)) {
           if (!tracker.isRunning) {
-            showBrowserNotification("⏰ Upcoming event", {
-              body: `${event.category} starts soon. Start tracking when needed.`,
+            showBrowserNotification("⏰ Actividad próxima", {
+              body: `${event.category} empieza pronto. Marca horas cuando haga falta.`,
             });
           }
           markNotified(event.id);
@@ -277,20 +347,36 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
   // Weather
   const [weather, setWeather] = useState<{ temp: number; code: number } | null>(null);
+  const [hourlyWeather, setHourlyWeather] = useState<HourlyWeather[]>([]);
   useEffect(() => {
-    if (!setup.city) return;
+    if (!setup.city) {
+      setWeather(null);
+      setHourlyWeather([]);
+      return;
+    }
     const { lat, lng } = setup.city;
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true&timezone=auto`)
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true&hourly=temperature_2m,weather_code,precipitation_probability&forecast_days=7&timezone=auto`)
       .then((r) => r.json())
       .then((data) => {
         const cw = data?.current_weather;
         if (cw) setWeather({ temp: Math.round(cw.temperature), code: cw.weathercode });
+        const hourly = data?.hourly;
+        if (Array.isArray(hourly?.time) && Array.isArray(hourly?.temperature_2m) && Array.isArray(hourly?.weather_code)) {
+          setHourlyWeather(hourly.time.map((time: string, index: number) => ({
+            date: new Date(time),
+            temp: Math.round(Number(hourly.temperature_2m[index])),
+            code: Number(hourly.weather_code[index]),
+            precipitationProbability: Array.isArray(hourly.precipitation_probability)
+              ? Number(hourly.precipitation_probability[index])
+              : null,
+          })).filter((item: HourlyWeather) => !Number.isNaN(item.date.getTime()) && Number.isFinite(item.temp) && Number.isFinite(item.code)));
+        }
       })
       .catch(() => {});
   }, [setup.city]);
 
   // Timer background gradient
-  const timerCategoryMeta = CATEGORY_META[timerDisplayCategory];
+  const timerCategoryMeta = getCategoryMeta(setup.categorySettings, timerDisplayCategory);
   const timerBackground = `linear-gradient(160deg, ${hexToRgba(timerCategoryMeta.gradient[0], 0.28)} 0%, ${hexToRgba(timerCategoryMeta.gradient[1], 0.2)} 100%), #f8fafc`;
 
   // Monthly total from completed calendar events (source of truth for hours)
@@ -442,13 +528,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   )}
                 </button>
 
-                {/* Upcoming events */}
+                {/* Upcoming activities */}
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-sm font-bold text-foreground">
-                    Próximos eventos
-                    {totalUpcoming > 0 && (
-                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">· {totalUpcoming} total</span>
-                    )}
+                    Próximas actividades
                   </h2>
                   <button
                     onClick={() => navigate("calendar")}
@@ -460,12 +543,12 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
                 {totalUpcoming === 0 ? (
                   <div className="rounded-2xl border border-border bg-muted/30 px-4 py-6 text-center">
-                    <p className="text-sm text-muted-foreground">Sin eventos próximos</p>
+                    <p className="text-sm text-muted-foreground">Sin actividades próximas</p>
                     <button
                       onClick={() => navigate("calendar")}
                       className="mt-2 text-xs font-semibold text-primary flex items-center gap-1 mx-auto"
                     >
-                      <Plus className="w-3 h-3" /> Añadir evento
+                      <Plus className="w-3 h-3" /> Añadir actividad
                     </button>
                   </div>
                 ) : (
@@ -476,9 +559,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                           {group.label}
                         </p>
                         {group.events.map((item) => {
-                          const style = CATEGORY_STYLE[item.category];
-                          const meta = CATEGORY_META[item.category];
+                          const style = getCategoryStyle(setup.categorySettings, item.category);
+                          const meta = getCategoryMeta(setup.categorySettings, item.category);
                           const timeStr = `${String(item.date.getHours()).padStart(2, "0")}:${String(item.date.getMinutes()).padStart(2, "0")}`;
+                          const forecast = formatActivityWeather(hourlyWeather, item.date);
                           return (
                             <button
                               key={item.id}
@@ -494,6 +578,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-bold text-foreground truncate">{item.label}</p>
                                 <p className="text-[11px] text-muted-foreground">{timeStr}</p>
+                                {forecast && <p className="text-[10px] text-muted-foreground truncate">{forecast}</p>}
                               </div>
                               <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                             </button>
@@ -532,6 +617,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 precursorHours={setup.precursorHours}
                 specialCampaignGoals={campaign.goals}
                 onSetSpecialCampaign={campaign.setGoal}
+                categoryConfigs={setup.categorySettings}
               />
             </Suspense>
           </>
@@ -592,21 +678,24 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 </button>
                 <div className="px-5 flex items-center justify-between mb-2 cursor-pointer" onClick={toggleSummary}>
                   <p className="text-sm font-bold text-foreground">
-                    {showingUpcomingEvents ? "Upcoming" : "Hoy"}
-                    {summaryEvents.length > 0 && (
-                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                        · {summaryEvents.length} evento{summaryEvents.length !== 1 ? "s" : ""}
-                      </span>
-                    )}
+                    {showingUpcomingEvents ? "Próximas actividades" : "Hoy"}
                   </p>
                 </div>
 
                 {summaryEvents.length === 0 ? (
                   <div className="px-5 pb-4 pt-1">
                     <p className="text-sm font-semibold text-foreground">Para hoy nada</p>
+                    {formatDayWeatherSummary(hourlyWeather, summaryEvents) && (
+                      <p className="mt-1 text-xs text-muted-foreground">{formatDayWeatherSummary(hourlyWeather, summaryEvents)}</p>
+                    )}
                   </div>
                 ) : (
                   <div className="px-5 pb-3 space-y-3">
+                    {formatDayWeatherSummary(hourlyWeather, summaryEvents) && (
+                      <p className="rounded-xl bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
+                        {formatDayWeatherSummary(hourlyWeather, summaryEvents)}
+                      </p>
+                    )}
                     {showingUpcomingEvents && (
                       <p className="text-sm font-semibold text-foreground">Para hoy nada</p>
                     )}
@@ -616,9 +705,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                           {group.label}
                         </p>
                         {group.events.map((event) => {
-                          const style = CATEGORY_STYLE[event.category];
-                          const meta = CATEGORY_META[event.category];
+                          const style = getCategoryStyle(setup.categorySettings, event.category);
+                          const meta = getCategoryMeta(setup.categorySettings, event.category);
                           const timeStr = `${String(event.date.getHours()).padStart(2, "0")}:${String(event.date.getMinutes()).padStart(2, "0")}`;
+                          const forecast = formatActivityWeather(hourlyWeather, event.date);
                           return (
                             <button
                               key={event.id}
@@ -631,6 +721,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                               <div className="flex-1 min-w-0">
                                 <p className={`text-[13px] font-semibold text-foreground truncate ${event.completed ? "line-through opacity-50" : ""}`}>{event.category}</p>
                                 <p className="text-[10px] text-muted-foreground">{timeStr}{event.endTime ? ` – ${event.endTime}` : ""}</p>
+                                {!event.completed && forecast && <p className="text-[10px] text-muted-foreground truncate">{forecast}</p>}
                               </div>
                               {event.completed && <span className="text-xs font-bold text-green-500">✓</span>}
                               <span className="flex items-center gap-1.5 flex-shrink-0">
@@ -669,7 +760,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                     onClick={() => navigate("calendar")}
                     className="w-full rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20"
                   >
-                    Añadir evento
+                    Añadir actividad
                   </button>
                 </div>
               </div>
@@ -705,6 +796,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   onUpdateStartTime={(startTime) => {
                     if (!activeEntry) return;
                     tracker.updateStartTime(activeEntry.id, startTime);
+                    if (activeEntry.linkedEventId) {
+                      calendar.updateEvent(activeEntry.linkedEventId, { date: startTime });
+                    }
                   }}
                   calendarEvents={calendar.events}
                   activeCategory={activeEntry?.category}
@@ -713,6 +807,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   estudios={estudios.contacts.filter((c) => c.active)}
                   onDisplayCategoryChange={setTimerDisplayCategory}
                   onEstudioSession={estudios.addSession}
+                  categoryConfigs={setup.categorySettings}
                   activityStartHour={setup.activityStartHour}
                   activityEndHour={setup.activityEndHour}
                 />
@@ -755,6 +850,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 onSetSpecialCampaign={campaign.setGoal}
                 activityStartHour={setup.activityStartHour}
                 activityEndHour={setup.activityEndHour}
+                categoryConfigs={setup.categorySettings}
               />
             </Suspense>
           </>
@@ -811,6 +907,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 onSaveSetup={saveSetup}
                 isDark={isDark}
                 onToggleDark={toggleDark}
+                hasActiveStudies={estudios.contacts.some(hasActiveStudyWork)}
               />
             </Suspense>
           </div>
@@ -940,6 +1037,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         onTabChange={navigate}
         isRunning={tracker.isRunning}
         activeCategory={timerDisplayCategory}
+        categoryConfigs={setup.categorySettings}
       />
     </div>
   );

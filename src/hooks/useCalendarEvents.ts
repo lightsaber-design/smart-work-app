@@ -5,7 +5,7 @@ import { clampReminderMinutes } from "@/lib/eventReminders";
 import { findScheduledEventAtTimerStart, findScheduledEventForTimerStart } from "@/lib/timerOverrun";
 import { requestNotificationPermission } from "@/lib/notifications";
 
-export type EventCategory = "Predi" | "Carrito" | "LDC" | "Visitas" | "Estudio";
+export type EventCategory = string;
 export type RecurrenceType = "none" | "weekly" | "monthly";
 
 export interface CalendarEvent {
@@ -39,7 +39,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isEventCategory(value: unknown): value is EventCategory {
-  return value === "Predi" || value === "Carrito" || value === "LDC" || value === "Visitas" || value === "Estudio";
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function isRecurrenceType(value: unknown): value is RecurrenceType {
@@ -128,7 +128,7 @@ function eventsShareSchedule(a: CalendarEvent, b: CalendarEvent): boolean {
 
 function removeCompletedScheduleDuplicates(events: CalendarEvent[], completedEvent: CalendarEvent): CalendarEvent[] {
   if (!completedEvent.completed) return events;
-  return events.filter((event) => event.id === completedEvent.id || !event.completed || !eventsShareSchedule(event, completedEvent));
+  return events.filter((event) => event.id === completedEvent.id || !eventsShareSchedule(event, completedEvent));
 }
 
 export function useCalendarEvents() {
@@ -320,7 +320,7 @@ export function useCalendarEvents() {
         const mapped = prev
           .map((e) => (e.id === id ? { ...e, ...updates, notified: shouldResetNotification ? false : updates.notified ?? e.notified } : e))
           .sort((a, b) => a.date.getTime() - b.date.getTime());
-        const completedEvent = updates.completed === true ? mapped.find((event) => event.id === id) : undefined;
+        const completedEvent = mapped.find((event) => event.id === id && event.completed);
         const updated = completedEvent ? removeCompletedScheduleDuplicates(mapped, completedEvent) : mapped;
         eventsRef.current = updated;
         persistEvents(updated);

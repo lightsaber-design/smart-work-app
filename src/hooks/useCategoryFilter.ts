@@ -1,18 +1,17 @@
 import { useState, useCallback, useEffect } from "react";
 import { EventCategory } from "@/hooks/useCalendarEvents";
-import { CATEGORY_LIST } from "@/lib/categories";
 import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 
-export function useCategoryFilter() {
+export function useCategoryFilter(validCategories: EventCategory[]) {
   const [excluded, setExcluded] = useState<Set<EventCategory>>(new Set());
 
   useEffect(() => {
     readJsonValue<unknown[]>("excludedCategories", [])
       .then((parsed) => {
-        setExcluded(new Set(parsed.filter((v): v is EventCategory => CATEGORY_LIST.includes(v as EventCategory))));
+        setExcluded(new Set(parsed.filter((v): v is EventCategory => typeof v === "string" && validCategories.includes(v))));
       })
       .catch((error) => console.error("Error loading category filters:", error));
-  }, []);
+  }, [validCategories]);
 
   const toggle = useCallback((cat: EventCategory) => {
     setExcluded((prev) => {

@@ -12,6 +12,7 @@ import {
 import { useMemo, useState, useEffect, useRef } from "react";
 import { useT } from "@/lib/LanguageContext";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
+import { CategoryConfig, getActiveCategoryConfigs, getCategoryMeta } from "@/lib/categories";
 
 function getCurrentTimeStr(): string {
   const now = new Date();
@@ -44,16 +45,6 @@ function formatSessionDay(isoDate: string): string {
   if (diffDays === -1) return "ayer";
   return d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
 }
-
-const ALL_CATEGORIES: WorkCategory[] = ["Predi", "Carrito", "LDC", "Visitas", "Estudio"];
-
-const CATEGORY_META: Record<WorkCategory, { icon: string; gradient: [string, string]; ring: string }> = {
-  Predi:   { icon: "🏠", gradient: ["#34B1AF", "#7BD4D2"], ring: "#34B1AF" },
-  Carrito: { icon: "🪧", gradient: ["#7CC67E", "#B3E0A4"], ring: "#7CC67E" },
-  LDC:     { icon: "🛠️", gradient: ["#9668A2", "#C29ACC"], ring: "#9668A2" },
-  Visitas: { icon: "🚶", gradient: ["#F4CFA4", "#F7DFB8"], ring: "#F4CFA4" },
-  Estudio: { icon: "📖", gradient: ["#D07D7D", "#E6A3A3"], ring: "#D07D7D" },
-};
 
 const RING_RADIUS = 108;
 const CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
@@ -93,6 +84,7 @@ interface ClockButtonProps {
     contactId: string,
     data?: { time?: string; lesson?: string; notes?: string; files?: SessionFile[]; forceNew?: boolean }
   ) => void;
+  categoryConfigs: CategoryConfig[];
   activityStartHour?: number;
   activityEndHour?: number;
 }
@@ -119,6 +111,7 @@ export function ClockButton({
   isRunning, elapsed, onClockIn, onClockOut, onUpdateCategory, onUpdateStartTime,
   calendarEvents, activeCategory, activeEntryId, activeEntryStartTime,
   estudios = [], onDisplayCategoryChange, onEstudioSession,
+  categoryConfigs,
   activityStartHour = DEFAULT_ACTIVITY_START_HOUR,
   activityEndHour = DEFAULT_ACTIVITY_END_HOUR,
 }: ClockButtonProps) {
@@ -144,25 +137,32 @@ export function ClockButton({
 
   const activeStudios = useMemo(() => estudios.filter(hasActiveStudyWork), [estudios]);
   const categories = useMemo(
-    () => activeStudios.length > 0 ? ALL_CATEGORIES : ALL_CATEGORIES.filter((c) => c !== "Estudio"),
-    [activeStudios.length]
+    () => getActiveCategoryConfigs(categoryConfigs)
+      .map((item) => item.name)
+      .filter((cat) => cat !== "Estudio" || activeStudios.length > 0),
+    [activeStudios.length, categoryConfigs]
   );
 
   useEffect(() => {
     if (category === "Estudio" && activeStudios.length === 1) {
       setSelectedEstudioId(activeStudios[0].id);
     } else if (category === "Estudio" && activeStudios.length === 0) {
-      setCategory("Predi");
+      setCategory(categories[0] ?? "Predi");
       setSelectedEstudioId("");
     }
-  }, [category, activeStudios]);
+  }, [category, activeStudios, categories]);
 
   useEffect(() => {
     if (!isRunning) {
-      setCategory(detected || "Predi");
+      const nextCategory = detected && categories.includes(detected) ? detected : categories[0] ?? "Predi";
+      setCategory(nextCategory);
       setEditingTime(false);
     }
-  }, [detected, isRunning]);
+  }, [categories, detected, isRunning]);
+
+  useEffect(() => {
+    if (!categories.includes(category)) setCategory(categories[0] ?? "Predi");
+  }, [categories, category]);
 
   useEffect(() => {
     setCustomTimeStr((value) => clampTimeToActivityRange(value, activityStartHour, activityEndHour));
@@ -220,7 +220,7 @@ export function ClockButton({
   };
 
   const currentCategory = isRunning ? (activeCategory || category) : category;
-  const meta = CATEGORY_META[currentCategory];
+  const meta = getCategoryMeta(categoryConfigs, currentCategory);
   const showEstudioPicker = currentCategory === "Estudio" && activeStudios.length > 0;
 
   useEffect(() => {
@@ -373,7 +373,7 @@ export function ClockButton({
                   {wallTime}
                 </p>
                 <p className={`text-[11px] ${mutedCircleText} font-medium`}>
-                  {currentCategory} · Toca para iniciar
+                  {currentCategory} · Toca para empezar
                 </p>
 
                 {/* Botón de inicio */}
@@ -392,7 +392,7 @@ export function ClockButton({
         {/* Iconos de categoría */}
         <div className="flex items-center justify-center gap-4 mt-6">
           {categories.map((cat) => {
-            const m = CATEGORY_META[cat];
+            const m = getCategoryMeta(categoryConfigs, cat);
             const isActive = currentCategory === cat;
             const isStrong = isActive && isRunning;
             return (

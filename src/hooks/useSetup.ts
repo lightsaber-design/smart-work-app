@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Lang, detectLanguage } from "@/lib/i18n";
 import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR, normalizeActivityHours } from "@/lib/activityHours";
+import { CategoryConfig, DEFAULT_CATEGORY_CONFIGS, normalizeCategoryConfigs } from "@/lib/categories";
 
 export interface SetupData {
   name?: string;
@@ -12,6 +13,7 @@ export interface SetupData {
   activityStartHour: number;
   activityEndHour: number;
   hasBibleStudies: boolean;
+  categorySettings: CategoryConfig[];
   completed: boolean;
   language?: Lang;
 }
@@ -24,6 +26,7 @@ const DEFAULT: SetupData = {
   activityStartHour: DEFAULT_ACTIVITY_START_HOUR,
   activityEndHour: DEFAULT_ACTIVITY_END_HOUR,
   hasBibleStudies: false,
+  categorySettings: DEFAULT_CATEGORY_CONFIGS,
   completed: false,
   language: detectLanguage(),
 };
@@ -61,6 +64,7 @@ function parseStoredSetup(value: unknown): SetupData {
     activityStartHour: activityHours.startHour,
     activityEndHour: activityHours.endHour,
     hasBibleStudies: typeof value.hasBibleStudies === "boolean" ? value.hasBibleStudies : DEFAULT.hasBibleStudies,
+    categorySettings: normalizeCategoryConfigs(value.categorySettings),
     completed: typeof value.completed === "boolean" ? value.completed : DEFAULT.completed,
     language: isLanguage(value.language) ? value.language : DEFAULT.language,
   };

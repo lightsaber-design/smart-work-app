@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CalendarEvent, EventCategory } from "@/hooks/useCalendarEvents";
 import { TimeEntry } from "@/hooks/useTimeTracker";
 import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { useCategoryFilter } from "@/hooks/useCategoryFilter";
 import { useMonthlyReportCarryover } from "@/hooks/useMonthlyReportCarryover";
-import { CATEGORY_LIST, CATEGORY_META } from "@/lib/categories";
-import { applyMonthlyLdcCap } from "@/lib/ldcCap";
+import { CategoryConfig, getActiveCategoryConfigs, getCategoryMeta, SUPPORT_CAP_HOURS } from "@/lib/categories";
+import { applyMonthlySupportCap } from "@/lib/ldcCap";
 import { calculateMonthlyReport } from "@/lib/monthlyReport";
 import { msToLabel } from "@/lib/time";
 import { useT } from "@/lib/LanguageContext";
@@ -19,6 +19,7 @@ interface StatsViewProps {
   precursorHours?: number | null;
   specialCampaignGoals?: Record<string, CampaignGoal>;
   onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
+  categoryConfigs: CategoryConfig[];
 }
 
 const MONTH_NAMES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -32,11 +33,14 @@ export function StatsView({
   precursorHours,
   specialCampaignGoals,
   onSetSpecialCampaign,
+  categoryConfigs,
 }: StatsViewProps) {
   const t = useT();
   const [mode, setMode] = useState<"mensual" | "anual">("mensual");
   const [editing, setEditing] = useState(false);
-  const { excluded, toggle, isIncluded } = useCategoryFilter();
+  const activeCategoryConfigs = useMemo(() => getActiveCategoryConfigs(categoryConfigs), [categoryConfigs]);
+  const activeCategoryNames = useMemo(() => activeCategoryConfigs.map((category) => category.name), [activeCategoryConfigs]);
+  const { excluded, toggle, isIncluded } = useCategoryFilter(activeCategoryNames);
   const { carryover, saveMonthlyReport } = useMonthlyReportCarryover();
   const now = new Date();
 
@@ -62,17 +66,21 @@ export function StatsView({
     );
 
   const maxCompletedMs = Math.max(...Object.values(completedMsByCategory), 1);
-  const includedCategories = CATEGORY_LIST.filter((c) => isIncluded(c as EventCategory));
+  const includedCategories = activeCategoryNames.filter((c) => isIncluded(c as EventCategory));
   const monthlyCategoryTotals = includedCategories.map((cat) => ({
     cat,
     ms: completedMsByCategory[cat] ?? 0,
   }));
-  const monthlyCappedCategoryTotals = applyMonthlyLdcCap(monthlyCategoryTotals);
+  const monthlyCappedCategoryTotals = applyMonthlySupportCap(monthlyCategoryTotals, activeCategoryConfigs);
   const monthlyFilteredMs = monthlyCappedCategoryTotals.reduce((sum, item) => sum + item.ms, 0);
   const monthlyRawFilteredMs = monthlyCategoryTotals.reduce((sum, item) => sum + item.ms, 0);
-  const monthlyLdcRawMs = monthlyCategoryTotals.find((item) => item.cat === "LDC")?.ms ?? 0;
-  const monthlyLdcCountedMs = monthlyCappedCategoryTotals.find((item) => item.cat === "LDC")?.ms ?? 0;
-  const isMonthlyLdcCapped = monthlyLdcRawMs > monthlyLdcCountedMs;
+  const monthlySupportRawMs = monthlyCategoryTotals
+    .filter((item) => activeCategoryConfigs.find((category) => category.name === item.cat)?.support)
+    .reduce((sum, item) => sum + item.ms, 0);
+  const monthlySupportCountedMs = monthlyCappedCategoryTotals
+    .filter((item) => activeCategoryConfigs.find((category) => category.name === item.cat)?.support)
+    .reduce((sum, item) => sum + item.ms, 0);
+  const isMonthlySupportCapped = monthlySupportRawMs > monthlySupportCountedMs;
   const monthlyReport = calculateMonthlyReport(monthlyFilteredMs, now, carryover);
 
 
@@ -82,47 +90,51 @@ export function StatsView({
   const serviceYearTo   = new Date(serviceYearStart + 1, 8, 1);
   const serviceYearLabel = `Sep ${serviceYearStart} – Ago ${serviceYearStart + 1}`;
 
-  const yearEntries = allEntries.filter(
-    (e) => e.startTime >= serviceYearFrom && e.startTime < serviceYearTo
-  );
-
-  const yearTotalMs = yearEntries.reduce(
-    (acc, e) => acc + Math.max(0, (e.endTime ?? new Date()).getTime() - e.startTime.getTime()), 0
-  );
-
-  const monthBars = Array.from({ length: 12 }, (_, i) => {
+  const serviceYearMonths = Array.from({ length: 12 }, (_, i) => {
     const calMonth = (8 + i) % 12;
     const calYear  = calMonth >= 8 ? serviceYearStart : serviceYearStart + 1;
-    const isCurrentMonth = calMonth === now.getMonth() && calYear === now.getFullYear();
-    const ms = yearEntries
-      .filter((e) => e.startTime.getMonth() === calMonth && e.startTime.getFullYear() === calYear)
-      .reduce((acc, e) => acc + Math.max(0, (e.endTime ?? new Date()).getTime() - e.startTime.getTime()), 0);
-    return { month: calMonth, ms, isCurrentMonth };
+    return { month: calMonth, year: calYear, isCurrentMonth: calMonth === now.getMonth() && calYear === now.getFullYear() };
   });
-  const maxMonthMs = Math.max(...monthBars.map((b) => b.ms), 1);
 
   const yearCompletedEvents = calendarEvents.filter(
     (e) => e.completed && e.date >= serviceYearFrom && e.date < serviceYearTo
   );
 
-  const { yearMsByCategory, yearCountByCategory } = yearCompletedEvents.reduce(
-    (acc, e) => {
-      if (!e.endTime) return acc;
-      const [h, m] = e.endTime.split(":").map(Number);
-      const end = new Date(e.date);
+  const yearlyCategoryTotals = includedCategories.map((cat) => ({ cat, ms: 0 }));
+  const monthBars = serviceYearMonths.map(({ month, year, isCurrentMonth }) => {
+    const monthEvents = yearCompletedEvents.filter(
+      (event) => event.date.getMonth() === month && event.date.getFullYear() === year
+    );
+    const monthMsByCategory = monthEvents.reduce<Record<string, number>>((acc, event) => {
+      if (!event.endTime) return acc;
+      const [h, m] = event.endTime.split(":").map(Number);
+      const end = new Date(event.date);
       end.setHours(h, m, 0, 0);
-      const ms = Math.max(0, end.getTime() - e.date.getTime());
-      acc.yearMsByCategory[e.category] = (acc.yearMsByCategory[e.category] ?? 0) + ms;
-      acc.yearCountByCategory[e.category] = (acc.yearCountByCategory[e.category] ?? 0) + 1;
+      acc[event.category] = (acc[event.category] ?? 0) + Math.max(0, end.getTime() - event.date.getTime());
       return acc;
-    },
-    { yearMsByCategory: {} as Record<string, number>, yearCountByCategory: {} as Record<string, number> }
-  );
-  const maxYearCatMs = Math.max(...CATEGORY_LIST.map((c) => yearMsByCategory[c] ?? 0), 1);
-  const yearlyCategoryTotals = includedCategories.map((cat) => ({
-    cat,
-    ms: yearMsByCategory[cat] ?? 0,
-  }));
+    }, {});
+    const monthTotals = includedCategories.map((cat) => ({
+      cat,
+      ms: monthMsByCategory[cat] ?? 0,
+    }));
+    const cappedMonthTotals = applyMonthlySupportCap(monthTotals, activeCategoryConfigs);
+    cappedMonthTotals.forEach((item) => {
+      const categoryTotal = yearlyCategoryTotals.find((total) => total.cat === item.cat);
+      if (categoryTotal) categoryTotal.ms += item.ms;
+    });
+    return {
+      month,
+      year,
+      isCurrentMonth,
+      ms: cappedMonthTotals.reduce((sum, item) => sum + item.ms, 0),
+    };
+  });
+  const maxMonthMs = Math.max(...monthBars.map((b) => b.ms), 1);
+  const yearMsByCategory = yearlyCategoryTotals.reduce<Record<string, number>>((acc, item) => {
+    acc[item.cat] = item.ms;
+    return acc;
+  }, {});
+  const maxYearCatMs = Math.max(...activeCategoryNames.map((c) => yearMsByCategory[c] ?? 0), 1);
   const yearFilteredMs = yearlyCategoryTotals.reduce((sum, item) => sum + item.ms, 0);
 
   return (
@@ -205,10 +217,10 @@ export function StatsView({
                     <p className="text-2xl font-bold text-foreground tabular-nums">
                       {monthlyFilteredMs > 0 ? msToLabel(monthlyFilteredMs) : "–"}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">time in events</p>
-                    {isMonthlyLdcCapped && (
+                    <p className="text-xs text-muted-foreground mt-0.5">horas registradas</p>
+                    {isMonthlySupportCapped && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        LDC counted as {msToLabel(monthlyLdcCountedMs)} of {msToLabel(monthlyLdcRawMs)} real hours.
+                        Support categories counted as {msToLabel(monthlySupportCountedMs)} of {msToLabel(monthlySupportRawMs)} real hours, capped at {SUPPORT_CAP_HOURS}h.
                         Real selected total: {msToLabel(monthlyRawFilteredMs)}.
                       </p>
                     )}
@@ -267,12 +279,12 @@ export function StatsView({
               </button>
             </div>
             <div className="space-y-3">
-              {CATEGORY_LIST.map((cat) => {
+              {activeCategoryNames.map((cat) => {
                 const rawMs = completedMsByCategory[cat] ?? 0;
                 const cappedMs = monthlyCappedCategoryTotals.find((item) => item.cat === cat)?.ms ?? 0;
-                const ms = cat === "LDC" ? cappedMs : rawMs;
-                const count = completedCountByCategory[cat] ?? 0;
-                const m = CATEGORY_META[cat];
+                const isSupport = activeCategoryConfigs.find((category) => category.name === cat)?.support ?? false;
+                const ms = isSupport ? cappedMs : rawMs;
+                const m = getCategoryMeta(categoryConfigs, cat);
                 const included = isIncluded(cat as EventCategory);
                 const pct = ms > 0 ? Math.round((ms / maxCompletedMs) * 100) : 0;
                 return (
@@ -301,11 +313,8 @@ export function StatsView({
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between mb-1.5">
                         <p className="text-[13px] font-semibold text-foreground">{cat}</p>
-                        {rawMs > 0 && (
-                          <p className="text-[11px] text-muted-foreground">
-                            {count} {count === 1 ? t("stats_event") : t("stats_events")}
-                            {cat === "LDC" && isMonthlyLdcCapped ? ` · ${msToLabel(rawMs)} real` : ""}
-                          </p>
+                        {isSupport && rawMs > ms && (
+                          <p className="text-[11px] text-muted-foreground">{msToLabel(rawMs)} real</p>
                         )}
                       </div>
                       <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -366,9 +375,9 @@ export function StatsView({
           {(() => {
             const hasExclusions = excluded.size > 0;
             const annualGoalMs = precursorHours === 50 ? 600 * 3_600_000 : 0;
-            const annualGoalPct = annualGoalMs > 0 ? Math.min(100, Math.round((yearTotalMs / annualGoalMs) * 100)) : 0;
-            const annualGoalRemaining = annualGoalMs > 0 ? Math.max(0, annualGoalMs - yearTotalMs) : 0;
-            const annualGoalDone = annualGoalMs > 0 && yearTotalMs >= annualGoalMs;
+            const annualGoalPct = annualGoalMs > 0 ? Math.min(100, Math.round((yearFilteredMs / annualGoalMs) * 100)) : 0;
+            const annualGoalRemaining = annualGoalMs > 0 ? Math.max(0, annualGoalMs - yearFilteredMs) : 0;
+            const annualGoalDone = annualGoalMs > 0 && yearFilteredMs >= annualGoalMs;
             return (
               <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4">
                 <div className="flex items-center justify-between gap-3">
@@ -380,7 +389,7 @@ export function StatsView({
                     <p className="text-2xl font-bold text-foreground tabular-nums">
                       {yearFilteredMs > 0 ? msToLabel(yearFilteredMs) : "–"}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">time in completed events</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">horas registradas</p>
                   </div>
                   <div className="text-3xl">📅</div>
                 </div>
@@ -401,7 +410,7 @@ export function StatsView({
                       />
                     </div>
                     <p className={`text-xs mt-1.5 ${annualGoalDone ? "text-green-600/70 dark:text-green-400/70" : "text-blue-600/70 dark:text-blue-400/70"}`}>
-                      {msToLabel(yearTotalMs)} de 600h · {serviceYearLabel}
+                      {msToLabel(yearFilteredMs)} de 600h · {serviceYearLabel}
                     </p>
                   </div>
                 )}
@@ -410,32 +419,46 @@ export function StatsView({
           })()}
 
           {/* Barras por mes */}
-          <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4">
-            <h3 className="text-sm font-bold text-foreground mb-4">Por mes</h3>
-            <div className="flex items-end gap-1.5 h-32">
+          <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4 overflow-hidden">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Por mes</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">{serviceYearLabel}</p>
+              </div>
+              <div className="rounded-xl bg-primary/10 px-3 py-1.5 text-right">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-primary/80">Total</p>
+                <p className="text-sm font-black tabular-nums text-primary">{yearFilteredMs > 0 ? msToLabel(yearFilteredMs) : "0m"}</p>
+              </div>
+            </div>
+            <div className="relative h-44">
+              <div className="absolute inset-x-0 top-0 h-px bg-border/60" />
+              <div className="absolute inset-x-0 top-1/3 h-px bg-border/40" />
+              <div className="absolute inset-x-0 top-2/3 h-px bg-border/40" />
+              <div className="absolute inset-x-0 bottom-8 h-px bg-border" />
+              <div className="relative z-10 flex h-full items-end gap-1.5">
               {monthBars.map(({ month, ms, isCurrentMonth }) => {
-                const barH = ms > 0 ? Math.max(8, (ms / maxMonthMs) * 96) : 4;
-                const hrs = Math.floor(ms / 3_600_000);
+                const barH = ms > 0 ? Math.max(10, (ms / maxMonthMs) * 118) : 5;
+                const label = ms > 0 ? msToLabel(ms) : "";
                 return (
-                  <div key={month} className="flex-1 flex flex-col items-center gap-1">
+                  <div key={month} className="flex min-w-0 flex-1 flex-col items-center gap-1">
                     {ms > 0 && (
-                      <span className={`text-[8px] font-bold tabular-nums ${isCurrentMonth ? "text-primary" : "text-muted-foreground"}`}>
-                        {hrs > 0 ? `${hrs}h` : ""}
+                      <span className={`max-w-full truncate text-[9px] font-bold tabular-nums ${isCurrentMonth ? "text-primary" : "text-muted-foreground"}`}>
+                        {label}
                       </span>
                     )}
                     <div
-                      className="w-full rounded-t-lg transition-all"
+                      className={`w-full max-w-5 rounded-t-lg transition-all ${isCurrentMonth ? "shadow-sm shadow-primary/20" : ""}`}
                       style={{
                         height: barH,
                         background: ms > 0
                           ? isCurrentMonth
-                            ? "linear-gradient(180deg, #818cf8, #60a5fa)"
-                            : "linear-gradient(180deg, #818cf840, #60a5fa40)"
+                            ? "linear-gradient(180deg, #22c55e, #0ea5e9)"
+                            : "linear-gradient(180deg, rgba(34,197,94,0.58), rgba(14,165,233,0.42))"
                           : undefined,
                         backgroundColor: ms === 0 ? "hsl(var(--muted))" : undefined,
                         opacity: ms === 0 ? 0.35 : 1,
                       }}
-                      title={`${MONTH_NAMES[month]}: ${hrs}h`}
+                      title={`${MONTH_NAMES[month]}: ${msToLabel(ms)}`}
                     />
                     <span className={`text-[8px] font-semibold ${isCurrentMonth ? "text-primary" : "text-muted-foreground"}`}>
                       {MONTH_NAMES[month]}
@@ -443,6 +466,7 @@ export function StatsView({
                   </div>
                 );
               })}
+              </div>
             </div>
           </div>
 
@@ -463,10 +487,9 @@ export function StatsView({
               </button>
             </div>
             <div className="space-y-3">
-              {CATEGORY_LIST.map((cat) => {
+              {activeCategoryNames.map((cat) => {
                 const ms = yearMsByCategory[cat] ?? 0;
-                const count = yearCountByCategory[cat] ?? 0;
-                const m = CATEGORY_META[cat];
+                const m = getCategoryMeta(categoryConfigs, cat);
                 const included = isIncluded(cat as EventCategory);
                 const pct = ms > 0 ? Math.round((ms / maxYearCatMs) * 100) : 0;
                 return (
@@ -495,7 +518,6 @@ export function StatsView({
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between mb-1.5">
                         <p className="text-[13px] font-semibold text-foreground">{cat}</p>
-                        {ms > 0 && <p className="text-[11px] text-muted-foreground">{count} {count === 1 ? t("stats_event") : t("stats_events")}</p>}
                       </div>
                       <div className="h-2 rounded-full bg-muted overflow-hidden">
                         {ms > 0 && (
