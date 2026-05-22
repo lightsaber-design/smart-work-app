@@ -974,17 +974,15 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
             {/* Quick access */}
             <div className="px-5 pt-5 mb-4 grid grid-cols-2 gap-3">
-              {estudios.contacts.some((contact) => contact.active) && (
-                <button
-                  onClick={() => navigate("estudios")}
-                  className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-sm active:scale-[0.98] text-left"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0">
-                    <BookOpen className="w-4 h-4 text-pink-500" />
-                  </div>
-                  <span className="text-sm font-semibold text-foreground">Estudios</span>
-                </button>
-              )}
+              <button
+                onClick={() => navigate("estudios")}
+                className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-sm active:scale-[0.98] text-left"
+              >
+                <div className="w-9 h-9 rounded-xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0">
+                  <BookOpen className="w-4 h-4 text-pink-500" />
+                </div>
+                <span className="text-sm font-semibold text-foreground">Estudios</span>
+              </button>
               <button
                 onClick={() => navigate("map")}
                 className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-sm active:scale-[0.98] text-left"

@@ -45,7 +45,8 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
 
   const currentLang = (setup.language ?? "es") as Lang;
   const categories = setup.categorySettings;
-  const activeCategoryCount = categories.filter((category) => category.active).length;
+  const visibleCategories = categories.filter((category) => category.name !== "Estudio" || hasActiveStudies);
+  const activeCategoryCount = visibleCategories.filter((category) => category.active).length;
 
   const saveCategories = (categorySettings: CategoryConfig[]) => onSaveSetup({ categorySettings });
 
@@ -185,7 +186,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
               {activeCategoryCount} active · Timer, Calendar, Summary, and Stats
             </p>
             <div className="mt-2 flex gap-1.5">
-              {categories.slice(0, 8).map((category) => (
+              {visibleCategories.slice(0, 8).map((category) => (
                 <span
                   key={category.name}
                   className={`h-2.5 w-2.5 rounded-full border border-border ${category.active ? "" : "opacity-35"}`}
@@ -201,7 +202,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
         {categoriesOpen && (
           <div className="space-y-4 border-t border-border px-5 pb-5 pt-4">
             <div className="space-y-2">
-              {categories.map((category) => (
+              {visibleCategories.map((category) => (
                 <div key={category.name} className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2">
