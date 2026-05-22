@@ -271,6 +271,7 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
   onDelete: () => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const isNew = session === null;
   const isPending = session?.pending ?? false;
   const canComplete = Boolean(session?.pending) && new Date(session.date).getTime() <= Date.now();
@@ -302,8 +303,8 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
   };
 
   const subtitle = isNew
-    ? (isPending ? "Programar sesión" : "Registrar sesión")
-    : (isPending ? "Sesión programada" : "Sesión registrada");
+    ? (isPending ? t("studies_schedule_session") : t("studies_register_session"))
+    : (isPending ? t("studies_scheduled_session") : t("studies_registered_session"));
 
   return (
     <>
@@ -320,7 +321,7 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
         <div className="px-4 space-y-4 overflow-y-auto flex-1">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Fecha</Label>
+              <Label>{t("date_label")}</Label>
               <input
                 type="date"
                 value={date}
@@ -329,7 +330,7 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Hora</Label>
+              <Label>{t("time_label")}</Label>
               <input
                 type="time"
                 value={time}
@@ -339,17 +340,17 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Lección <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+            <Label>{t("study_lesson")} <span className="text-muted-foreground font-normal text-xs">({t("cal_optional")})</span></Label>
             <Input
-              placeholder="Ej: Cap. 3 - La esperanza de la resurrección"
+              placeholder={t("studies_lesson_placeholder")}
               value={lesson}
               onChange={(e) => setLesson(e.target.value)}
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Notas <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+            <Label>{t("study_notes")} <span className="text-muted-foreground font-normal text-xs">({t("cal_optional")})</span></Label>
             <Input
-              placeholder="Ej: Mostró interés en el tema de la familia"
+              placeholder={t("studies_session_notes_placeholder")}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
@@ -357,7 +358,7 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
 
           {existingFiles.length > 0 && (
             <div className="space-y-1.5">
-              <Label>Archivos</Label>
+              <Label>{t("study_files")}</Label>
               <div className="space-y-1">
                 {existingFiles.map((f) => (
                   <div key={f.id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-muted">
@@ -388,8 +389,8 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
 
           <div className="space-y-1.5">
             <Label>
-              {existingFiles.length > 0 ? "Añadir archivos" : "Archivos"}
-              <span className="text-muted-foreground font-normal text-xs ml-1">(opcional)</span>
+              {existingFiles.length > 0 ? t("study_add_files") : t("study_files")}
+              <span className="text-muted-foreground font-normal text-xs ml-1">({t("cal_optional")})</span>
             </Label>
             <FilePicker files={pendingFiles} onChange={setPendingFiles} />
           </div>
@@ -397,7 +398,7 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
 
         <div className="flex-shrink-0 px-4 pt-3 pb-6 border-t border-border bg-card mt-2 space-y-2">
           <Button onClick={handleSave} disabled={saving || !date} className="w-full">
-            {saving ? "Guardando..." : isNew ? (isPending ? "Programar sesión" : "Guardar sesión") : "Guardar cambios"}
+            {saving ? t("common_saving") : isNew ? (isPending ? t("studies_schedule_session") : t("studies_save_session")) : t("cal_save_changes")}
           </Button>
           {!isNew && isPending && canComplete && onComplete && (
             <Button
@@ -405,7 +406,7 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
               onClick={() => { onComplete(); onClose(); }}
               className="w-full gap-2"
             >
-              <CheckCircle2 className="w-4 h-4 text-green-500" /> Marcar como completada
+              <CheckCircle2 className="w-4 h-4 text-green-500" /> {t("study_mark_completed")}
             </Button>
           )}
           {!isNew && (
@@ -414,7 +415,7 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
               onClick={() => { onDelete(); onClose(); }}
               className="w-full text-destructive gap-2"
             >
-              <Trash2 className="w-4 h-4" /> Eliminar sesión
+              <Trash2 className="w-4 h-4" /> {t("study_delete_session")}
             </Button>
           )}
         </div>
@@ -471,6 +472,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
   focusedSessionId?: string;
   onFocusedSessionHandled?: () => void;
 }) {
+  const t = useT();
   const [newSessionOpen, setNewSessionOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -598,7 +600,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
           <div className="mt-3">
             <Button size="sm" onClick={() => setNewSessionOpen(true)} className="w-full gap-1.5">
               <BookOpen className="w-4 h-4" />
-              {sessionToday ? "Añadir otra sesión" : "Registrar sesión de hoy"}
+              {sessionToday ? t("studies_add_another_session") : t("studies_register_today")}
             </Button>
           </div>
         )}
@@ -610,7 +612,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
         <div>
           <div className="flex items-center gap-2 mb-3">
             <CalendarPlus className="w-4 h-4 text-primary" />
-            <h3 className="text-sm font-bold text-foreground">Próximas sesiones</h3>
+            <h3 className="text-sm font-bold text-foreground">{t("studies_upcoming_sessions")}</h3>
             {upcomingSessions.length > 0 && (
               <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">
                 {upcomingSessions.length}
@@ -619,7 +621,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
           </div>
           {upcomingSessions.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border p-6 text-center">
-              <p className="text-xs text-muted-foreground">Sin sesiones programadas</p>
+              <p className="text-xs text-muted-foreground">{t("studies_no_scheduled_sessions")}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -642,7 +644,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                         <span className="text-xs text-muted-foreground">{s.time}</span>
                         {isPast && (
                           <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-medium">
-                            Pendiente
+                            {t("cal_pending")}
                           </span>
                         )}
                         <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -660,7 +662,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
         <div>
           <div className="flex items-center gap-2 mb-3">
             <History className="w-4 h-4 text-muted-foreground" />
-            <h3 className="text-sm font-bold text-foreground">Historial</h3>
+            <h3 className="text-sm font-bold text-foreground">{t("studies_history")}</h3>
             {doneSessions.length > 0 && (
               <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-semibold">
                 {doneSessions.length}
@@ -669,7 +671,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
           </div>
           {doneSessions.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border p-6 text-center">
-              <p className="text-xs text-muted-foreground">Sin sesiones registradas</p>
+              <p className="text-xs text-muted-foreground">{t("studies_no_registered_sessions")}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -816,6 +818,7 @@ export function EstudiosView({
   onAddSession, onUpdateSession, onDeleteSession, onCompleteSession,
   focusedSession, onFocusedSessionHandled,
 }: EstudiosViewProps) {
+  const t = useT();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
@@ -856,12 +859,12 @@ export function EstudiosView({
             <BookOpen className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Estudios activos</p>
+            <p className="text-xs text-muted-foreground">{t("studies_active")}</p>
             <p className="text-lg font-bold text-foreground leading-none">{active.length}</p>
           </div>
         </div>
         <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
-          <Plus className="w-4 h-4" /> Añadir
+          <Plus className="w-4 h-4" /> {t("cal_add")}
         </Button>
       </div>
 
@@ -869,8 +872,8 @@ export function EstudiosView({
         {contacts.length === 0 && (
           <div className="text-center py-16 space-y-2">
             <BookOpen className="w-10 h-10 text-muted-foreground mx-auto" />
-            <p className="text-sm font-medium text-foreground">Sin estudios registrados</p>
-            <p className="text-xs text-muted-foreground">Pulsa Añadir para registrar tu primer estudio</p>
+            <p className="text-sm font-medium text-foreground">{t("studies_none")}</p>
+            <p className="text-xs text-muted-foreground">{t("studies_empty_hint")}</p>
           </div>
         )}
         {active.map((c) => (
@@ -878,7 +881,7 @@ export function EstudiosView({
         ))}
         {archived.length > 0 && (
           <>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-2">Archivados</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-2">{t("studies_archived")}</p>
             {archived.map((c) => (
               <ContactCard key={c.id} contact={c} favoritePlaces={favoritePlaces} onClick={() => setSelectedId(c.id)} />
             ))}

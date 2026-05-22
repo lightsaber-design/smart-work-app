@@ -252,6 +252,10 @@ function EventMonthGrid({
   onNextMonth,
   onAddEvent,
   addEventLabel,
+  upcomingLabel,
+  doneLabel,
+  pendingLabel,
+  currentDayLabel,
   precursorHours,
   specialCampaignGoals,
   onSetSpecialCampaign,
@@ -266,6 +270,10 @@ function EventMonthGrid({
   onNextMonth: () => void;
   onAddEvent: () => void;
   addEventLabel: string;
+  upcomingLabel: string;
+  doneLabel: string;
+  pendingLabel: string;
+  currentDayLabel: string;
   precursorHours?: number | null;
   specialCampaignGoals?: Record<string, CampaignGoal>;
   onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
@@ -449,16 +457,16 @@ function EventMonthGrid({
       </div>
       <div className="flex items-center gap-3 mt-3 pt-2 border-t border-border/40 flex-wrap">
         <span className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
-          <span className="w-3 h-3 rounded-md bg-primary/20" /> Por venir
+          <span className="w-3 h-3 rounded-md bg-primary/20" /> {upcomingLabel}
         </span>
         <span className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
-          <span className="w-3 h-3 rounded-md bg-green-500/25" /> Realizado
+          <span className="w-3 h-3 rounded-md bg-green-500/25" /> {doneLabel}
         </span>
         <span className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
-          <span className="w-3 h-3 rounded-md bg-muted-foreground/20" /> Pendiente
+          <span className="w-3 h-3 rounded-md bg-muted-foreground/20" /> {pendingLabel}
         </span>
         <span className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
-          <span className="w-3 h-3 rounded-md ring-2 ring-primary" /> Día actual
+          <span className="w-3 h-3 rounded-md ring-2 ring-primary" /> {currentDayLabel}
         </span>
       </div>
     </div>
@@ -975,7 +983,7 @@ export function CalendarView({
                 onClick={() => setSelectedDate(new Date())}
                 className="px-4 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-bold shadow-md shadow-primary/25"
               >
-                Hoy
+                {t("day_today")}
               </button>
               <button
                 onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() + 7); setSelectedDate(d); }}
@@ -1192,6 +1200,10 @@ export function CalendarView({
             onNextMonth={() => setMonthOffset((v) => v + 1)}
             onAddEvent={() => setDialogOpen(true)}
             addEventLabel={t("home_add_activity")}
+            upcomingLabel={t("cal_upcoming")}
+            doneLabel={t("cal_done")}
+            pendingLabel={t("cal_pending")}
+            currentDayLabel={t("cal_current_day")}
             precursorHours={precursorHours}
             specialCampaignGoals={specialCampaignGoals}
             onSetSpecialCampaign={onSetSpecialCampaign}
@@ -1256,7 +1268,7 @@ export function CalendarView({
               <div className="space-y-2">
                 <Label>Contacto de estudio</Label>
                 <Select value={selectedEstudioContactId} onValueChange={setSelectedEstudioContactId}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar contacto" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("studies_select_contact")} /></SelectTrigger>
                   <SelectContent>
                     {activeContacts.map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -1268,7 +1280,7 @@ export function CalendarView({
             {category === "Estudio" && (
               <div className="space-y-3 rounded-2xl border border-border bg-muted/20 p-3">
                 <div className="space-y-1.5">
-                  <Label>Lección <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+                  <Label>{t("study_lesson")} <span className="text-muted-foreground font-normal text-xs">({t("cal_optional")})</span></Label>
                   <Input
                     placeholder="Ej: Cap. 3 - La esperanza de la resurrección"
                     value={studyLesson}
@@ -1572,7 +1584,7 @@ export function CalendarView({
                   <div className="space-y-2">
                     <Label>Contacto de estudio</Label>
                     <Select value={editEstudioContactId} onValueChange={setEditEstudioContactId}>
-                      <SelectTrigger><SelectValue placeholder="Seleccionar contacto" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={t("studies_select_contact")} /></SelectTrigger>
                       <SelectContent>
                         {activeContacts.map((c) => (
                           <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
