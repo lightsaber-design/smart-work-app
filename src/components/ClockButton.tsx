@@ -13,6 +13,8 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
 import { CategoryConfig, getActiveCategoryConfigs, getCategoryLabel, getCategoryMeta } from "@/lib/categories";
+import { CategoryIcon } from "@/components/CategoryIcon";
+import { formatDateLong, formatShortMonth, formatWeekday } from "@/lib/dateFormat";
 
 function getCurrentTimeStr(): string {
   const now = new Date();
@@ -43,7 +45,7 @@ function formatSessionDay(isoDate: string, t: (key: string) => string, locale: s
   if (diffDays === 0) return t("date_today_lower");
   if (diffDays === 1) return t("date_tomorrow_lower");
   if (diffDays === -1) return t("date_yesterday_lower");
-  return d.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
+  return formatDateLong(d, locale);
 }
 
 const RING_RADIUS = 108;
@@ -334,7 +336,7 @@ export function ClockButton({
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white text-[10px] font-bold tracking-wide"
                   style={{ background: "rgba(255,255,255,0.18)" }}
                 >
-                  <span>{meta.icon}</span>
+                  <CategoryIcon icon={meta.icon} />
                   <span>{getCategoryLabel(currentCategory, t)}</span>
                 </div>
 
@@ -369,7 +371,7 @@ export function ClockButton({
               <>
                 {/* Reloj detenido */}
                 <p className={`text-[11px] font-semibold ${subtleCircleText} tracking-widest uppercase`}>
-                  {new Date().toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" })}
+                  {`${formatWeekday(new Date(), locale, "short")}, ${new Date().getDate()} ${formatShortMonth(new Date(), locale)}`}
                 </p>
                 <p className={`text-[50px] font-black tabular-nums ${circleText} leading-none tracking-tight`}>
                   {wallTime}
@@ -416,7 +418,7 @@ export function ClockButton({
                     : { background: softCategoryBackground(m.gradient) }
                   }
                 >
-                  {m.icon}
+                  <CategoryIcon icon={m.icon} />
                 </div>
                 <span className={`text-[10px] font-semibold ${isStrong ? "text-white" : "text-slate-700"}`}>
                   {getCategoryLabel(cat, t)}

@@ -1,6 +1,7 @@
 import { Trash2 } from "lucide-react";
 import { TimeEntry, formatDuration } from "@/hooks/useTimeTracker";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
+import { formatTime } from "@/lib/dateFormat";
 
 interface TimeEntryListProps {
   entries: TimeEntry[];
@@ -12,7 +13,6 @@ export function TimeEntryList({ entries, onDelete, onUpdateDescription }: TimeEn
   const t = useT();
   const lang = useLang();
   const locale = localeForLang(lang);
-  const formatEntryTime = (date: Date) => date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 
   if (entries.length === 0) {
     return (
@@ -51,8 +51,8 @@ export function TimeEntryList({ entries, onDelete, onUpdateDescription }: TimeEn
                 className="text-sm font-medium text-foreground bg-transparent border-none outline-none w-full placeholder:text-muted-foreground/50"
               />
               <p className="text-xs text-muted-foreground mt-0.5">
-                {formatEntryTime(entry.startTime)}
-                {entry.endTime ? ` - ${formatEntryTime(entry.endTime)}` : ` - ${t("time_entries_running")}`}
+                {formatTime(entry.startTime, locale)}
+                {entry.endTime ? ` - ${formatTime(entry.endTime, locale)}` : ` - ${t("time_entries_running")}`}
               </p>
             </div>
             <p className="text-sm font-semibold text-foreground tabular-nums">

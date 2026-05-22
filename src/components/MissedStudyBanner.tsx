@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BookOpen, X, Calendar, Clock } from "lucide-react";
 import { EstudioContact, EstudioSession, SessionFile } from "@/hooks/useEstudios";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
+import { formatDateLong } from "@/lib/dateFormat";
 
 interface MissedStudyBannerProps {
   contacts: EstudioContact[];
@@ -29,9 +30,7 @@ function isoToDateStr(iso: string): string {
 }
 
 function formatMissedLabel(isoDate: string, locale: string): string {
-  return new Date(isoDate).toLocaleDateString(locale, {
-    weekday: "long", day: "numeric", month: "long",
-  });
+  return formatDateLong(new Date(isoDate), locale);
 }
 
 export function MissedStudyBanner({ contacts, onComplete, onReschedule }: MissedStudyBannerProps) {

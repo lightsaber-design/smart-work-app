@@ -14,13 +14,13 @@ interface BottomNavProps {
 }
 
 const LEFT_TABS = [
-  { id: "home" as AppTab, icon: Home, label: "Inicio" },
-  { id: "summary" as AppTab, icon: BarChart3, label: "Resumen" },
+  { id: "home" as AppTab, icon: Home, labelKey: "nav_home" },
+  { id: "summary" as AppTab, icon: BarChart3, labelKey: "nav_stats" },
 ] as const;
 
 const RIGHT_TABS = [
-  { id: "calendar" as AppTab, icon: CalendarDays, label: "Agenda" },
-  { id: "profile" as AppTab, icon: User, label: "Perfil" },
+  { id: "calendar" as AppTab, icon: CalendarDays, labelKey: "nav_calendar" },
+  { id: "profile" as AppTab, icon: User, labelKey: "nav_settings" },
 ] as const;
 
 export function BottomNav({ activeTab, onTabChange, isRunning, activeCategory = "Predi", categoryConfigs }: BottomNavProps) {
@@ -36,16 +36,20 @@ export function BottomNav({ activeTab, onTabChange, isRunning, activeCategory = 
     <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
       <div className="flex items-center h-16 max-w-md mx-auto px-2">
         {/* Left tabs */}
-        {LEFT_TABS.map(({ id, icon: Icon }) => {
+        {LEFT_TABS.map(({ id, icon: Icon, labelKey }) => {
           const active = activeTab === id;
+          const label = t(labelKey);
           return (
             <button
               key={id}
               onClick={() => onTabChange(id)}
-              className="flex-1 flex items-center justify-center py-3 transition-colors"
-              aria-label={id === "home" ? t("nav_home") : t("nav_stats")}
+              className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors"
+              aria-label={label}
             >
               <Icon className={`w-6 h-6 transition-colors ${active ? "text-primary" : "text-muted-foreground"}`} />
+              <span className={`max-w-full truncate text-[10px] font-semibold ${active ? "text-primary" : "text-muted-foreground"}`}>
+                {label}
+              </span>
             </button>
           );
         })}
@@ -75,16 +79,20 @@ export function BottomNav({ activeTab, onTabChange, isRunning, activeCategory = 
         </div>
 
         {/* Right tabs */}
-        {RIGHT_TABS.map(({ id, icon: Icon }) => {
+        {RIGHT_TABS.map(({ id, icon: Icon, labelKey }) => {
           const active = id === "profile" ? profileActive : activeTab === id;
+          const label = t(labelKey);
           return (
             <button
               key={id}
               onClick={() => onTabChange(id)}
-              className="flex-1 flex items-center justify-center py-3 transition-colors"
-              aria-label={id === "calendar" ? t("nav_calendar") : t("nav_settings")}
+              className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors"
+              aria-label={label}
             >
               <Icon className={`w-6 h-6 transition-colors ${active ? "text-primary" : "text-muted-foreground"}`} />
+              <span className={`max-w-full truncate text-[10px] font-semibold ${active ? "text-primary" : "text-muted-foreground"}`}>
+                {label}
+              </span>
             </button>
           );
         })}

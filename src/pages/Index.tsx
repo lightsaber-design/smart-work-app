@@ -5,6 +5,7 @@ import { useFavoritePlaces } from "@/hooks/useFavoritePlaces";
 import { useSetup, SetupData } from "@/hooks/useSetup";
 import { ClockButton } from "@/components/ClockButton";
 import { BottomNav, AppTab } from "@/components/BottomNav";
+import { CategoryIcon } from "@/components/CategoryIcon";
 import { LanguageProvider, localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { detectLanguage, Lang, translate } from "@/lib/i18n";
 import { ChevronLeft, ChevronRight, MapPin, BookOpen, Moon, Sun, Plus, Pencil, Trash2, CloudFog, CloudRain, CloudSun, Snowflake, Zap } from "lucide-react";
@@ -20,6 +21,7 @@ import { findActiveScheduledEvent, getEventEndDate, shouldShowTimerOverrunPrompt
 import { showBrowserNotification } from "@/lib/notifications";
 import { clampTimeValueToHourRange } from "@/lib/activityHours";
 import { formatPlaceName } from "@/lib/placeNames";
+import { formatDateLong, formatTime } from "@/lib/dateFormat";
 
 const StatsView = lazy(() => import("@/components/StatsView").then((module) => ({ default: module.StatsView })));
 const CalendarView = lazy(() => import("@/components/CalendarView").then((module) => ({ default: module.CalendarView })));
@@ -346,7 +348,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       const existing = groups.find((group) => group.key === key);
       const label = key === todayKey
         ? t("day_today")
-        : event.date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
+        : formatDateLong(event.date, locale);
       if (existing) {
         existing.events.push(event);
       } else {
@@ -550,7 +552,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             const existing = groups.find((group) => group.key === key);
             const label = key === todayKey
               ? t("day_today")
-              : item.date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
+              : formatDateLong(item.date, locale);
             if (existing) {
               existing.events.push(item);
             } else if (groups.length < 2) {
@@ -677,7 +679,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                               className={`w-full flex items-center gap-3 rounded-2xl border px-3 py-3 text-left active:scale-[0.98] transition-transform ${style.card}`}
                               style={{ borderLeftWidth: 3, borderLeftColor: style.accent }}
                             >
-                              <span className="text-xl leading-none flex-shrink-0">{meta.icon}</span>
+                              <CategoryIcon icon={meta.icon} className="text-xl leading-none flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-bold text-foreground truncate">{item.label}</p>
                                 <p className="text-[11px] text-muted-foreground">{timeStr}</p>
@@ -820,7 +822,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                               className={`w-full flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-left active:scale-[0.98] transition-transform ${style.card}`}
                               style={{ borderLeftWidth: 3, borderLeftColor: style.accent }}
                             >
-                              <span className="text-lg leading-none">{meta.icon}</span>
+                              <CategoryIcon icon={meta.icon} className="text-lg leading-none flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <p className={`text-[13px] font-semibold text-foreground truncate ${event.completed ? "line-through opacity-50" : ""}`}>{getCategoryLabel(event.category, t)}</p>
                                 <p className="text-[10px] text-muted-foreground">{timeStr}{event.endTime ? ` – ${event.endTime}` : ""}</p>
@@ -1087,7 +1089,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       {/* Timer overrun prompt */}
       {showTimerOverrunPrompt && activeScheduledEvent && (() => {
         const end = getEventEndDate(activeScheduledEvent);
-        const endLabel = end?.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }) ?? "";
+        const endLabel = end ? formatTime(end, locale) : "";
         return (
           <div className="fixed bottom-24 left-0 right-0 px-4 max-w-md mx-auto z-50">
             <div className="rounded-2xl border border-amber-500/30 bg-card p-4 shadow-xl">

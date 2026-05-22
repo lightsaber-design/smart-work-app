@@ -10,6 +10,8 @@ import { calculateMonthlyReport } from "@/lib/monthlyReport";
 import { msToLabel } from "@/lib/time";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { Pencil, Check, Send } from "lucide-react";
+import { CategoryIcon } from "@/components/CategoryIcon";
+import { formatMonthYear, formatShortMonth } from "@/lib/dateFormat";
 
 interface StatsViewProps {
   entries: TimeEntry[];
@@ -42,8 +44,6 @@ export function StatsView({
   const { excluded, toggle, isIncluded } = useCategoryFilter(activeCategoryNames);
   const { carryover, saveMonthlyReport } = useMonthlyReportCarryover();
   const now = new Date();
-  const formatMonthYear = (date: Date) => date.toLocaleDateString(locale, { month: "long", year: "numeric" });
-  const formatShortMonth = (date: Date) => date.toLocaleDateString(locale, { month: "short" });
 
   // ── MENSUAL ──────────────────────────────────────────────────────────────
   const monthCompletedEvents = calendarEvents.filter(
@@ -89,7 +89,7 @@ export function StatsView({
   const serviceYearStart = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
   const serviceYearFrom = new Date(serviceYearStart, 8, 1);
   const serviceYearTo   = new Date(serviceYearStart + 1, 8, 1);
-  const serviceYearLabel = `${formatShortMonth(new Date(serviceYearStart, 8, 1))} ${serviceYearStart} - ${formatShortMonth(new Date(serviceYearStart + 1, 7, 1))} ${serviceYearStart + 1}`;
+  const serviceYearLabel = `${formatShortMonth(new Date(serviceYearStart, 8, 1), locale)} ${serviceYearStart} - ${formatShortMonth(new Date(serviceYearStart + 1, 7, 1), locale)} ${serviceYearStart + 1}`;
 
   const serviceYearMonths = Array.from({ length: 12 }, (_, i) => {
     const calMonth = (8 + i) % 12;
@@ -214,7 +214,7 @@ export function StatsView({
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-muted-foreground mb-0.5 capitalize">
-                      {formatMonthYear(now)}
+                      {formatMonthYear(now, locale)}
                       {hasExclusions && <span className="ml-1 text-primary/70">· {t("stats_filtered")}</span>}
                     </p>
                     <p className="text-2xl font-bold text-foreground tabular-nums">
@@ -315,7 +315,7 @@ export function StatsView({
                       className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
                       style={{ background: `linear-gradient(135deg, ${m.gradient[0]}30, ${m.gradient[1]}30)` }}
                     >
-                      {m.icon}
+                      <CategoryIcon icon={m.icon} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between mb-1.5">
@@ -351,7 +351,7 @@ export function StatsView({
           {/* Enviar Informe mensual */}
           {(() => {
             const estudiosCount = completedCountByCategory["Estudio"] ?? 0;
-            const monthLabel = formatMonthYear(now);
+            const monthLabel = formatMonthYear(now, locale);
             const msg = [
               `📊 ${t("stats_report")} ${monthLabel}`,
               `⏱️ ${t("stats_hours")}: ${monthlyReport.reportedHours}h`,
@@ -465,10 +465,10 @@ export function StatsView({
                         backgroundColor: ms === 0 ? "hsl(var(--muted))" : undefined,
                         opacity: ms === 0 ? 0.35 : 1,
                       }}
-                      title={`${formatShortMonth(new Date(year, month, 1))}: ${msToLabel(ms)}`}
+                      title={`${formatShortMonth(new Date(year, month, 1), locale)}: ${msToLabel(ms)}`}
                     />
                     <span className={`text-[8px] font-semibold ${isCurrentMonth ? "text-primary" : "text-muted-foreground"}`}>
-                      {formatShortMonth(new Date(year, month, 1))}
+                      {formatShortMonth(new Date(year, month, 1), locale)}
                     </span>
                   </div>
                 );
@@ -520,7 +520,7 @@ export function StatsView({
                       className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
                       style={{ background: `linear-gradient(135deg, ${m.gradient[0]}30, ${m.gradient[1]}30)` }}
                     >
-                      {m.icon}
+                      <CategoryIcon icon={m.icon} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between mb-1.5">

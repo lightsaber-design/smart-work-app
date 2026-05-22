@@ -22,6 +22,7 @@ import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { saveFile, getFileURL, formatFileSize } from "@/lib/sessionFiles";
 import { openGoogleMaps } from "@/lib/maps";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
+import { formatDateFull, formatDateLong, formatWeekday } from "@/lib/dateFormat";
 
 /* Constantes */
 /* Ayudantes */
@@ -40,9 +41,7 @@ function formatRelative(isoDate: string, t: (key: string, vars?: Record<string, 
 }
 
 function formatDateLabel(isoDate: string, locale: string): string {
-  return new Date(isoDate).toLocaleDateString(locale, {
-    weekday: "short", day: "numeric", month: "long", year: "numeric",
-  });
+  return formatDateFull(new Date(isoDate), locale);
 }
 
 function todayDateStr(): string {
@@ -211,7 +210,7 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
                       <SelectContent>
                         {Array.from({ length: 7 }, (_, i) => (
                           <SelectItem key={i} value={String(i)}>
-                            {new Date(2024, 0, 7 + i).toLocaleDateString(locale, { weekday: "long" })}
+                            {formatWeekday(new Date(2024, 0, 7 + i), locale)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -239,7 +238,7 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
                   <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">{t("studies_generated_dates")}</p>
                   {getNextOccurrences({ frequency: freq, dayOfWeek: schedDay, time: schedTime }, 3).map((d, i) => (
                     <p key={i} className="text-xs text-foreground capitalize">
-                      {d.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })} · {schedTime}
+                      {formatDateLong(d, locale)} · {schedTime}
                     </p>
                   ))}
                 </div>

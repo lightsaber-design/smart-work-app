@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
-import { Lang, translate } from './i18n';
+import { Lang, TranslationKey, translate } from './i18n';
 
-type TFn = (key: string, vars?: Record<string, string | number>) => string;
+type TFn = (key: TranslationKey | (string & {}), vars?: Record<string, string | number>) => string;
 
 const LanguageContext = createContext<TFn>((k) => k);
 const CurrentLanguageContext = createContext<Lang>('es');

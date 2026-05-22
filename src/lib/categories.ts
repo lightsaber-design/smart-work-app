@@ -30,7 +30,7 @@ export function getCategoryLabel(name: string, t: (key: string) => string): stri
 
 const DEFAULT_ICONS: Record<string, string> = {
   Predi: "🏠",
-  Carrito: "🪧",
+  Carrito: "cart-trolley",
   LDC: "🛠️",
   Visitas: "🚶",
   Estudio: "📖",

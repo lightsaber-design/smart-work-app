@@ -8,6 +8,7 @@ import {
   Circle, ChevronLeft, ChevronRight, Paperclip, X, Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CategoryIcon } from "@/components/CategoryIcon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -33,6 +34,7 @@ import { getTravelReminderMinutes, type TravelReminderSettings } from "@/lib/eve
 import { formatFileSize, saveFile } from "@/lib/sessionFiles";
 import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
+import { formatDateLong, formatHourLabel, formatMonthYear, formatTime, formatWeekday } from "@/lib/dateFormat";
 
 import { CategoryConfig, getActiveCategoryConfigs, getCategoryLabel, getCategoryMeta, getCategoryStyle } from "@/lib/categories";
 
@@ -84,12 +86,8 @@ interface CalendarViewProps {
 
 const HOUR_HEIGHT = 64;
 
-function formatHour(h: number, locale: string) {
-  return new Date(2024, 0, 1, h, 0).toLocaleTimeString(locale, { hour: "numeric" });
-}
-
 function formatEventTime(date: Date, locale: string) {
-  return date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  return formatTime(date, locale);
 }
 
 function getWeekDates(anchorDate: Date): Date[] {
@@ -395,7 +393,7 @@ function EventMonthGrid({
       <div className="grid grid-cols-7 mb-1">
         {Array.from({ length: 7 }, (_, index) => new Date(2024, 0, 1 + index)).map((day) => (
           <div key={day.toISOString()} className="text-center text-[9px] font-semibold text-muted-foreground py-1">
-            {day.toLocaleDateString(locale, { weekday: "short" })}
+            {formatWeekday(day, locale, "short")}
           </div>
         ))}
       </div>
@@ -614,7 +612,7 @@ export function CalendarView({
   const monthBase = new Date();
   monthBase.setDate(1);
   monthBase.setMonth(monthBase.getMonth() + monthOffset);
-  const monthLabel = monthBase.toLocaleDateString(locale, { month: "long", year: "numeric" });
+  const monthLabel = formatMonthYear(monthBase, locale);
 
   const previewDate = new Date(selectedDate);
   const [previewHours, previewMinutes] = time.split(":").map(Number);
@@ -1022,7 +1020,7 @@ export function CalendarView({
                   className="flex flex-col items-center gap-1 flex-1"
                 >
                   <span className={`text-[10px] font-semibold ${isSelected ? "text-primary" : "text-muted-foreground"}`}>
-                    {d.toLocaleDateString(locale, { weekday: "short" })}
+                    {formatWeekday(d, locale, "short")}
                   </span>
                   <span
                     className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black transition-all ${
@@ -1072,7 +1070,7 @@ export function CalendarView({
                     style={{ top: (h - activityStartHour) * HOUR_HEIGHT - 8 }}
                   >
                     <span className="text-[9px] text-muted-foreground/70 font-medium leading-none">
-                      {formatHour(h, locale)}
+                      {formatHourLabel(h, locale)}
                     </span>
                   </div>
                 ))}
@@ -1130,7 +1128,7 @@ export function CalendarView({
                       <div className="px-2.5 py-2 h-full flex flex-col justify-between">
                         <div>
                           <div className="flex items-center gap-1">
-                            <span className="text-sm leading-none">{meta.icon}</span>
+                            <CategoryIcon icon={meta.icon} className="text-sm leading-none" />
                             <p className={`text-[11px] font-bold text-foreground leading-tight truncate ${event.completed ? "line-through" : ""}`}>
                               {getCategoryLabel(event.category, t)}
                             </p>
@@ -1250,7 +1248,7 @@ export function CalendarView({
           <div className="px-5 space-y-4 overflow-y-auto flex-1 pb-2">
             <h2 className="text-base font-bold text-foreground">{t("cal_new_event")}</h2>
             <p className="text-sm text-muted-foreground capitalize -mt-2">
-              {selectedDate.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
+              {formatDateLong(selectedDate, locale)}
             </p>
             <div className="space-y-2">
               <Label>{t("cal_category")}</Label>
@@ -1566,7 +1564,7 @@ export function CalendarView({
               <div className="px-5 space-y-4 overflow-y-auto flex-1 pb-2">
                 <h2 className="text-base font-bold text-foreground">{t("cal_edit_event")}</h2>
                 <p className="text-sm text-muted-foreground capitalize -mt-2">
-                  {editEvent.date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
+                  {formatDateLong(editEvent.date, locale)}
                 </p>
                 <div className="space-y-2">
                   <Label>{t("cal_category")}</Label>
@@ -1689,7 +1687,7 @@ export function CalendarView({
                 {pendingEstudioConflict && (() => {
                   const { contact, session } = pendingEstudioConflict;
                   const sessionDate = new Date(session.date);
-                  const dateStr = sessionDate.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
+                  const dateStr = formatDateLong(sessionDate, locale);
                   return (
                     <>
                       <span className="block">

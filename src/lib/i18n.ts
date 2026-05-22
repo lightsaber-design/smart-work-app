@@ -19,7 +19,7 @@ export function detectLanguage(): Lang {
 type Vars = Record<string, string | number>;
 type TranslationMap = Record<string, string>;
 
-const translations: Record<Lang, TranslationMap> = {
+export const translations = {
   es: {
     // Navigation
     nav_timer: 'Marcar horas',
@@ -2036,7 +2036,9 @@ const translations: Record<Lang, TranslationMap> = {
     stats_event: 'Aktivität',
     stats_events: 'Aktivitäten',
   },
-};
+} satisfies Record<Lang, TranslationMap>;
+
+export type TranslationKey = keyof typeof translations.es;
 
 export function translate(lang: Lang, key: string, vars?: Vars): string {
   let str = translations[lang]?.[key] ?? translations['en']?.[key] ?? translations['es']?.[key] ?? key;
