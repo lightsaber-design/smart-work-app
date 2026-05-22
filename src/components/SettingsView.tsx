@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Trash2, MapPin, User, Globe, Moon, FileJson, FolderOpen, Plus, Check } from "lucide-react";
+import { Trash2, MapPin, User, Globe, Moon, FileJson, FolderOpen, Plus, Check, ChevronRight } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -34,6 +34,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryColor, setNewCategoryColor] = useState(CATEGORY_COLORS[0]);
   const [newCategorySupport, setNewCategorySupport] = useState(true);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
 
   const handleSaveCity = () => {
     if (cityDraft) onSaveSetup({ city: cityDraft });
@@ -42,6 +43,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
 
   const currentLang = (setup.language ?? "es") as Lang;
   const categories = setup.categorySettings;
+  const activeCategoryCount = categories.filter((category) => category.active).length;
 
   const saveCategories = (categorySettings: CategoryConfig[]) => onSaveSetup({ categorySettings });
 
@@ -137,25 +139,84 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
         </div>
       </div>
 
-      <div className="rounded-xl bg-card p-5 shadow-sm border border-border space-y-4">
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">Categories</h3>
-          <p className="mt-1 text-xs text-muted-foreground">These categories control Timer, Calendar, Summary, and Stats.</p>
-        </div>
-
-        <div className="space-y-2">
-          {categories.map((category) => (
-            <div key={category.name} className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: category.color }} />
-                  <span className="truncate text-sm font-semibold text-foreground">{category.name}</span>
-                </div>
-                <Switch
-                  checked={category.active}
-                  onCheckedChange={(active) => updateCategory(category.name, { active })}
+      <div className="overflow-hidden rounded-xl bg-card shadow-sm border border-border">
+        <button
+          type="button"
+          onClick={() => setCategoriesOpen((open) => !open)}
+          className="flex w-full items-center justify-between gap-3 p-5 text-left transition-colors hover:bg-muted/30"
+          aria-expanded={categoriesOpen}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground">Categories</h3>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {activeCategoryCount} active · Timer, Calendar, Summary, and Stats
+            </p>
+            <div className="mt-2 flex gap-1.5">
+              {categories.slice(0, 8).map((category) => (
+                <span
+                  key={category.name}
+                  className={`h-2.5 w-2.5 rounded-full border border-border ${category.active ? "" : "opacity-35"}`}
+                  style={{ backgroundColor: category.color }}
+                  title={category.name}
                 />
-              </div>
+              ))}
+            </div>
+          </div>
+          <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${categoriesOpen ? "rotate-90" : ""}`} />
+        </button>
+
+        {categoriesOpen && (
+          <div className="space-y-4 border-t border-border px-5 pb-5 pt-4">
+            <div className="space-y-2">
+              {categories.map((category) => (
+                <div key={category.name} className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: category.color }} />
+                      <span className="truncate text-sm font-semibold text-foreground">{category.name}</span>
+                    </div>
+                    <Switch
+                      checked={category.active}
+                      onCheckedChange={(active) => updateCategory(category.name, { active })}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <Label className="text-xs text-muted-foreground">Color</Label>
+                    <div className="flex gap-1.5">
+                      {CATEGORY_COLORS.map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => updateCategory(category.name, { color })}
+                          className="flex h-6 w-6 items-center justify-center rounded-full border border-border"
+                          style={{ backgroundColor: color }}
+                          aria-label={`Use ${color}`}
+                        >
+                          {category.color === color && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <Label className="text-xs text-muted-foreground">Support category, capped at 55h/month</Label>
+                    <Switch
+                      checked={category.support}
+                      onCheckedChange={(support) => updateCategory(category.name, { support })}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-lg border border-dashed border-border p-3 space-y-3">
+              <Label className="text-xs font-semibold text-muted-foreground">Add category</Label>
+              <Input
+                value={newCategoryName}
+                onChange={(event) => setNewCategoryName(event.target.value)}
+                placeholder="Name"
+              />
               <div className="flex items-center justify-between gap-3">
                 <Label className="text-xs text-muted-foreground">Color</Label>
                 <div className="flex gap-1.5">
@@ -163,60 +224,27 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                     <button
                       key={color}
                       type="button"
-                      onClick={() => updateCategory(category.name, { color })}
+                      onClick={() => setNewCategoryColor(color)}
                       className="flex h-6 w-6 items-center justify-center rounded-full border border-border"
                       style={{ backgroundColor: color }}
                       aria-label={`Use ${color}`}
                     >
-                      {category.color === color && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
+                      {newCategoryColor === color && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
                     </button>
                   ))}
                 </div>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <Label className="text-xs text-muted-foreground">Support category, capped at 55h/month</Label>
-                <Switch
-                  checked={category.support}
-                  onCheckedChange={(support) => updateCategory(category.name, { support })}
-                />
+                <Label className="text-xs text-muted-foreground">Support category by default</Label>
+                <Switch checked={newCategorySupport} onCheckedChange={setNewCategorySupport} />
               </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="rounded-lg border border-dashed border-border p-3 space-y-3">
-          <Label className="text-xs font-semibold text-muted-foreground">Add category</Label>
-          <Input
-            value={newCategoryName}
-            onChange={(event) => setNewCategoryName(event.target.value)}
-            placeholder="Name"
-          />
-          <div className="flex items-center justify-between gap-3">
-            <Label className="text-xs text-muted-foreground">Color</Label>
-            <div className="flex gap-1.5">
-              {CATEGORY_COLORS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  onClick={() => setNewCategoryColor(color)}
-                  className="flex h-6 w-6 items-center justify-center rounded-full border border-border"
-                  style={{ backgroundColor: color }}
-                  aria-label={`Use ${color}`}
-                >
-                  {newCategoryColor === color && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
-                </button>
-              ))}
+              <Button size="sm" onClick={addCategory} className="w-full">
+                <Plus className="h-4 w-4" />
+                Add category
+              </Button>
             </div>
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <Label className="text-xs text-muted-foreground">Support category by default</Label>
-            <Switch checked={newCategorySupport} onCheckedChange={setNewCategorySupport} />
-          </div>
-          <Button size="sm" onClick={addCategory} className="w-full">
-            <Plus className="h-4 w-4" />
-            Add category
-          </Button>
-        </div>
+        )}
       </div>
 
       {/* Language */}
