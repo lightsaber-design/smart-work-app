@@ -3,6 +3,7 @@ import { SetupData } from "@/hooks/useSetup";
 import { CitySearch } from "@/components/CitySearch";
 import { PrecursorHoursConfig } from "@/components/PrecursorHoursConfig";
 import { TravelTimeConfig } from "@/components/TravelTimeConfig";
+import { LanguageFlag } from "@/components/LanguageFlag";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ChevronLeft, ChevronRight, Clock, MapPin, User } from "lucide-react";
@@ -87,7 +88,7 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
             <div className="space-y-3">
               <h2 className="text-sm font-semibold text-foreground">{t("setup_language")}</h2>
               <div className="grid grid-cols-3 gap-2">
-                {LANGUAGES.map(({ code, name: languageName, flag }) => (
+                {LANGUAGES.map(({ code, name: languageName }) => (
                   <button
                     key={code}
                     onClick={() => handleLangSelect(code)}
@@ -96,8 +97,9 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
                         ? "bg-primary text-primary-foreground border-primary"
                         : "bg-secondary text-foreground border-transparent hover:border-border"
                     }`}
+                    aria-label={languageName}
                   >
-                    <span className="text-xl">{flag}</span>
+                    <LanguageFlag lang={code} className="h-6 w-9" />
                     <span className="text-xs">{languageName}</span>
                   </button>
                 ))}

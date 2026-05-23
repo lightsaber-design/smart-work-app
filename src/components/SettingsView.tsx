@@ -8,6 +8,7 @@ import { CitySearch } from "@/components/CitySearch";
 import { PrecursorHoursConfig } from "@/components/PrecursorHoursConfig";
 import { TravelTimeConfig } from "@/components/TravelTimeConfig";
 import { ActivityHoursConfig } from "@/components/ActivityHoursConfig";
+import { LanguageFlag } from "@/components/LanguageFlag";
 import { SetupData } from "@/hooks/useSetup";
 import { useT } from "@/lib/LanguageContext";
 import { LANGUAGES, Lang } from "@/lib/i18n";
@@ -89,7 +90,6 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
   };
 
   const currentLang = (setup.language ?? "es") as Lang;
-  const currentLanguage = LANGUAGES.find((language) => language.code === currentLang) ?? LANGUAGES[0];
   const categories = setup.categorySettings;
   const visibleCategories = categories.filter((category) => category.name !== "Estudio" || hasActiveStudies);
   const activeCategoryCount = visibleCategories.filter((category) => category.active).length;
@@ -376,17 +376,17 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
       </div>
 
       <SettingsSection
-        icon={<span className="text-lg leading-none">{currentLanguage.flag}</span>}
+        icon={<LanguageFlag lang={currentLang} className="h-4 w-6" />}
         title={t("set_language")}
         summary={
           <>
-            {LANGUAGES.map(({ code, flag, name }) => (
+            {LANGUAGES.map(({ code, name }) => (
               <span
                 key={code}
-                className={`text-base leading-none ${currentLang === code ? "" : "opacity-35"}`}
+                className={currentLang === code ? "" : "opacity-35"}
                 title={name}
               >
-                {flag}
+                <LanguageFlag lang={code} className="h-3.5 w-5" />
               </span>
             ))}
           </>
@@ -395,11 +395,11 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
         onToggle={() => setLanguageOpen((open) => !open)}
       >
         <div className="grid grid-cols-6 gap-2">
-          {LANGUAGES.map(({ code, name, flag }) => (
+          {LANGUAGES.map(({ code, name }) => (
             <button
               key={code}
               onClick={() => onSaveSetup({ language: code as Lang })}
-              className={`flex aspect-square items-center justify-center rounded-2xl text-2xl transition-colors border ${
+              className={`flex aspect-square items-center justify-center rounded-2xl transition-colors border ${
                 currentLang === code
                   ? 'bg-primary text-primary-foreground border-primary shadow-sm'
                   : 'bg-secondary text-foreground border-transparent hover:border-border'
@@ -407,7 +407,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
               aria-label={name}
               title={name}
             >
-              <span className="leading-none">{flag}</span>
+              <LanguageFlag lang={code} className="h-6 w-9" />
             </button>
           ))}
         </div>
