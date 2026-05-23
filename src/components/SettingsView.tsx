@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Trash2, MapPin, User, Globe, Moon, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil } from "lucide-react";
+import { Trash2, MapPin, User, Moon, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -37,7 +37,7 @@ function SettingsSection({
 }: {
   icon: ReactNode;
   title: string;
-  summary?: string;
+  summary?: ReactNode;
   open: boolean;
   onToggle: () => void;
   children: ReactNode;
@@ -56,7 +56,7 @@ function SettingsSection({
           </div>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-            {summary && <p className="mt-0.5 truncate text-xs text-muted-foreground">{summary}</p>}
+            {summary && <div className="mt-1 flex min-h-4 items-center gap-1.5 text-xs text-muted-foreground">{summary}</div>}
           </div>
         </div>
         <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`} />
@@ -89,7 +89,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
   };
 
   const currentLang = (setup.language ?? "es") as Lang;
-  const currentLanguageName = LANGUAGES.find((language) => language.code === currentLang)?.name ?? currentLang;
+  const currentLanguage = LANGUAGES.find((language) => language.code === currentLang) ?? LANGUAGES[0];
   const categories = setup.categorySettings;
   const visibleCategories = categories.filter((category) => category.name !== "Estudio" || hasActiveStudies);
   const activeCategoryCount = visibleCategories.filter((category) => category.active).length;
@@ -155,7 +155,12 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
       <SettingsSection
         icon={<User className="w-4 h-4" />}
         title={t("set_profile")}
-        summary={setup.city ? formatPlaceName(setup.city.name, t) : t("set_no_city")}
+        summary={
+          <>
+            <MapPin className="h-3.5 w-3.5" />
+            <span className="truncate">{setup.city ? formatPlaceName(setup.city.name, t) : t("set_no_city")}</span>
+          </>
+        }
         open={profileOpen}
         onToggle={() => setProfileOpen((open) => !open)}
       >
@@ -221,22 +226,25 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
           className="flex w-full items-center justify-between gap-3 p-5 text-left transition-colors hover:bg-muted/30"
           aria-expanded={categoriesOpen}
         >
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground">{t("settings_categories")}</h3>
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Plus className="h-4 w-4" />
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t("settings_categories_summary", { count: activeCategoryCount })}
-            </p>
-            <div className="mt-2 flex gap-1.5">
-              {visibleCategories.slice(0, 8).map((category) => (
-                <span
-                  key={category.name}
-                  className={`h-2.5 w-2.5 rounded-full border border-border ${category.active ? "" : "opacity-35"}`}
-                  style={{ backgroundColor: category.color }}
-                  title={getCategoryLabel(category.name, t)}
-                />
-              ))}
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-foreground">{t("settings_categories")}</h3>
+              <div className="mt-1 flex items-center gap-1.5">
+                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                  {activeCategoryCount}
+                </span>
+                {visibleCategories.slice(0, 8).map((category) => (
+                  <span
+                    key={category.name}
+                    className={`h-2.5 w-2.5 rounded-full border border-border ${category.active ? "" : "opacity-35"}`}
+                    style={{ backgroundColor: category.color }}
+                    title={getCategoryLabel(category.name, t)}
+                  />
+                ))}
+              </div>
             </div>
           </div>
           <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${categoriesOpen ? "rotate-90" : ""}`} />
@@ -368,25 +376,38 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
       </div>
 
       <SettingsSection
-        icon={<Globe className="w-4 h-4" />}
+        icon={<span className="text-lg leading-none">{currentLanguage.flag}</span>}
         title={t("set_language")}
-        summary={currentLanguageName}
+        summary={
+          <>
+            {LANGUAGES.map(({ code, flag, name }) => (
+              <span
+                key={code}
+                className={`text-base leading-none ${currentLang === code ? "" : "opacity-35"}`}
+                title={name}
+              >
+                {flag}
+              </span>
+            ))}
+          </>
+        }
         open={languageOpen}
         onToggle={() => setLanguageOpen((open) => !open)}
       >
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-6 gap-2">
           {LANGUAGES.map(({ code, name, flag }) => (
             <button
               key={code}
               onClick={() => onSaveSetup({ language: code as Lang })}
-              className={`flex flex-col items-center gap-1 rounded-lg px-2 py-2.5 text-sm font-medium transition-colors border ${
+              className={`flex aspect-square items-center justify-center rounded-2xl text-2xl transition-colors border ${
                 currentLang === code
-                  ? 'bg-primary text-primary-foreground border-primary'
+                  ? 'bg-primary text-primary-foreground border-primary shadow-sm'
                   : 'bg-secondary text-foreground border-transparent hover:border-border'
               }`}
+              aria-label={name}
+              title={name}
             >
-              <span className="text-xl">{flag}</span>
-              <span className="text-xs">{name}</span>
+              <span className="leading-none">{flag}</span>
             </button>
           ))}
         </div>
@@ -396,7 +417,9 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
         <SettingsSection
           icon={<Moon className="w-4 h-4" />}
           title={t("settings_dark_mode")}
-          summary={isDark ? t("common_yes") : t("common_no")}
+          summary={
+            <span className={`h-2.5 w-2.5 rounded-full ${isDark ? "bg-primary" : "bg-muted-foreground/40"}`} />
+          }
           open={displayOpen}
           onToggle={() => setDisplayOpen((open) => !open)}
         >
@@ -413,7 +436,12 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
       <SettingsSection
         icon={<FileJson className="w-4 h-4" />}
         title={t("set_data")}
-        summary={t("set_records", { count: entryCount })}
+        summary={
+          <>
+            <FileJson className="h-3.5 w-3.5" />
+            <span className="tabular-nums">{entryCount}</span>
+          </>
+        }
         open={dataOpen}
         onToggle={() => setDataOpen((open) => !open)}
       >
