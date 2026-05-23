@@ -394,12 +394,12 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
         open={languageOpen}
         onToggle={() => setLanguageOpen((open) => !open)}
       >
-        <div className="grid grid-cols-6 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {LANGUAGES.map(({ code, name }) => (
             <button
               key={code}
               onClick={() => onSaveSetup({ language: code as Lang })}
-              className={`flex aspect-square items-center justify-center rounded-2xl transition-colors border ${
+              className={`flex flex-col items-center justify-center gap-1.5 rounded-2xl px-2 py-2.5 transition-colors border ${
                 currentLang === code
                   ? 'bg-primary text-primary-foreground border-primary shadow-sm'
                   : 'bg-secondary text-foreground border-transparent hover:border-border'
@@ -408,6 +408,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
               title={name}
             >
               <LanguageFlag lang={code} className="h-6 w-9" />
+              <span className="max-w-full truncate text-[10px] font-semibold">{name}</span>
             </button>
           ))}
         </div>
