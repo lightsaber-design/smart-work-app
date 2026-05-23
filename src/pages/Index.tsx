@@ -666,7 +666,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   <div className="space-y-4">
                     {nextDayGroups.map((group) => (
                       <div key={group.key} className="space-y-2">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground capitalize">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                           {group.label}
                         </p>
                         {group.events.map((item) => {

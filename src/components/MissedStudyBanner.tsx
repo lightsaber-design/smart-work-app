@@ -116,7 +116,7 @@ export function MissedStudyBanner({ contacts, onComplete, onReschedule }: Missed
               {t("missed_study_question_prefix")}{" "}
               <span className="font-semibold">{contact.name}</span>
               {" "}{t("missed_study_question_day")}{" "}
-              <span className="font-semibold capitalize">{formatMissedLabel(session.date, locale)}</span>?
+              <span className="font-semibold">{formatMissedLabel(session.date, locale)}</span>?
             </p>
             {session.lesson && (
               <p className="text-xs text-muted-foreground mt-0.5">{session.lesson}</p>

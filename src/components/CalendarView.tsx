@@ -319,7 +319,7 @@ function EventMonthGrid({
   return (
     <div className="rounded-2xl bg-card border border-border shadow-sm p-3">
       <div className="flex items-center justify-between gap-3 mb-3">
-        <p className="text-sm font-bold text-foreground capitalize truncate">{monthLabel}</p>
+        <p className="text-sm font-bold text-foreground truncate">{monthLabel}</p>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
@@ -1262,7 +1262,7 @@ export function CalendarView({
           </button>
           <div className="px-5 space-y-4 overflow-y-auto flex-1 pb-2">
             <h2 className="text-base font-bold text-foreground">{t("cal_new_event")}</h2>
-            <p className="text-sm text-muted-foreground capitalize -mt-2">
+            <p className="text-sm text-muted-foreground -mt-2">
               {formatDateLong(selectedDate, locale)}
             </p>
             <div className="space-y-2">
@@ -1578,7 +1578,7 @@ export function CalendarView({
             <>
               <div className="px-5 space-y-4 overflow-y-auto flex-1 pb-2">
                 <h2 className="text-base font-bold text-foreground">{t("cal_edit_event")}</h2>
-                <p className="text-sm text-muted-foreground capitalize -mt-2">
+                <p className="text-sm text-muted-foreground -mt-2">
                   {formatDateLong(editEvent.date, locale)}
                 </p>
                 <div className="space-y-2">

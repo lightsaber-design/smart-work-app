@@ -508,7 +508,7 @@ export function ClockButton({
                   {t("clock_saving_session_prefix")}{" "}
                   <span className="font-semibold">{pendingPrompt.contactName}</span>
                   {" "}{t("clock_saving_session_day")}{" "}
-                  <span className="font-semibold capitalize">
+                  <span className="font-semibold">
                     {formatSessionDay(pendingPrompt.nextSession.date, t, locale)}
                   </span>
                 </p>

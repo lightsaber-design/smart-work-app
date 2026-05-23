@@ -237,7 +237,7 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
                 <div className="rounded-xl bg-primary/5 border border-primary/20 px-3 py-2 space-y-1">
                   <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">{t("studies_generated_dates")}</p>
                   {getNextOccurrences({ frequency: freq, dayOfWeek: schedDay, time: schedTime }, 3).map((d, i) => (
-                    <p key={i} className="text-xs text-foreground capitalize">
+                    <p key={i} className="text-xs text-foreground">
                       {formatDateLong(d, locale)} · {schedTime}
                     </p>
                   ))}
@@ -431,7 +431,7 @@ function HistorySessionCard({ session, onOpen }: { session: EstudioSession; onOp
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-muted-foreground capitalize">{formatDateLabel(session.date, locale)}</p>
+          <p className="text-xs text-muted-foreground">{formatDateLabel(session.date, locale)}</p>
           {session.lesson
             ? <p className="text-sm font-medium text-foreground mt-0.5">{session.lesson}</p>
             : <p className="text-sm text-muted-foreground mt-0.5 italic">{t("studies_no_lesson")}</p>
@@ -637,7 +637,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground capitalize">{formatDateLabel(s.date, locale)}</p>
+                        <p className="text-xs text-muted-foreground">{formatDateLabel(s.date, locale)}</p>
                         {s.lesson && <p className="text-sm font-medium text-foreground mt-0.5">{s.lesson}</p>}
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">

@@ -213,7 +213,7 @@ export function StatsView({
               <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-muted-foreground mb-0.5 capitalize">
+                    <p className="text-xs text-muted-foreground mb-0.5">
                       {formatMonthYear(now, locale)}
                       {hasExclusions && <span className="ml-1 text-primary/70">· {t("stats_filtered")}</span>}
                     </p>

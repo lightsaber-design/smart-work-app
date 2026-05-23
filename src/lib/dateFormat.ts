@@ -1,13 +1,18 @@
+function capitalizeFirst(value: string, locale: string): string {
+  if (!value) return value;
+  return value.charAt(0).toLocaleUpperCase(locale) + value.slice(1);
+}
+
 export function formatDateLong(date: Date, locale: string): string {
-  return date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
+  return capitalizeFirst(date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" }), locale);
 }
 
 export function formatDateFull(date: Date, locale: string): string {
-  return date.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "long", year: "numeric" });
+  return capitalizeFirst(date.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "long", year: "numeric" }), locale);
 }
 
 export function formatMonthYear(date: Date, locale: string): string {
-  return date.toLocaleDateString(locale, { month: "long", year: "numeric" });
+  return capitalizeFirst(date.toLocaleDateString(locale, { month: "long", year: "numeric" }), locale);
 }
 
 export function formatShortMonth(date: Date, locale: string): string {
