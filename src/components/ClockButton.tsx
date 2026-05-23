@@ -267,6 +267,9 @@ export function ClockButton({
   const mutedCircleText = isRunning ? "text-white/75" : "text-slate-700";
   const subtleCircleText = isRunning ? "text-white/60" : "text-slate-500";
   const progressStroke = isRunning ? "rgba(255,255,255,0.94)" : meta.ring;
+  const scheduledActivityHint = !isRunning && detected
+    ? t("timer_replaces_scheduled", { category: getCategoryLabel(detected, t) })
+    : null;
 
   return (
     <>
@@ -379,6 +382,11 @@ export function ClockButton({
                 <p className={`text-[11px] ${mutedCircleText} font-medium`}>
                   {t("timer_touch_to_start", { category: getCategoryLabel(currentCategory, t) })}
                 </p>
+                {scheduledActivityHint && (
+                  <p className={`max-w-[190px] text-center text-[10px] ${subtleCircleText} font-medium leading-tight`}>
+                    {scheduledActivityHint}
+                  </p>
+                )}
 
                 {/* Botón de inicio */}
                 <button

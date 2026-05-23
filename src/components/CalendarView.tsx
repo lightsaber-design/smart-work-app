@@ -603,6 +603,7 @@ export function CalendarView({
         .map((s) => ({ ...s, contact: c, contactName: c.name }))
     )
     .sort((a, b) => a.time.localeCompare(b.time));
+  const hasSelectedItems = selectedEvents.length > 0 || selectedStudySessions.length > 0;
   const { hrs: dayTotalHrs, mins: dayTotalMins, ms: dayTotalMs } = dayTotalFromEvents(selectedEvents);
   const isSelectedToday = selectedDate.toDateString() === new Date().toDateString();
   const nowMinutes = isSelectedToday ? minutesFromTimelineStart(new Date(), activityStartHour) : null;
@@ -1193,6 +1194,20 @@ export function CalendarView({
                     </button>
                   );
                 })}
+
+                {!hasSelectedItems && (
+                  <div className="absolute inset-x-3 top-8 rounded-2xl border border-dashed border-border bg-card/80 px-4 py-5 text-center shadow-sm">
+                    <p className="text-sm font-semibold text-foreground">{t("cal_no_events")}</p>
+                    <button
+                      type="button"
+                      onClick={() => setDialogOpen(true)}
+                      className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      {t("home_add_activity")}
+                    </button>
+                  </div>
+                )}
 
               </div>
             </div>

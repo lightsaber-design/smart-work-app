@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Trash2, MapPin, User, Globe, Moon, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,45 @@ interface SettingsViewProps {
 
 const CATEGORY_COLORS = ["#34B1AF", "#7CC67E", "#9668A2", "#F4CFA4", "#D07D7D", "#5B8DEF", "#E17A47", "#607D8B"];
 
+function SettingsSection({
+  icon,
+  title,
+  summary,
+  open,
+  onToggle,
+  children,
+}: {
+  icon: ReactNode;
+  title: string;
+  summary?: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl bg-card shadow-sm border border-border">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-3 p-5 text-left transition-colors hover:bg-muted/30"
+        aria-expanded={open}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            {icon}
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+            {summary && <p className="mt-0.5 truncate text-xs text-muted-foreground">{summary}</p>}
+          </div>
+        </div>
+        <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`} />
+      </button>
+      {open && <div className="space-y-4 border-t border-border px-5 pb-5 pt-4">{children}</div>}
+    </div>
+  );
+}
+
 export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDark, onToggleDark, hasActiveStudies = false }: SettingsViewProps) {
   const t = useT();
   const storage = useJsonStorageStatus();
@@ -36,6 +75,11 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
   const [newCategoryColor, setNewCategoryColor] = useState(CATEGORY_COLORS[0]);
   const [newCategorySupport, setNewCategorySupport] = useState(true);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const [displayOpen, setDisplayOpen] = useState(false);
+  const [dataOpen, setDataOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [editingCategoryName, setEditingCategoryName] = useState<string | null>(null);
   const [categoryNameDraft, setCategoryNameDraft] = useState("");
 
@@ -45,6 +89,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
   };
 
   const currentLang = (setup.language ?? "es") as Lang;
+  const currentLanguageName = LANGUAGES.find((language) => language.code === currentLang)?.name ?? currentLang;
   const categories = setup.categorySettings;
   const visibleCategories = categories.filter((category) => category.name !== "Estudio" || hasActiveStudies);
   const activeCategoryCount = visibleCategories.filter((category) => category.active).length;
@@ -88,7 +133,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
       window.alert(t("settings_category_keep_one"));
       return;
     }
-    if (!window.confirm(t("settings_category_delete_confirm"))) return;
+    if (!window.confirm(`${getCategoryLabel(name, t)}\n${t("settings_category_delete_confirm")}`)) return;
     saveCategories(categories.filter((category) => category.name !== name));
   };
 
@@ -107,14 +152,13 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
 
   return (
     <div className="px-4 space-y-4 pb-24">
-      {/* Profile */}
-      <div className="rounded-xl bg-card p-5 shadow-sm border border-border space-y-4">
-        <div className="flex items-center gap-2">
-          <User className="w-4 h-4 text-primary" />
-          <h3 className="text-sm font-semibold text-foreground">{t('set_profile')}</h3>
-        </div>
-
-        {/* City */}
+      <SettingsSection
+        icon={<User className="w-4 h-4" />}
+        title={t("set_profile")}
+        summary={setup.city ? formatPlaceName(setup.city.name, t) : t("set_no_city")}
+        open={profileOpen}
+        onToggle={() => setProfileOpen((open) => !open)}
+      >
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label className="flex items-center gap-1.5 text-sm">
@@ -145,7 +189,6 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
           )}
         </div>
 
-        {/* Precursor hours */}
         <div className="space-y-2 pt-1">
           <Label className="text-sm text-foreground">{t('set_precursor')}</Label>
           <PrecursorHoursConfig
@@ -154,7 +197,6 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
           />
         </div>
 
-        {/* Tiempo de trayecto */}
         <div className="space-y-2 pt-1">
           <TravelTimeConfig
             enabled={setup.travelTimeEnabled}
@@ -170,7 +212,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
             onChange={(value) => onSaveSetup({ activityStartHour: value.startHour, activityEndHour: value.endHour })}
           />
         </div>
-      </div>
+      </SettingsSection>
 
       <div className="overflow-hidden rounded-xl bg-card shadow-sm border border-border">
         <button
@@ -325,12 +367,13 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
         )}
       </div>
 
-      {/* Language */}
-      <div className="rounded-xl bg-card p-5 shadow-sm border border-border space-y-3">
-        <div className="flex items-center gap-2">
-          <Globe className="w-4 h-4 text-primary" />
-          <h3 className="text-sm font-semibold text-foreground">{t('set_language')}</h3>
-        </div>
+      <SettingsSection
+        icon={<Globe className="w-4 h-4" />}
+        title={t("set_language")}
+        summary={currentLanguageName}
+        open={languageOpen}
+        onToggle={() => setLanguageOpen((open) => !open)}
+      >
         <div className="grid grid-cols-3 gap-2">
           {LANGUAGES.map(({ code, name, flag }) => (
             <button
@@ -347,11 +390,16 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
             </button>
           ))}
         </div>
-      </div>
+      </SettingsSection>
 
-      {/* Dark mode */}
       {onToggleDark !== undefined && (
-        <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
+        <SettingsSection
+          icon={<Moon className="w-4 h-4" />}
+          title={t("settings_dark_mode")}
+          summary={isDark ? t("common_yes") : t("common_no")}
+          open={displayOpen}
+          onToggle={() => setDisplayOpen((open) => !open)}
+        >
           <div className="flex items-center justify-between">
             <Label className="flex items-center gap-2 text-sm text-foreground cursor-pointer" htmlFor="dark-mode-toggle">
               <Moon className="w-4 h-4 text-primary" />
@@ -359,14 +407,16 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
             </Label>
             <Switch id="dark-mode-toggle" checked={!!isDark} onCheckedChange={onToggleDark} />
           </div>
-        </div>
+        </SettingsSection>
       )}
 
-      {/* Data */}
-      <div className="rounded-xl bg-card p-5 shadow-sm border border-border space-y-3">
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-          {t('set_data')}
-        </h3>
+      <SettingsSection
+        icon={<FileJson className="w-4 h-4" />}
+        title={t("set_data")}
+        summary={t("set_records", { count: entryCount })}
+        open={dataOpen}
+        onToggle={() => setDataOpen((open) => !open)}
+      >
         <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-3">
           <div className="flex items-center gap-2">
             <FileJson className="h-4 w-4 text-primary" />
@@ -393,21 +443,23 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
           {t('set_records', { count: entryCount })}
         </p>
         <button
-          onClick={() => { if (confirm(t('set_confirm_delete'))) onClearAll(); }}
+          onClick={() => { if (confirm(`${t('set_confirm_delete')}\n${t("set_records", { count: entryCount })}`)) onClearAll(); }}
           className="flex items-center gap-2 text-sm font-medium text-destructive hover:underline"
         >
           <Trash2 className="w-4 h-4" />
           {t('set_delete_all')}
         </button>
-      </div>
+      </SettingsSection>
 
-      {/* About */}
-      <div className="rounded-xl bg-card p-5 shadow-sm border border-border">
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-          {t('set_about')}
-        </h3>
+      <SettingsSection
+        icon={<Check className="w-4 h-4" />}
+        title={t("set_about")}
+        summary={t("set_version")}
+        open={aboutOpen}
+        onToggle={() => setAboutOpen((open) => !open)}
+      >
         <p className="text-sm text-muted-foreground">{t('set_version')}</p>
-      </div>
+      </SettingsSection>
     </div>
   );
 }

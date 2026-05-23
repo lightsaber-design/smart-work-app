@@ -318,7 +318,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   useEffect(() => {
     if (!showTimerOverrunPrompt || !activeScheduledEvent || timerOverrunNotifiedId === activeScheduledEvent.id) return;
     showBrowserNotification(t("timer_overrun_title"), {
-      body: t("timer_overrun_notification_body", { category: activeScheduledEvent.category }),
+      body: t("timer_overrun_notification_body", { category: getCategoryLabel(activeScheduledEvent.category, t) }),
     });
     setTimerOverrunNotifiedId(activeScheduledEvent.id);
   }, [activeScheduledEvent, showTimerOverrunPrompt, t, timerOverrunNotifiedId]);
@@ -564,6 +564,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
           const hasMore = allUpcoming.length > displayedUpcomingCount;
           const heroTheme = getWeatherHeroTheme(weather);
           const WeatherHeroIcon = heroTheme.Icon;
+          const monthlyGoalPct = setup.precursorHours
+            ? Math.min(100, Math.round((calMonthMs / (setup.precursorHours * 3_600_000)) * 100))
+            : 0;
           return (
             <div className="min-h-screen bg-background pb-24">
               {/* Gradient hero */}
@@ -623,11 +626,11 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                       <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                         <div
                           className="h-full rounded-full bg-primary transition-all duration-500"
-                          style={{ width: `${Math.min(100, (monthTotalHrs / setup.precursorHours) * 100)}%` }}
+                          style={{ width: `${monthlyGoalPct}%` }}
                         />
                       </div>
                       <p className="text-[10px] text-muted-foreground">
-                        {t("stats_pioneer_goal")}: {setup.precursorHours}h · {Math.round(Math.min(100, (monthTotalHrs / setup.precursorHours) * 100))}%
+                        {t("stats_pioneer_goal")}: {setup.precursorHours}h · {monthlyGoalPct}%
                       </p>
                     </div>
                   )}
@@ -648,10 +651,13 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
                 {totalUpcoming === 0 ? (
                   <div className="rounded-2xl border border-border bg-muted/30 px-4 py-6 text-center">
-                    <p className="text-sm text-muted-foreground">{t("home_no_upcoming_activities")}</p>
+                    <p className="text-sm font-semibold text-foreground">{t("home_no_upcoming_activities")}</p>
+                    {formatDayWeatherSummary(hourlyWeather, [], t) && (
+                      <p className="mt-1 text-xs text-muted-foreground">{formatDayWeatherSummary(hourlyWeather, [], t)}</p>
+                    )}
                     <button
                       onClick={() => navigate("calendar")}
-                      className="mt-2 text-xs font-semibold text-primary flex items-center gap-1 mx-auto"
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
                     >
                       <Plus className="w-3 h-3" /> {t("home_add_activity")}
                     </button>
@@ -753,11 +759,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               </div>
             </div>
 
-            {/* Decorative blobs */}
-            <div className="absolute inset-x-0 top-0 h-[58vh] overflow-hidden rounded-b-[42px] bg-[radial-gradient(circle_at_22%_8%,rgba(255,255,255,0.32),transparent_24%),radial-gradient(circle_at_82%_18%,rgba(255,255,255,0.22),transparent_20%)] pointer-events-none" />
-            <div className="absolute left-7 top-24 h-1.5 w-1.5 rounded-full bg-white/50" />
-            <div className="absolute right-10 top-32 h-1 w-1 rounded-full bg-white/60" />
-            <div className="absolute right-20 top-24 h-24 w-32 rounded-tl-[60px] bg-white/10 blur-sm" />
+            <div className="absolute inset-x-0 top-0 h-[58vh] rounded-b-[42px] bg-[linear-gradient(180deg,rgba(255,255,255,0.32),rgba(255,255,255,0.06)_52%,transparent)] pointer-events-none" />
 
             {/* Backdrop when sheet is open */}
             <div
@@ -1096,7 +1098,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               <div className="mb-3">
                 <p className="text-sm font-bold text-foreground">{t("timer_overrun_title")}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {t("timer_overrun_body", { category: activeScheduledEvent.category, time: endLabel })}
+                  {t("timer_overrun_body", { category: getCategoryLabel(activeScheduledEvent.category, t), time: endLabel })}
                 </p>
               </div>
               <div className="grid grid-cols-[1fr_auto] gap-2 mb-2">
