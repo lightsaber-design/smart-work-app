@@ -6,7 +6,8 @@ import { TravelTimeConfig } from "@/components/TravelTimeConfig";
 import { LanguageFlag } from "@/components/LanguageFlag";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, ChevronRight, Clock, MapPin, User } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, User } from "lucide-react";
+import { MinistryMark, MinistryWordmark } from "@/components/MinistryMark";
 import { LANGUAGES, Lang, detectLanguage } from "@/lib/i18n";
 import { useT } from "@/lib/LanguageContext";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
@@ -65,10 +66,9 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
       <div className="w-full max-w-sm space-y-6">
         {/* Encabezado del asistente de configuracion inicial. */}
         <div className="text-center space-y-2">
-          <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <Clock className="w-8 h-8 text-primary" />
-            </div>
+          <div className="flex flex-col items-center gap-2 mb-4">
+            <MinistryMark size={88} />
+            <MinistryWordmark size={22} showUnderline />
           </div>
           <h1 className="text-2xl font-bold text-foreground">{t("setup_welcome")}</h1>
           <p className="text-sm text-muted-foreground">{t("setup_subtitle")}</p>

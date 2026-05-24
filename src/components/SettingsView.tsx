@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { MinistryMark, MinistryWordmark } from "@/components/MinistryMark";
 import { Trash2, MapPin, User, Moon, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -487,7 +488,11 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
         open={aboutOpen}
         onToggle={() => setAboutOpen((open) => !open)}
       >
-        <p className="text-sm text-muted-foreground">{t('set_version')}</p>
+        <div className="flex flex-col items-center gap-3 py-2">
+          <MinistryMark size={72} />
+          <MinistryWordmark size={20} showUnderline />
+          <p className="text-xs text-muted-foreground font-mono tracking-widest mt-1">{t('set_version')}</p>
+        </div>
       </SettingsSection>
     </div>
   );
