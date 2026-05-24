@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo, useState, useEffect, useRef } from "react";
+import { MinistryMark } from "@/components/MinistryMark";
 import { useTimeTracker } from "@/hooks/useTimeTracker";
 import { useCalendarEvents, EventCategory } from "@/hooks/useCalendarEvents";
 import { useFavoritePlaces } from "@/hooks/useFavoritePlaces";
@@ -717,7 +718,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         {activeTab === "summary" && (
           <>
             <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
-              <h1 className="text-xl font-bold text-foreground">{t("nav_stats")}</h1>
+              <div className="flex items-center justify-between">
+                <h1 className="text-xl font-bold text-foreground">{t("nav_stats")}</h1>
+                <MinistryMark size={32} />
+              </div>
             </header>
             <Suspense fallback={<TabLoading />}>
               <StatsView
@@ -927,7 +931,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         {activeTab === "calendar" && (
           <>
             <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
-              <h1 className="text-xl font-bold text-foreground">{t("nav_calendar")}</h1>
+              <div className="flex items-center justify-between">
+                <h1 className="text-xl font-bold text-foreground">{t("nav_calendar")}</h1>
+                <MinistryMark size={32} />
+              </div>
             </header>
             <Suspense fallback={<TabLoading />}>
               <CalendarView
@@ -1031,6 +1038,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   <ChevronLeft className="w-4 h-4 text-muted-foreground" />
                 </button>
                 <h1 className="text-xl font-bold text-foreground">{t("nav_studies")}</h1>
+                <MinistryMark size={32} className="ml-auto" />
               </div>
             </header>
             <Suspense fallback={<TabLoading />}>
@@ -1066,6 +1074,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   <ChevronLeft className="w-4 h-4 text-muted-foreground" />
                 </button>
                 <h1 className="text-xl font-bold text-foreground">{t("nav_map")}</h1>
+                <MinistryMark size={32} className="ml-auto" />
               </div>
             </header>
             <div className="py-4 pb-24">
