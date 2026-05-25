@@ -81,7 +81,6 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
   const [languageOpen, setLanguageOpen] = useState(false);
   const [displayOpen, setDisplayOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
   const [editingCategoryName, setEditingCategoryName] = useState<string | null>(null);
   const [categoryNameDraft, setCategoryNameDraft] = useState("");
 
@@ -479,19 +478,11 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
           <Trash2 className="w-4 h-4" />
           {t('set_delete_all')}
         </button>
-      </SettingsSection>
 
-      <SettingsSection
-        icon={<Check className="w-4 h-4" />}
-        title={t("set_about")}
-        summary={t("set_version")}
-        open={aboutOpen}
-        onToggle={() => setAboutOpen((open) => !open)}
-      >
-        <div className="flex flex-col items-center gap-3 py-2">
-          <MinistryMark size={72} />
-          <MinistryWordmark size={20} showUnderline />
-          <p className="text-xs text-muted-foreground font-mono tracking-widest mt-1">{t('set_version')}</p>
+        <div className="mt-5 pt-4 border-t border-border flex flex-col items-center gap-3">
+          <MinistryMark size={64} />
+          <MinistryWordmark size={18} showUnderline />
+          <p className="text-xs text-muted-foreground font-mono tracking-widest">{t('set_version')}</p>
         </div>
       </SettingsSection>
     </div>
