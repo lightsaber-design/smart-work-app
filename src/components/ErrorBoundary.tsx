@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from "react";
 import { detectLanguage, Lang, translate } from "@/lib/i18n";
+import { MinistryMark, MinistryWordmark } from "@/components/MinistryMark";
 
 interface Props { children: ReactNode; }
 interface State { error: Error | null; }
@@ -82,6 +83,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
       return (
         <div className="min-h-screen flex flex-col items-center justify-center px-6 gap-4 bg-background text-foreground">
+          <div className="flex flex-col items-center gap-2 mb-2">
+            <MinistryMark size={56} />
+            <MinistryWordmark size={16} />
+          </div>
           <p className="text-lg font-bold text-destructive">{t("error_title")}</p>
           <p className="text-sm text-muted-foreground text-center break-all">
             {t("error_reload_hint")}

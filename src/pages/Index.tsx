@@ -216,10 +216,11 @@ function getWeatherHeroTheme(weather: CurrentWeather | null) {
 }
 
 function TabLoading() {
-  const t = useT();
   return (
-    <div className="px-5 py-6 text-sm font-medium text-muted-foreground">
-      {t("common_loading")}
+    <div className="flex flex-col items-center justify-center py-16 gap-3 opacity-60">
+      <div className="animate-pulse">
+        <MinistryMark size={48} />
+      </div>
     </div>
   );
 }
@@ -976,7 +977,13 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-muted-foreground font-medium">{t("nav_settings")}</p>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <MinistryMark size={18} />
+                    <span className="text-xs font-medium" style={{fontFamily:'Inter,sans-serif',letterSpacing:'-.01em'}}>
+                      <span className="text-muted-foreground font-normal">Ministry</span>
+                      <span className="text-primary font-bold">Log</span>
+                    </span>
+                  </div>
                   <h1 className="text-xl font-bold text-foreground leading-tight">{userName}</h1>
                 </div>
                 <button
