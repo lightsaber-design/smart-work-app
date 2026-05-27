@@ -967,24 +967,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         {/* ── PROFILE TAB ── */}
         {activeTab === "profile" && (
           <div className="pb-24">
-            <header className="sticky top-0 z-10 overflow-hidden" style={{background:'#181D26'}}>
-              <MinistryMark
-                size={180}
-                pinColor="#ffffff"
-                accentColor="#ffffff"
-                dialColor="#181D26"
-                romanColor="#ffffff"
-                className="absolute -right-8 -top-8 opacity-[0.07] pointer-events-none"
-              />
-              <div className="px-5 pt-3 pb-7 relative">
-                <div className="flex items-center gap-2.5 mb-4">
-                  <MinistryMark size={36} pinColor="#ffffff" accentColor="#34B1AF" dialColor="#181D26" romanColor="#ffffff" />
-                  <span style={{fontFamily:'Inter,sans-serif',fontSize:17,letterSpacing:'-.01em',lineHeight:1}}>
-                    <span style={{fontWeight:400,color:'#ffffff'}}>Ministry</span>
-                    <span style={{fontWeight:700,color:'#34B1AF'}}>Log</span>
-                  </span>
-                </div>
-                <h1 className="text-[22px] font-bold leading-tight" style={{color:'#ffffff'}}>{t("nav_settings")}</h1>
+            <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <MinistryMark size={28} />
+                <h1 className="text-xl font-bold text-foreground">{t("nav_settings")}</h1>
               </div>
             </header>
 
