@@ -987,10 +987,10 @@ export function CalendarView({
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() - 7); setSelectedDate(d); }}
-                className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+                className="w-10 h-10 rounded-full bg-muted border border-border flex items-center justify-center"
                 aria-label={t("calendar_previous_week")}
               >
-                <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+                <ChevronLeft className="w-5 h-5 text-foreground" />
               </button>
               <button
                 onClick={() => setSelectedDate(new Date())}
@@ -1000,10 +1000,10 @@ export function CalendarView({
               </button>
               <button
                 onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() + 7); setSelectedDate(d); }}
-                className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+                className="w-10 h-10 rounded-full bg-muted border border-border flex items-center justify-center"
                 aria-label={t("calendar_next_week")}
               >
-                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                <ChevronRight className="w-5 h-5 text-foreground" />
               </button>
             </div>
           </div>

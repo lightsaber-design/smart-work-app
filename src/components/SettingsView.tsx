@@ -57,8 +57,8 @@ function SettingsSection({
             {icon}
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-            {summary && <div className="mt-1 flex min-h-4 items-center gap-1.5 text-xs text-muted-foreground">{summary}</div>}
+            <h3 className="text-base font-semibold text-foreground">{title}</h3>
+            {summary && <div className="mt-1 flex min-h-4 items-center gap-1.5 text-sm text-muted-foreground">{summary}</div>}
           </div>
         </div>
         <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`} />
@@ -233,7 +233,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-foreground">{t("settings_categories")}</h3>
               <div className="mt-1 flex items-center gap-1.5">
-                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs font-bold text-muted-foreground">
                   {activeCategoryCount}
                 </span>
                 {visibleCategories.slice(0, 8).map((category) => (
@@ -280,11 +280,11 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                     />
                   </div>
                   {isDefaultCategoryName(category.name) ? (
-                    <p className="text-xs text-muted-foreground">{t("settings_category_base_hint")}</p>
+                    <p className="text-sm text-muted-foreground">{t("settings_category_base_hint")}</p>
                   ) : (
                     <>
                       <div className="flex items-center justify-between gap-3">
-                        <Label className="text-xs text-muted-foreground">{t("settings_category_color")}</Label>
+                        <Label className="text-sm text-muted-foreground">{t("settings_category_color")}</Label>
                         <div className="flex gap-1.5">
                           {CATEGORY_COLORS.map((color) => (
                             <button
@@ -301,7 +301,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                         </div>
                       </div>
                       <div className="flex items-center justify-between gap-3">
-                        <Label className="text-xs text-muted-foreground">{t("settings_category_support_cap")}</Label>
+                        <Label className="text-sm text-muted-foreground">{t("settings_category_support_cap")}</Label>
                         <Switch
                           checked={category.support}
                           onCheckedChange={(support) => updateCategory(category.name, { support })}
@@ -346,7 +346,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                 placeholder={t("settings_category_name")}
               />
               <div className="flex items-center justify-between gap-3">
-                <Label className="text-xs text-muted-foreground">{t("settings_category_color")}</Label>
+                <Label className="text-sm text-muted-foreground">{t("settings_category_color")}</Label>
                 <div className="flex gap-1.5">
                   {CATEGORY_COLORS.map((color) => (
                     <button
@@ -363,7 +363,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                 </div>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <Label className="text-xs text-muted-foreground">{t("settings_category_support_default")}</Label>
+                <Label className="text-sm text-muted-foreground">{t("settings_category_support_default")}</Label>
                 <Switch checked={newCategorySupport} onCheckedChange={setNewCategorySupport} />
               </div>
               <Button size="sm" onClick={addCategory} className="w-full">
@@ -408,7 +408,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
               title={name}
             >
               <LanguageFlag lang={code} className="h-6 w-9" />
-              <span className="max-w-full truncate text-[10px] font-semibold">{name}</span>
+              <span className="max-w-full truncate text-xs font-semibold">{name}</span>
             </button>
           ))}
         </div>

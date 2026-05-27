@@ -582,30 +582,21 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 <div className="absolute right-4 top-24 pointer-events-none">
                   <WeatherHeroIcon className="h-20 w-20 text-white/18" strokeWidth={1.4} />
                 </div>
-                <div className="flex items-start justify-between">
-                  <div className="relative z-10">
-                    <p className="text-white/80 text-sm font-medium">{getGreeting(t)}</p>
-                    <h1 className="text-3xl font-black text-white leading-tight mt-0.5">{userName},</h1>
-                    {setup.city && (
-                      <p className="text-white/75 text-[13px] mt-2 flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-                        {displayCityName}{weather ? ` · ${weatherCodeToEmoji(weather.code)} ${weather.temp}°` : ""}
-                      </p>
-                    )}
-                    {weather && (
-                      <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/16 px-2.5 py-1 text-[11px] font-semibold text-white/85 backdrop-blur">
-                        <WeatherHeroIcon className="h-3.5 w-3.5" />
-                        {t(heroTheme.label)}
-                      </p>
-                    )}
-                  </div>
-                  <button
-                    onClick={toggleDark}
-                    className="relative z-10 w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:opacity-70 backdrop-blur mt-1 flex-shrink-0"
-                    aria-label={t("theme_toggle")}
-                  >
-                    {isDark ? <Sun className="w-4 h-4 text-yellow-300" /> : <Moon className="w-4 h-4 text-white" />}
-                  </button>
+                <div className="relative z-10">
+                  <p className="text-white/80 text-sm font-medium">{getGreeting(t)}</p>
+                  <h1 className="text-3xl font-black text-white leading-tight mt-0.5">{userName},</h1>
+                  {setup.city && (
+                    <p className="text-white/75 text-[13px] mt-2 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                      {displayCityName}{weather ? ` · ${weatherCodeToEmoji(weather.code)} ${weather.temp}°` : ""}
+                    </p>
+                  )}
+                  {weather && (
+                    <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/16 px-2.5 py-1 text-[11px] font-semibold text-white/85 backdrop-blur">
+                      <WeatherHeroIcon className="h-3.5 w-3.5" />
+                      {t(heroTheme.label)}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -747,23 +738,14 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
           <div className="h-screen flex flex-col relative pb-16 overflow-hidden" style={{ background: timerBackground }}>
             {/* Header */}
             <div className="px-5 pt-5 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <p className="text-sm text-slate-700 font-medium">{getGreeting(t)}</p>
-                  <h1 className="text-xl font-bold text-slate-950 leading-tight">{userName}</h1>
-                  {setup.city && (
-                    <p className="text-[11px] text-slate-700">
-                      {displayCityName}{weather ? ` · ${weatherCodeToEmoji(weather.code)} ${weather.temp}°` : ""}
-                    </p>
-                  )}
-                </div>
-                <button
-                  onClick={toggleDark}
-                  className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:opacity-70 backdrop-blur"
-                  aria-label={t("theme_toggle")}
-                >
-                  {isDark ? <Sun className="w-4 h-4 text-yellow-300" /> : <Moon className="w-4 h-4 text-slate-700" />}
-                </button>
+              <div>
+                <p className="text-sm text-slate-700 font-medium">{getGreeting(t)}</p>
+                <h1 className="text-xl font-bold text-slate-950 leading-tight">{userName}</h1>
+                {setup.city && (
+                  <p className="text-[11px] text-slate-700">
+                    {displayCityName}{weather ? ` · ${weatherCodeToEmoji(weather.code)} ${weather.temp}°` : ""}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -788,14 +770,22 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               onPointerCancel={(e) => endDrag(e.clientY)}
             >
               <div className="h-[62vh] overflow-hidden bg-card shadow-[0_-18px_55px_rgba(15,23,42,0.18)]" style={{ borderRadius: "34px 34px 0 0" }}>
-                <button onClick={toggleSummary} className="w-full flex flex-col items-center pt-3 pb-2">
+                <button onClick={toggleSummary} className="w-full flex flex-col items-center pt-2.5 pb-1.5 gap-1">
                   <div className="w-10 h-1 rounded-full bg-border" />
+                  {!summaryOpen && (
+                    <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                      <ChevronLeft className="w-3 h-3 rotate-90" />
+                      {showingUpcomingEvents ? t("home_upcoming_activities") : t("day_today")}
+                    </p>
+                  )}
                 </button>
-                <div className="px-5 flex items-center justify-between mb-2 cursor-pointer" onClick={toggleSummary}>
-                  <p className="text-sm font-bold text-foreground">
-                    {showingUpcomingEvents ? t("home_upcoming_activities") : t("day_today")}
-                  </p>
-                </div>
+                {summaryOpen && (
+                  <div className="px-5 flex items-center justify-between mb-2 cursor-pointer" onClick={toggleSummary}>
+                    <p className="text-sm font-bold text-foreground">
+                      {showingUpcomingEvents ? t("home_upcoming_activities") : t("day_today")}
+                    </p>
+                  </div>
+                )}
 
                 {summaryEvents.length === 0 ? (
                   <div className="px-5 pb-4 pt-1">

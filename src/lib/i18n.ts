@@ -26,7 +26,7 @@ export const translations = {
     nav_home: 'Inicio',
     nav_map: 'Mapa',
     nav_calendar: 'Calendario',
-    nav_stats: 'Resumen',
+    nav_stats: 'Mis horas',
     nav_settings: 'Ajustes',
     // Timer
     timer_working: 'Trabajando...',
@@ -363,7 +363,7 @@ export const translations = {
     nav_home: 'Home',
     nav_map: 'Map',
     nav_calendar: 'Calendar',
-    nav_stats: 'Summary',
+    nav_stats: 'My Hours',
     nav_settings: 'Settings',
     // Timer
     timer_working: 'Working...',
