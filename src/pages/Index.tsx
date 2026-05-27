@@ -967,25 +967,24 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         {/* ── PROFILE TAB ── */}
         {activeTab === "profile" && (
           <div className="pb-24">
-            <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <MinistryMark size={18} />
-                    <span className="text-xs font-medium" style={{fontFamily:'Inter,sans-serif',letterSpacing:'-.01em'}}>
-                      <span className="text-muted-foreground font-normal">Ministry</span>
-                      <span className="text-primary font-bold">Log</span>
-                    </span>
-                  </div>
-                  <h1 className="text-xl font-bold text-foreground leading-tight">{userName}</h1>
+            <header className="sticky top-0 z-10 overflow-hidden" style={{background:'#181D26'}}>
+              <MinistryMark
+                size={180}
+                pinColor="#ffffff"
+                accentColor="#ffffff"
+                dialColor="#181D26"
+                romanColor="#ffffff"
+                className="absolute -right-8 -top-8 opacity-[0.07] pointer-events-none"
+              />
+              <div className="px-5 pt-3 pb-7 relative">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <MinistryMark size={36} pinColor="#ffffff" accentColor="#34B1AF" dialColor="#181D26" romanColor="#ffffff" />
+                  <span style={{fontFamily:'Inter,sans-serif',fontSize:17,letterSpacing:'-.01em',lineHeight:1}}>
+                    <span style={{fontWeight:400,color:'#ffffff'}}>Ministry</span>
+                    <span style={{fontWeight:700,color:'#34B1AF'}}>Log</span>
+                  </span>
                 </div>
-                <button
-                  onClick={toggleDark}
-                  className="w-9 h-9 rounded-full bg-muted flex items-center justify-center active:opacity-70"
-                  aria-label={t("theme_toggle")}
-                >
-                  {isDark ? <Sun className="w-4 h-4 text-yellow-300" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
-                </button>
+                <h1 className="text-[22px] font-bold leading-tight" style={{color:'#ffffff'}}>{t("nav_settings")}</h1>
               </div>
             </header>
 

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- pin bail (ring at top) -->
+  <circle cx="100" cy="30" r="7" fill="none" stroke="#181D26" stroke-width="5"/>
+  <!-- elongated pin body -->
+  <path d="M100 44 C 62 44, 48 76, 48 96 C 48 130, 92 170, 100 184 C 108 170, 152 130, 152 96 C 152 76, 138 44, 100 44 Z" fill="#181D26"/>
+  <!-- clock dial -->
+  <circle cx="100" cy="92" r="32" fill="#ffffff"/>
+  <!-- subtle inner ring -->
+  <circle cx="100" cy="92" r="29" fill="none" stroke="#181D26" stroke-width="0.8" opacity="0.25"/>
+  <!-- Roman numerals -->
+  <text x="100" y="70" font-family="Georgia, serif" font-size="9" font-weight="700" fill="#181D26" text-anchor="middle">XII</text>
+  <text x="126" y="95" font-family="Georgia, serif" font-size="9" font-weight="700" fill="#181D26" text-anchor="middle">III</text>
+  <text x="100" y="121" font-family="Georgia, serif" font-size="9" font-weight="700" fill="#181D26" text-anchor="middle">VI</text>
+  <text x="74" y="95" font-family="Georgia, serif" font-size="9" font-weight="700" fill="#181D26" text-anchor="middle">IX</text>
+  <!-- tick marks -->
+  <line x1="103" y1="61" x2="103" y2="64" stroke="#181D26" stroke-width="0.8" opacity="0.5"/>
+  <line x1="113" y1="63" x2="111" y2="66" stroke="#181D26" stroke-width="0.8" opacity="0.5"/>
+  <line x1="124" y1="70" x2="121" y2="72" stroke="#181D26" stroke-width="0.8" opacity="0.5"/>
+  <line x1="129" y1="80" x2="126" y2="81" stroke="#181D26" stroke-width="0.8" opacity="0.5"/>
+  <line x1="129" y1="103" x2="126" y2="102" stroke="#181D26" stroke-width="0.8" opacity="0.5"/>
+  <line x1="124" y1="113" x2="121" y2="111" stroke="#181D26" stroke-width="0.8" opacity="0.5"/>
+  <line x1="76" y1="113" x2="79" y2="111" stroke="#181D26" stroke-width="0.8" opacity="0.5"/>
+  <line x1="71" y1="103" x2="74" y2="102" stroke="#181D26" stroke-width="0.8" opacity="0.5"/>
+  <!-- clock hands (10:10) -->
+  <line x1="100" y1="92" x2="88" y2="84" stroke="#181D26" stroke-width="2.4" stroke-linecap="round"/>
+  <line x1="100" y1="92" x2="112" y2="84" stroke="#181D26" stroke-width="2.4" stroke-linecap="round"/>
+  <!-- center dot in teal -->
+  <circle cx="100" cy="92" r="2.5" fill="#34B1AF"/>
+</svg>
