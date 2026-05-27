@@ -1,12 +1,5 @@
 {
-  "name": "MinistryLog",
-  "short_name": "MinistryLog",
-  "description": "Registro de actividad ministerial",
-  "start_url": "/",
-  "display": "standalone",
   "background_color": "#f5f7fa",
-  "theme_color": "#181D26",
-  "orientation": "portrait",
   "icons": [
     {
       "src": "../icons/icon-48.webp",
