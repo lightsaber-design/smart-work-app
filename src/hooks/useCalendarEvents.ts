@@ -102,7 +102,7 @@ function generateRecurringEvents(params: AddEventParams, count: number): Calenda
       location: params.location,
       recurrence: params.recurrence,
       parentId: i === 0 ? undefined : parentId,
-      completed: false,
+      completed: date.getTime() < Date.now(),
     });
   }
 
@@ -186,7 +186,7 @@ export function useCalendarEvents() {
         notified: params.date.getTime() < Date.now(),
         location: params.location,
         recurrence: "none",
-        completed: false,
+        completed: params.date.getTime() < Date.now(),
       };
       setEvents((prev) => {
         const updated = [...prev, event].sort((a, b) => a.date.getTime() - b.date.getTime());

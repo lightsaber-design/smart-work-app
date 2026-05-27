@@ -9,7 +9,7 @@ import { BottomNav, AppTab } from "@/components/BottomNav";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import { LanguageProvider, localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { detectLanguage, Lang, translate } from "@/lib/i18n";
-import { ChevronLeft, ChevronRight, MapPin, BookOpen, Moon, Sun, Plus, Pencil, Trash2, CloudFog, CloudRain, CloudSun, Snowflake, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, BookOpen, Moon, Sun, Plus, Pencil, Trash2, Check, CloudFog, CloudRain, CloudSun, Snowflake, Zap } from "lucide-react";
 import { hasActiveStudyWork, useEstudios } from "@/hooks/useEstudios";
 import { MissedStudyBanner } from "@/components/MissedStudyBanner";
 import { useDarkMode } from "@/hooks/useDarkMode";
@@ -217,10 +217,12 @@ function getWeatherHeroTheme(weather: CurrentWeather | null) {
 
 function TabLoading() {
   return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3 opacity-60">
-      <div className="animate-pulse">
-        <MinistryMark size={48} />
-      </div>
+    <div className="px-5 pt-5 pb-4 space-y-3 animate-pulse">
+      <div className="h-24 rounded-3xl bg-muted/60" />
+      <div className="h-4 w-32 rounded-full bg-muted/60" />
+      <div className="h-16 rounded-2xl bg-muted/60" />
+      <div className="h-16 rounded-2xl bg-muted/50" />
+      <div className="h-16 rounded-2xl bg-muted/40" />
     </div>
   );
 }
@@ -577,7 +579,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 style={{ background: heroTheme.background }}
               >
                 <div className="absolute inset-0 opacity-70 pointer-events-none" style={{ backgroundImage: heroTheme.overlay }} />
-                <div className="absolute right-5 top-16 pointer-events-none">
+                <div className="absolute right-4 top-24 pointer-events-none">
                   <WeatherHeroIcon className="h-20 w-20 text-white/18" strokeWidth={1.4} />
                 </div>
                 <div className="flex items-start justify-between">
@@ -625,10 +627,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   </div>
                   {setup.precursorHours && (
                     <div className="mt-3 space-y-1">
-                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-2.5 rounded-full bg-muted overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-primary transition-all duration-500"
-                          style={{ width: `${monthlyGoalPct}%` }}
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${monthlyGoalPct}%`, background: "linear-gradient(90deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 70%, white) 100%)" }}
                         />
                       </div>
                       <p className="text-[10px] text-muted-foreground">
@@ -659,15 +661,16 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                     )}
                     <button
                       onClick={() => navigate("calendar")}
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+                      className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-md shadow-primary/25 active:scale-95 transition-transform"
                     >
-                      <Plus className="w-3 h-3" /> {t("home_add_activity")}
+                      <Plus className="w-4 h-4" /> {t("home_add_activity")}
                     </button>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {nextDayGroups.map((group) => (
+                    {nextDayGroups.map((group, groupIdx) => (
                       <div key={group.key} className="space-y-2">
+                        {groupIdx > 0 && <div className="border-t border-border/50 pt-2" />}
                         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                           {group.label}
                         </p>
@@ -756,10 +759,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 </div>
                 <button
                   onClick={toggleDark}
-                  className="w-9 h-9 rounded-full bg-white/18 flex items-center justify-center active:opacity-70 backdrop-blur"
+                  className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:opacity-70 backdrop-blur"
                   aria-label={t("theme_toggle")}
                 >
-                  {isDark ? <Sun className="w-4 h-4 text-yellow-500" /> : <Moon className="w-4 h-4 text-slate-700" />}
+                  {isDark ? <Sun className="w-4 h-4 text-yellow-300" /> : <Moon className="w-4 h-4 text-slate-700" />}
                 </button>
               </div>
             </div>
@@ -835,7 +838,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                                 <p className="text-[10px] text-muted-foreground">{timeStr}{event.endTime ? ` – ${event.endTime}` : ""}</p>
                                 {!event.completed && forecast && <p className="text-[10px] text-muted-foreground truncate">{forecast}</p>}
                               </div>
-                              {event.completed && <span className="text-xs font-bold text-green-500">✓</span>}
+                              {event.completed && <Check className="w-4 h-4 text-green-500 flex-shrink-0" />}
                               <span className="flex items-center gap-1.5 flex-shrink-0">
                                 <span className="w-7 h-7 rounded-full bg-background/70 border border-border flex items-center justify-center">
                                   <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
@@ -991,7 +994,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   className="w-9 h-9 rounded-full bg-muted flex items-center justify-center active:opacity-70"
                   aria-label={t("theme_toggle")}
                 >
-                  {isDark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
+                  {isDark ? <Sun className="w-4 h-4 text-yellow-300" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
                 </button>
               </div>
             </header>

@@ -47,9 +47,10 @@ export function BottomNav({ activeTab, onTabChange, isRunning, activeCategory = 
               aria-label={label}
             >
               <Icon className={`w-6 h-6 transition-colors ${active ? "text-primary" : "text-muted-foreground"}`} />
-              <span className={`max-w-full truncate text-[10px] font-semibold ${active ? "text-primary" : "text-muted-foreground"}`}>
+              <span className={`max-w-full truncate text-[11px] font-semibold ${active ? "text-primary" : "text-muted-foreground"}`}>
                 {label}
               </span>
+              <span className={`h-1 w-1 rounded-full mt-0.5 transition-all ${active ? "bg-primary scale-100" : "scale-0"}`} />
             </button>
           );
         })}
@@ -90,9 +91,10 @@ export function BottomNav({ activeTab, onTabChange, isRunning, activeCategory = 
               aria-label={label}
             >
               <Icon className={`w-6 h-6 transition-colors ${active ? "text-primary" : "text-muted-foreground"}`} />
-              <span className={`max-w-full truncate text-[10px] font-semibold ${active ? "text-primary" : "text-muted-foreground"}`}>
+              <span className={`max-w-full truncate text-[11px] font-semibold ${active ? "text-primary" : "text-muted-foreground"}`}>
                 {label}
               </span>
+              <span className={`h-1 w-1 rounded-full mt-0.5 transition-all ${active ? "bg-primary scale-100" : "scale-0"}`} />
             </button>
           );
         })}
