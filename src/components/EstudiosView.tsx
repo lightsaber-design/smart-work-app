@@ -208,9 +208,9 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
                     <Select value={String(schedDay)} onValueChange={(v) => setSchedDay(Number(v))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {Array.from({ length: 7 }, (_, i) => (
-                          <SelectItem key={i} value={String(i)}>
-                            {formatWeekday(new Date(2024, 0, 7 + i), locale)}
+                        {[1, 2, 3, 4, 5, 6, 0].map((day) => (
+                          <SelectItem key={day} value={String(day)}>
+                            {formatWeekday(new Date(2024, 0, 7 + day), locale)}
                           </SelectItem>
                         ))}
                       </SelectContent>

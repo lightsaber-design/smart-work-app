@@ -285,7 +285,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     );
 
   const stopActiveTimer = () => {
-    tracker.clockOut((eventId, endTime) => calendar.updateEvent(eventId, { endTime }));
+    tracker.clockOut((eventId, endTime) => calendar.updateEvent(eventId, { endTime, completed: true }));
     setTimerOverrunDismissedId(activeScheduledEvent?.id ?? null);
   };
 
@@ -822,13 +822,23 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                               className={`w-full flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-left active:scale-[0.98] transition-transform ${style.card}`}
                               style={{ borderLeftWidth: 3, borderLeftColor: style.accent }}
                             >
-                              <CategoryIcon icon={meta.icon} className="text-lg leading-none flex-shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <p className={`text-[13px] font-semibold text-foreground truncate ${event.completed ? "line-through opacity-50" : ""}`}>{getCategoryLabel(event.category, t)}</p>
-                                <p className="text-[10px] text-muted-foreground">{timeStr}{event.endTime ? ` – ${event.endTime}` : ""}</p>
-                                {!event.completed && forecast && <p className="text-[10px] text-muted-foreground truncate">{forecast}</p>}
-                              </div>
-                              {event.completed && <Check className="w-4 h-4 text-green-500 flex-shrink-0" />}
+                              {(() => {
+                                const isOngoing = tracker.isRunning && activeScheduledEvent?.id === event.id;
+                                return (
+                                  <>
+                                    <CategoryIcon icon={meta.icon} className={`text-lg leading-none flex-shrink-0 ${isOngoing ? "animate-pulse" : ""}`} />
+                                    <div className="flex-1 min-w-0">
+                                      <p className={`text-[13px] font-semibold truncate ${isOngoing ? "text-primary" : event.completed ? "line-through opacity-50 text-foreground" : "text-foreground"}`}>
+                                        {getCategoryLabel(event.category, t)}
+                                        {isOngoing && <span className="ml-1.5 text-[10px] font-medium text-primary/70">● en curso</span>}
+                                      </p>
+                                      <p className="text-[10px] text-muted-foreground">{timeStr}{event.endTime ? ` – ${event.endTime}` : ""}</p>
+                                      {!event.completed && !isOngoing && forecast && <p className="text-[10px] text-muted-foreground truncate">{forecast}</p>}
+                                    </div>
+                                    {!isOngoing && event.completed && <Check className="w-4 h-4 text-green-500 flex-shrink-0" />}
+                                  </>
+                                );
+                              })()}
                               <span className="flex items-center gap-1.5 flex-shrink-0">
                                 <span className="w-7 h-7 rounded-full bg-background/70 border border-border flex items-center justify-center">
                                   <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
@@ -1079,7 +1089,19 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       <MissedStudyBanner
         contacts={estudios.contacts}
         onComplete={estudios.completeSession}
-        onReschedule={estudios.updateSession}
+        onCancel={estudios.deleteSession}
+        onReschedule={(contactId, sessionId, data) => {
+          // Remove the matching CalendarEvent on the old date before rescheduling
+          const contact = estudios.contacts.find((c) => c.id === contactId);
+          const session = contact?.sessions.find((s) => s.id === sessionId);
+          if (session) {
+            const oldDate = new Date(session.date);
+            calendarEvents
+              .filter((e) => !e.completed && e.date.toDateString() === oldDate.toDateString() && Math.abs(e.date.getTime() - oldDate.getTime()) < 30 * 60 * 1000)
+              .forEach((e) => calendar.deleteEvent(e.id));
+          }
+          estudios.updateSession(contactId, sessionId, data);
+        }}
       />
 
       {/* Timer overrun prompt */}

@@ -7,6 +7,7 @@ import { formatDateLong } from "@/lib/dateFormat";
 interface MissedStudyBannerProps {
   contacts: EstudioContact[];
   onComplete: (contactId: string, sessionId: string) => void;
+  onCancel: (contactId: string, sessionId: string) => void;
   onReschedule: (
     contactId: string,
     sessionId: string,
@@ -33,7 +34,7 @@ function formatMissedLabel(isoDate: string, locale: string): string {
   return formatDateLong(new Date(isoDate), locale);
 }
 
-export function MissedStudyBanner({ contacts, onComplete, onReschedule }: MissedStudyBannerProps) {
+export function MissedStudyBanner({ contacts, onComplete, onCancel, onReschedule }: MissedStudyBannerProps) {
   const t = useT();
   const lang = useLang();
   const locale = localeForLang(lang);
@@ -79,6 +80,11 @@ export function MissedStudyBanner({ contacts, onComplete, onReschedule }: Missed
 
   const handleComplete = () => {
     onComplete(contact.id, session.id);
+    dismiss();
+  };
+
+  const handleCancel = () => {
+    onCancel(contact.id, session.id);
     dismiss();
   };
 
@@ -171,18 +177,26 @@ export function MissedStudyBanner({ contacts, onComplete, onReschedule }: Missed
             </div>
           </div>
         ) : (
-          <div className="flex gap-2 px-4 pb-4">
+          <div className="flex flex-col gap-2 px-4 pb-4">
+            <div className="flex gap-2">
+              <button
+                onClick={handleComplete}
+                className="flex-1 py-2 rounded-xl bg-green-500 text-white text-sm font-semibold"
+              >
+                {t("missed_study_mark_done")}
+              </button>
+              <button
+                onClick={openReschedule}
+                className="flex-1 py-2 rounded-xl bg-muted text-foreground text-sm font-medium"
+              >
+                {t("missed_study_postpone")}
+              </button>
+            </div>
             <button
-              onClick={handleComplete}
-              className="flex-1 py-2 rounded-xl bg-green-500 text-white text-sm font-semibold"
+              onClick={handleCancel}
+              className="w-full py-2 rounded-xl bg-destructive/10 text-destructive text-sm font-medium"
             >
-              {t("missed_study_mark_done")}
-            </button>
-            <button
-              onClick={openReschedule}
-              className="flex-1 py-2 rounded-xl bg-muted text-foreground text-sm font-medium"
-            >
-              {t("missed_study_postpone")}
+              {t("missed_study_cancel")}
             </button>
           </div>
         )}
