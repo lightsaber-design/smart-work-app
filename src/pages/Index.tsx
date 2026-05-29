@@ -72,6 +72,9 @@ type CurrentWeather = {
   isDay: boolean | null;
 };
 
+const WEATHER_CACHE_KEY = "_ml_weather";
+const WEATHER_TTL = 30 * 60 * 1000;
+
 function weatherCodeToLabel(code: number, t: TranslateFn): string {
   if (code === 0) return t("weather_clear");
   if (code <= 3) return t("weather_cloudy");
@@ -95,9 +98,16 @@ function isRainyWeather(code: number, probability: number | null): boolean {
 
 function getWeatherForDate(hourlyWeather: HourlyWeather[], date: Date): HourlyWeather | null {
   if (hourlyWeather.length === 0) return null;
-  return hourlyWeather
-    .filter((item) => Math.abs(item.date.getTime() - date.getTime()) <= 90 * 60_000)
-    .sort((a, b) => Math.abs(a.date.getTime() - date.getTime()) - Math.abs(b.date.getTime() - date.getTime()))[0] ?? null;
+  const targetMs = date.getTime();
+  let bestForecast: HourlyWeather | null = null;
+  let bestDiff = Number.POSITIVE_INFINITY;
+  for (const item of hourlyWeather) {
+    const diff = Math.abs(item.date.getTime() - targetMs);
+    if (diff > 90 * 60_000 || diff >= bestDiff) continue;
+    bestForecast = item;
+    bestDiff = diff;
+  }
+  return bestForecast;
 }
 
 function formatActivityWeather(hourlyWeather: HourlyWeather[], date: Date, t: TranslateFn): string | null {
@@ -302,36 +312,48 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   };
 
   // ── Pre-programar notificaciones nativas al cambiar los eventos ──────────────
-  const scheduledEventIds = useRef<Set<string>>(new Set());
+  const scheduledEventFireTimes = useRef<Map<string, number>>(new Map());
   useEffect(() => {
     const now = Date.now();
+    const liveReminderIds = new Set<string>();
+
     calendarEvents.forEach((event) => {
       if (event.completed || event.notified) return;
       const reminder = event.reminderMinutesBefore ?? 0;
       if (reminder <= 0) return;
       const fireAt = new Date(event.date.getTime() - reminder * 60_000);
       if (fireAt.getTime() <= now) return;
-      if (scheduledEventIds.current.has(event.id)) return;
-      scheduledEventIds.current.add(event.id);
+      liveReminderIds.add(event.id);
+
+      const fireAtMs = fireAt.getTime();
+      if (scheduledEventFireTimes.current.get(event.id) === fireAtMs) return;
+
       void scheduleEventNotification(
         event.id,
         t("notif_activity_upcoming"),
         t("notif_activity_upcoming_body", { category: getCategoryLabel(event.category, t) }),
         fireAt
-      );
+      ).then((scheduled) => {
+        if (scheduled) scheduledEventFireTimes.current.set(event.id, fireAtMs);
+        else if (scheduledEventFireTimes.current.get(event.id) === fireAtMs) scheduledEventFireTimes.current.delete(event.id);
+      });
     });
     // Cancelar las que ya no existen o están completadas
-    scheduledEventIds.current.forEach((id) => {
-      const ev = calendarEvents.find((e) => e.id === id);
-      if (!ev || ev.completed) {
+    scheduledEventFireTimes.current.forEach((_, id) => {
+      if (!liveReminderIds.has(id)) {
         void cancelEventNotification(id);
-        scheduledEventIds.current.delete(id);
+        scheduledEventFireTimes.current.delete(id);
       }
     });
   }, [calendarEvents, t]);
 
   // ── Fallback: check periódico cuando la app está abierta (web / sin reminder) ─
   useEffect(() => {
+    const hasPendingReminder = calendarEvents.some((event) =>
+      !event.completed && !event.notified && Date.now() < event.date.getTime() + 5 * 60_000
+    );
+    if (!hasPendingReminder) return;
+
     const check = () => {
       const now = Date.now();
       calendarEvents.forEach((event) => {
@@ -447,6 +469,16 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     setSummaryOpen((v) => !v);
   };
 
+  // ── Estado de conexión ───────────────────────────────────────────────────────
+  const [isOnline, setIsOnline] = useState(() => typeof navigator !== "undefined" ? navigator.onLine : true);
+  useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+
   const navigate = (tab: Tab) => setActiveTab(tab);
   const navigateToStudySession = (contactId: string, sessionId: string) => {
     setSelectedStudySession({ contactId, sessionId });
@@ -467,40 +499,69 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const displayCityName = setup.city ? formatPlaceName(setup.city.name, t) : "";
   const userName = setup.name || displayCityName || t("friend_name");
 
-  // Weather
-  const [weather, setWeather] = useState<CurrentWeather | null>(null);
-  const [hourlyWeather, setHourlyWeather] = useState<HourlyWeather[]>([]);
-  useEffect(() => {
-    if (!setup.city) {
-      setWeather(null);
-      setHourlyWeather([]);
-      return;
+  // ── Weather (con caché de 30 min) ────────────────────────────────────────────
+  const [weather, setWeather] = useState<CurrentWeather | null>(() => {
+    try {
+      const c = JSON.parse(localStorage.getItem(WEATHER_CACHE_KEY) ?? "null");
+      if (c && Date.now() - c.ts < WEATHER_TTL) return c.weather as CurrentWeather;
+    } catch {
+      // Si la cache esta corrupta, se ignora y se carga desde red.
     }
+    return null;
+  });
+  const [hourlyWeather, setHourlyWeather] = useState<HourlyWeather[]>(() => {
+    try {
+      const c = JSON.parse(localStorage.getItem(WEATHER_CACHE_KEY) ?? "null");
+      if (c && Date.now() - c.ts < WEATHER_TTL && Array.isArray(c.hourly)) {
+        return (c.hourly as HourlyWeather[]).map((h) => ({ ...h, date: new Date(h.date) }));
+      }
+    } catch {
+      // Si la cache esta corrupta, se ignora y se carga desde red.
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    if (!setup.city) { setWeather(null); setHourlyWeather([]); return; }
+    // Usa caché si es reciente
+    try {
+      const c = JSON.parse(localStorage.getItem(WEATHER_CACHE_KEY) ?? "null");
+      if (c && c.cityKey === `${setup.city.lat},${setup.city.lng}` && Date.now() - c.ts < WEATHER_TTL) return;
+    } catch {
+      // Si la cache esta corrupta, se ignora y se carga desde red.
+    }
+
     const { lat, lng } = setup.city;
     fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true&hourly=temperature_2m,weather_code,precipitation_probability&forecast_days=7&timezone=auto`)
       .then((r) => r.json())
       .then((data) => {
         const cw = data?.current_weather;
+        let newWeather: CurrentWeather | null = null;
         if (cw) {
-          setWeather({
-            temp: Math.round(cw.temperature),
-            code: cw.weathercode,
-            isDay: typeof cw.is_day === "number" ? cw.is_day === 1 : null,
-          });
+          newWeather = { temp: Math.round(cw.temperature), code: cw.weathercode, isDay: typeof cw.is_day === "number" ? cw.is_day === 1 : null };
+          setWeather(newWeather);
         }
         const hourly = data?.hourly;
+        let newHourly: HourlyWeather[] = [];
         if (Array.isArray(hourly?.time) && Array.isArray(hourly?.temperature_2m) && Array.isArray(hourly?.weather_code)) {
-          setHourlyWeather(hourly.time.map((time: string, index: number) => ({
+          newHourly = hourly.time.map((time: string, index: number) => ({
             date: new Date(time),
             temp: Math.round(Number(hourly.temperature_2m[index])),
             code: Number(hourly.weather_code[index]),
-            precipitationProbability: Array.isArray(hourly.precipitation_probability)
-              ? Number(hourly.precipitation_probability[index])
-              : null,
-          })).filter((item: HourlyWeather) => !Number.isNaN(item.date.getTime()) && Number.isFinite(item.temp) && Number.isFinite(item.code)));
+            precipitationProbability: Array.isArray(hourly.precipitation_probability) ? Number(hourly.precipitation_probability[index]) : null,
+          })).filter((item: HourlyWeather) => !Number.isNaN(item.date.getTime()) && Number.isFinite(item.temp) && Number.isFinite(item.code));
+          setHourlyWeather(newHourly);
+        }
+        // Guarda en caché
+        if (newWeather) {
+          try {
+            localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify({ cityKey: `${lat},${lng}`, ts: Date.now(), weather: newWeather, hourly: newHourly }));
+          } catch {
+            // El clima es auxiliar; si no se puede cachear no bloquea la app.
+          }
         }
       })
-      .catch(() => {});
+      .catch((error) => console.warn("Weather fetch failed:", error));
   }, [setup.city]);
 
   // Timer background gradient
@@ -560,7 +621,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
   // ── Regla 3: Meta mensual ─────────────────────────────────────────────────
   useEffect(() => {
-    const goalHours = setup.monthlyGoalHours ?? 0;
+    const goalHours = setup.precursorHours ?? 0;
     if (!goalHours) return;
     const status = getGoalStatus(goalHours, calMonthMs);
     const monthKey = currentMonthKey();
@@ -583,7 +644,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         }),
       });
     }
-  }, [calMonthMs, setup.monthlyGoalHours, t]);
+  }, [calMonthMs, setup.precursorHours, t]);
 
   // ── Regla 4: Contacto sin cita >14 días ──────────────────────────────────
   useEffect(() => {
@@ -600,7 +661,15 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
   return (
     <div className="min-h-screen bg-background max-w-md mx-auto relative">
-      <main className={activeTab === "timer" ? "" : "pb-24"}>
+      {/* ── Indicador sin conexión ── */}
+      {!isOnline && (
+        <div className="fixed top-0 left-0 right-0 z-[100] max-w-md mx-auto bg-yellow-400 text-yellow-900 text-xs font-semibold text-center py-1.5 px-4 flex items-center justify-center gap-1.5">
+          <span>⚠️</span>
+          <span>{t("offline_banner")}</span>
+        </div>
+      )}
+
+      <main className={`${!isOnline ? "pt-7" : ""} ${activeTab === "timer" ? "" : "pb-24"}`}>
 
         {/* ── HOME TAB ── */}
         {activeTab === "home" && (() => {

@@ -1,17 +1,26 @@
 import { Capacitor } from '@capacitor/core';
-import { LocalNotifications } from '@capacitor/local-notifications';
+import { LocalNotifications, type Schedule } from '@capacitor/local-notifications';
 
 const CHANNEL_ID = 'ministrylog-main';
-const NOTIF_ID_KEY = '_ml_notif_ids'; // localStorage map: eventId → notifId
+const NOTIF_ID_KEY = '_ml_notif_ids';
 
-// ── ID generator persistente ─────────────────────────────────────────────────
+// Generador persistente para evitar reutilizar ids de notificaciones.
 function loadNextId(): number {
-  try { return Number(localStorage.getItem('_ml_notif_seq') ?? '100') || 100; }
-  catch { return 100; }
+  try {
+    return Number(localStorage.getItem('_ml_notif_seq') ?? '100') || 100;
+  } catch {
+    return 100;
+  }
 }
+
 function saveNextId(n: number) {
-  try { localStorage.setItem('_ml_notif_seq', String(n)); } catch {}
+  try {
+    localStorage.setItem('_ml_notif_seq', String(n));
+  } catch {
+    // Si localStorage no esta disponible, se mantiene la secuencia en memoria.
+  }
 }
+
 let _nextId = loadNextId();
 function nextId(): number {
   const id = _nextId++;
@@ -19,28 +28,40 @@ function nextId(): number {
   return id;
 }
 
-// ── Mapa eventId → notifId (para poder cancelar) ─────────────────────────────
+// Relaciona cada evento con su notificacion para poder cancelarla despues.
 function loadIdMap(): Map<string, number> {
   try {
     const raw = localStorage.getItem(NOTIF_ID_KEY);
     if (raw) return new Map(JSON.parse(raw) as [string, number][]);
-  } catch {}
+  } catch {
+    // Si el mapa persistido esta corrupto, se empieza con un mapa limpio.
+  }
   return new Map();
 }
-function saveIdMap(map: Map<string, number>) {
-  try { localStorage.setItem(NOTIF_ID_KEY, JSON.stringify([...map])); } catch {}
-}
-const _idMap = loadIdMap();
 
-// ── Canal Android ─────────────────────────────────────────────────────────────
+function saveIdMap(map: Map<string, number>) {
+  try {
+    localStorage.setItem(NOTIF_ID_KEY, JSON.stringify([...map]));
+  } catch {
+    // El plugin nativo sigue funcionando aunque no podamos guardar el mapa.
+  }
+}
+
+const _idMap = loadIdMap();
 let _channelReady = false;
+
+function isNativeAndroid(): boolean {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+}
+
+// Crea el canal de Android sin pedir permisos al arrancar la app.
 async function ensureChannel(): Promise<void> {
   if (_channelReady) return;
   try {
     await LocalNotifications.createChannel({
       id: CHANNEL_ID,
       name: 'MinistryLog',
-      description: 'Avisos de actividades y recordatorios',
+      description: 'Activity alerts and reminders',
       importance: 4,
       visibility: 1,
       vibration: true,
@@ -48,10 +69,11 @@ async function ensureChannel(): Promise<void> {
       lightColor: '#34B1AF',
     });
     _channelReady = true;
-  } catch (e) { console.warn('[Notif] createChannel:', e); }
+  } catch (e) {
+    console.warn('[Notif] createChannel:', e);
+  }
 }
 
-// ── Permiso ───────────────────────────────────────────────────────────────────
 async function requestNativePermission(): Promise<boolean> {
   try {
     await ensureChannel();
@@ -66,56 +88,79 @@ async function requestNativePermission(): Promise<boolean> {
   }
 }
 
-// ── Inicialización al arrancar ────────────────────────────────────────────────
+async function canUseExactAlarms(): Promise<boolean> {
+  if (!isNativeAndroid()) return true;
+  try {
+    const { exact_alarm } = await LocalNotifications.checkExactNotificationSetting();
+    return exact_alarm === 'granted';
+  } catch (e) {
+    console.warn('[Notif] exact alarm setting:', e);
+    return false;
+  }
+}
+
 export async function initNotifications(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   await ensureChannel();
-  await requestNativePermission();
 }
 
-// ── Pre-programar notificación para un evento futuro (dispara con app cerrada) ─
 export async function scheduleEventNotification(
   eventId: string,
   title: string,
   body: string,
   fireAt: Date
-): Promise<void> {
-  if (!Capacitor.isNativePlatform()) return;
-  if (fireAt.getTime() <= Date.now()) return; // ya pasó
-  const granted = await requestNativePermission();
-  if (!granted) return;
+): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return false;
+  if (fireAt.getTime() <= Date.now()) return false;
 
-  // Cancela la anterior si existe
+  const granted = await requestNativePermission();
+  if (!granted) return false;
+
   await cancelEventNotification(eventId);
 
   const id = nextId();
   _idMap.set(eventId, id);
   saveIdMap(_idMap);
 
-  await LocalNotifications.schedule({
-    notifications: [{
-      id,
-      title,
-      body,
-      channelId: CHANNEL_ID,
-      smallIcon: 'ic_launcher_foreground',
-      iconColor: '#34B1AF',
-      schedule: { at: fireAt, allowWhileIdle: true },
-    }],
-  }).catch((e) => console.warn('[Notif] schedule:', e));
+  const schedule: Schedule = { at: fireAt };
+  if (await canUseExactAlarms()) {
+    schedule.allowWhileIdle = true;
+  }
+
+  try {
+    await LocalNotifications.schedule({
+      notifications: [{
+        id,
+        title,
+        body,
+        channelId: CHANNEL_ID,
+        smallIcon: 'ic_launcher_foreground',
+        iconColor: '#34B1AF',
+        schedule,
+      }],
+    });
+    return true;
+  } catch (e) {
+    _idMap.delete(eventId);
+    saveIdMap(_idMap);
+    console.warn('[Notif] schedule:', e);
+    return false;
+  }
 }
 
-// ── Cancelar notificación programada de un evento ────────────────────────────
 export async function cancelEventNotification(eventId: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   const id = _idMap.get(eventId);
   if (id === undefined) return;
-  try { await LocalNotifications.cancel({ notifications: [{ id }] }); } catch {}
+  try {
+    await LocalNotifications.cancel({ notifications: [{ id }] });
+  } catch {
+    // Cancelar una notificacion inexistente no requiere accion adicional.
+  }
   _idMap.delete(eventId);
   saveIdMap(_idMap);
 }
 
-// ── Notificación inmediata (para cuando la app está abierta) ─────────────────
 export function showBrowserNotification(
   title: string,
   options?: NotificationOptions
@@ -132,7 +177,7 @@ export function showBrowserNotification(
           smallIcon: 'ic_launcher_foreground',
           iconColor: '#34B1AF',
         }],
-      }).catch((e) => console.warn('[Notif] schedule (immediate):', e));
+      }).catch((e) => console.warn('[Notif] schedule immediate:', e));
     });
     return true;
   }
@@ -143,17 +188,42 @@ export function showBrowserNotification(
     Notification.permission !== 'granted'
   ) return false;
 
-  try { new Notification(title, options); return true; }
-  catch (e) { console.warn('[Notif] browser:', e); return false; }
+  try {
+    new Notification(title, options);
+    return true;
+  } catch (e) {
+    console.warn('[Notif] browser:', e);
+    return false;
+  }
 }
 
-// ── API pública de permisos ───────────────────────────────────────────────────
 export function canRequestNotificationPermission(): boolean {
   if (Capacitor.isNativePlatform()) return true;
   return typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default';
 }
-export function requestNotificationPermission(): void {
-  if (Capacitor.isNativePlatform()) { void requestNativePermission(); return; }
-  if (!canRequestNotificationPermission()) return;
-  void Notification.requestPermission().catch((e) => console.warn('[Notif] browser perm:', e));
+
+export async function hasNotificationPermission(): Promise<boolean> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { display } = await LocalNotifications.checkPermissions();
+      return display === 'granted';
+    } catch (e) {
+      console.warn('[Notif] checkPermission:', e);
+      return false;
+    }
+  }
+  return typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
+}
+
+export async function requestNotificationPermission(): Promise<boolean> {
+  if (Capacitor.isNativePlatform()) {
+    return requestNativePermission();
+  }
+  if (!canRequestNotificationPermission()) return false;
+  try {
+    return await Notification.requestPermission() === 'granted';
+  } catch (e) {
+    console.warn('[Notif] browser perm:', e);
+    return false;
+  }
 }

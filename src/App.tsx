@@ -12,7 +12,7 @@ import { initNotifications } from "@/lib/notifications";
 const queryClient = new QueryClient();
 
 const App = () => {
-  // Initialize native notifications (creates Android channel + requests permission)
+  // Inicializa el canal nativo sin pedir permisos al abrir la app.
   useEffect(() => { void initNotifications(); }, []);
 
   return (

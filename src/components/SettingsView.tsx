@@ -98,7 +98,8 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
 
   const updateCategory = (name: string, updates: Partial<CategoryConfig>) => {
     const categoryIsDefault = isDefaultCategoryName(name);
-    const protectedUpdates = categoryIsDefault && ("name" in updates || "color" in updates || "support" in updates);
+    // Solo protege nombre y tipo-soporte en categorías base; el color es siempre editable
+    const protectedUpdates = categoryIsDefault && ("name" in updates || "support" in updates);
     if (protectedUpdates) return;
     if (name === "Estudio" && updates.active === true && !hasActiveStudies) {
       window.alert(t("settings_category_study_required"));
@@ -279,13 +280,11 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                       onCheckedChange={(active) => updateCategory(category.name, { active })}
                     />
                   </div>
-                  {isDefaultCategoryName(category.name) ? (
-                    <p className="text-sm text-muted-foreground">{t("settings_category_base_hint")}</p>
-                  ) : (
+                  {false ? null : (
                     <>
                       <div className="flex items-center justify-between gap-3">
                         <Label className="text-sm text-muted-foreground">{t("settings_category_color")}</Label>
-                        <div className="flex gap-1.5">
+                        <div className="flex gap-1.5 flex-wrap justify-end">
                           {CATEGORY_COLORS.map((color) => (
                             <button
                               key={color}
@@ -307,31 +306,33 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                           onCheckedChange={(support) => updateCategory(category.name, { support })}
                         />
                       </div>
-                      <div className="flex gap-2 pt-1">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="flex-1"
-                          onClick={() => {
-                            setEditingCategoryName(category.name);
-                            setCategoryNameDraft(category.name);
-                          }}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                          {t("settings_category_rename")}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="flex-1 text-destructive hover:text-destructive"
-                          onClick={() => deleteCategory(category.name)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          {t("settings_category_delete")}
-                        </Button>
-                      </div>
+                      {!isDefaultCategoryName(category.name) && (
+                        <div className="flex gap-2 pt-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="flex-1"
+                            onClick={() => {
+                              setEditingCategoryName(category.name);
+                              setCategoryNameDraft(category.name);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            {t("settings_category_rename")}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 text-destructive hover:text-destructive"
+                            onClick={() => deleteCategory(category.name)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {t("settings_category_delete")}
+                          </Button>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

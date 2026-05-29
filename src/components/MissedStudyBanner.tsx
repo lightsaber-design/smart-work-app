@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BookOpen, X, Calendar, Clock } from "lucide-react";
 import { EstudioContact, EstudioSession, SessionFile } from "@/hooks/useEstudios";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
@@ -45,12 +45,17 @@ export function MissedStudyBanner({ contacts, onComplete, onCancel, onReschedule
   const [newDate, setNewDate] = useState(todayDateStr());
   const [newTime, setNewTime] = useState("10:00");
   const [now, setNow] = useState(Date.now());
+  const hasPendingSessions = useMemo(
+    () => contacts.some((contact) => contact.active && (contact.sessions ?? []).some((session) => session.pending)),
+    [contacts]
+  );
 
-  // Refresca cada minuto para mostrar sesiones vencidas a tiempo.
+  // Refresca solo cuando hay sesiones pendientes que puedan vencer.
   useEffect(() => {
+    if (!hasPendingSessions) return;
     const id = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(id);
-  }, []);
+  }, [hasPendingSessions]);
 
   // Reúne sesiones pendientes vencidas por más de cinco minutos.
   const missed: MissedEntry[] = [];

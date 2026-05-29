@@ -35,6 +35,8 @@ import { formatFileSize, saveFile } from "@/lib/sessionFiles";
 import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
 import { formatDateLong, formatHourLabel, formatMonthYear, formatTime, formatWeekday } from "@/lib/dateFormat";
+import { hasNotificationPermission, requestNotificationPermission } from "@/lib/notifications";
+import { Capacitor } from "@capacitor/core";
 
 import { CategoryConfig, getActiveCategoryConfigs, getCategoryLabel, getCategoryMeta, getCategoryStyle } from "@/lib/categories";
 
@@ -514,10 +516,13 @@ export function CalendarView({
   const t = useT();
   const lang = useLang();
   const locale = localeForLang(lang);
-  const timelineHours = Array.from({ length: activityEndHour - activityStartHour }, (_, i) => i + activityStartHour);
+  const timelineHours = useMemo(
+    () => Array.from({ length: activityEndHour - activityStartHour }, (_, i) => i + activityStartHour),
+    [activityEndHour, activityStartHour]
+  );
   const timelineDurationMinutes = (activityEndHour - activityStartHour) * 60;
   const timelineHeight = (activityEndHour - activityStartHour) * HOUR_HEIGHT;
-  const activeContacts = estudiosContacts.filter(hasActiveStudyWork);
+  const activeContacts = useMemo(() => estudiosContacts.filter(hasActiveStudyWork), [estudiosContacts]);
   const singleActiveContactId = activeContacts.length === 1 ? activeContacts[0].id : "";
   const [mode, setMode] = useState<CalendarMode>("daily");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -593,16 +598,21 @@ export function CalendarView({
 
   useScrollLock(dialogOpen || !!editEvent || !!pendingAddConflict || !!selectedStudySession);
 
-  const selectedEvents = getEventsForDate(selectedDate).sort(
-    (a, b) => a.date.getTime() - b.date.getTime()
+  const selectedDateKey = selectedDate.toDateString();
+  const selectedEvents = useMemo(
+    () => getEventsForDate(selectedDate).slice().sort((a, b) => a.date.getTime() - b.date.getTime()),
+    [getEventsForDate, selectedDate]
   );
-  const selectedStudySessions = estudiosContacts
-    .flatMap((c) =>
-      (c.sessions ?? [])
-        .filter((s) => s.pending && new Date(s.date).toDateString() === selectedDate.toDateString())
-        .map((s) => ({ ...s, contact: c, contactName: c.name }))
-    )
-    .sort((a, b) => a.time.localeCompare(b.time));
+  const selectedStudySessions = useMemo(
+    () => estudiosContacts
+      .flatMap((c) =>
+        (c.sessions ?? [])
+          .filter((s) => s.pending && new Date(s.date).toDateString() === selectedDateKey)
+          .map((s) => ({ ...s, contact: c, contactName: c.name }))
+      )
+      .sort((a, b) => a.time.localeCompare(b.time)),
+    [estudiosContacts, selectedDateKey]
+  );
   const hasSelectedItems = selectedEvents.length > 0 || selectedStudySessions.length > 0;
   const { hrs: dayTotalHrs, mins: dayTotalMins, ms: dayTotalMs } = dayTotalFromEvents(selectedEvents);
   const isSelectedToday = selectedDate.toDateString() === new Date().toDateString();
@@ -905,8 +915,16 @@ export function CalendarView({
     await commitAddAfterEstudioCheck(params, { contact, session: null });
   };
 
-  const notifStatus =
-    "Notification" in window
+  const [nativeNotifGranted, setNativeNotifGranted] = useState(false);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    void hasNotificationPermission().then(setNativeNotifGranted);
+  }, []);
+
+  const notifStatus = Capacitor.isNativePlatform()
+    ? nativeNotifGranted ? "granted" : "default"
+    : "Notification" in window
       ? Notification.permission === "granted" ? "granted"
       : Notification.permission === "denied" ? "denied"
       : "default"
@@ -935,7 +953,12 @@ export function CalendarView({
             {notifStatus === "denied" ? t("cal_notif_blocked") : t("cal_notif_allow")}
           </span>
           {notifStatus === "default" && (
-            <Button size="sm" variant="outline" className="ml-auto text-xs" onClick={() => Notification.requestPermission()}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto text-xs"
+              onClick={() => void requestNotificationPermission().then(setNativeNotifGranted)}
+            >
               {t("cal_notif_activate")}
             </Button>
           )}

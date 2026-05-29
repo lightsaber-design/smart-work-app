@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { generateId } from "@/lib/uuid";
-import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
+import { readJsonValue } from "@/lib/jsonFileStorage";
+import { useDebouncedJsonWriter } from "@/hooks/useDebouncedJsonWriter";
 
 export interface GeoLocation {
   lat: number;
@@ -61,8 +62,9 @@ function parseStoredEntry(value: unknown): TimeEntry | null {
 
 export function useTimeTracker() {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const persistEntries = useDebouncedJsonWriter("time-entries");
 
-  const activeEntry = entries.find((e) => e.endTime === null);
+  const activeEntry = useMemo(() => entries.find((e) => e.endTime === null), [entries]);
   const [isRunning, setIsRunning] = useState(() => entries.some((e) => e.endTime === null));
   const [elapsed, setElapsed] = useState(() => {
     const active = entries.find((e) => e.endTime === null);
@@ -80,10 +82,6 @@ export function useTimeTracker() {
         setElapsed(active ? Math.floor((Date.now() - active.startTime.getTime()) / 1000) : 0);
       })
       .catch((error) => console.error("Error loading entries:", error));
-  }, []);
-
-  const persistEntries = useCallback((updated: TimeEntry[]) => {
-    void writeJsonValue("time-entries", updated).catch((error) => console.error("Error saving entries:", error));
   }, []);
 
   useEffect(() => {
@@ -180,32 +178,32 @@ export function useTimeTracker() {
     });
   }, [persistEntries]);
 
-  const todayEntries = entries.filter((e) => {
+  const todayEntries = useMemo(() => entries.filter((e) => {
     const today = new Date();
     return (
       e.startTime.getDate() === today.getDate() &&
       e.startTime.getMonth() === today.getMonth() &&
       e.startTime.getFullYear() === today.getFullYear()
     );
-  });
+  }), [entries]);
 
-  const todayTotal = todayEntries.reduce((acc, e) => {
-    const end = e.endTime ? e.endTime.getTime() : Date.now();
+  const todayTotal = useMemo(() => todayEntries.reduce((acc, e) => {
+    const end = e.endTime ? e.endTime.getTime() : e.startTime.getTime() + elapsed * 1000;
     return acc + (end - e.startTime.getTime());
-  }, 0);
+  }, 0), [todayEntries, elapsed]);
 
-  const monthEntries = entries.filter((e) => {
+  const monthEntries = useMemo(() => entries.filter((e) => {
     const now = new Date();
     return (
       e.startTime.getMonth() === now.getMonth() &&
       e.startTime.getFullYear() === now.getFullYear()
     );
-  });
+  }), [entries]);
 
-  const monthTotal = monthEntries.reduce((acc, e) => {
-    const end = e.endTime ? e.endTime.getTime() : Date.now();
+  const monthTotal = useMemo(() => monthEntries.reduce((acc, e) => {
+    const end = e.endTime ? e.endTime.getTime() : e.startTime.getTime() + elapsed * 1000;
     return acc + (end - e.startTime.getTime());
-  }, 0);
+  }, 0), [monthEntries, elapsed]);
 
   return {
     entries,

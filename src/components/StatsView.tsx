@@ -43,36 +43,52 @@ export function StatsView({
   const activeCategoryNames = useMemo(() => activeCategoryConfigs.map((category) => category.name), [activeCategoryConfigs]);
   const { excluded, toggle, isIncluded } = useCategoryFilter(activeCategoryNames);
   const { carryover, saveMonthlyReport } = useMonthlyReportCarryover();
-  const now = new Date();
+  const todayKey = new Date().toDateString();
+  const now = useMemo(() => new Date(todayKey), [todayKey]);
 
   // ── MENSUAL ──────────────────────────────────────────────────────────────
-  const monthCompletedEvents = calendarEvents.filter(
-    (e) => e.completed && e.date.getMonth() === now.getMonth() && e.date.getFullYear() === now.getFullYear()
+  const monthCompletedEvents = useMemo(
+    () => calendarEvents.filter(
+      (e) => e.completed && e.date.getMonth() === now.getMonth() && e.date.getFullYear() === now.getFullYear()
+    ),
+    [calendarEvents, now]
   );
 
   const { completedMsByCategory, completedCountByCategory } =
-    monthCompletedEvents.reduce(
-      (acc, e) => {
-        if (!e.endTime) return acc;
-        const [h, m] = e.endTime.split(":").map(Number);
-        const end = new Date(e.date);
-        end.setHours(h, m, 0, 0);
-        const ms = Math.max(0, end.getTime() - e.date.getTime());
-        acc.completedMs += ms;
-        acc.completedMsByCategory[e.category] = (acc.completedMsByCategory[e.category] ?? 0) + ms;
-        acc.completedCountByCategory[e.category] = (acc.completedCountByCategory[e.category] ?? 0) + 1;
-        return acc;
-      },
-      { completedMs: 0, completedMsByCategory: {} as Record<string, number>, completedCountByCategory: {} as Record<string, number> }
+    useMemo(
+      () => monthCompletedEvents.reduce(
+        (acc, e) => {
+          if (!e.endTime) return acc;
+          const [h, m] = e.endTime.split(":").map(Number);
+          const end = new Date(e.date);
+          end.setHours(h, m, 0, 0);
+          const ms = Math.max(0, end.getTime() - e.date.getTime());
+          acc.completedMs += ms;
+          acc.completedMsByCategory[e.category] = (acc.completedMsByCategory[e.category] ?? 0) + ms;
+          acc.completedCountByCategory[e.category] = (acc.completedCountByCategory[e.category] ?? 0) + 1;
+          return acc;
+        },
+        { completedMs: 0, completedMsByCategory: {} as Record<string, number>, completedCountByCategory: {} as Record<string, number> }
+      ),
+      [monthCompletedEvents]
     );
 
   const maxCompletedMs = Math.max(...Object.values(completedMsByCategory), 1);
-  const includedCategories = activeCategoryNames.filter((c) => isIncluded(c as EventCategory));
-  const monthlyCategoryTotals = includedCategories.map((cat) => ({
-    cat,
-    ms: completedMsByCategory[cat] ?? 0,
-  }));
-  const monthlyCappedCategoryTotals = applyMonthlySupportCap(monthlyCategoryTotals, activeCategoryConfigs);
+  const includedCategories = useMemo(
+    () => activeCategoryNames.filter((c) => isIncluded(c as EventCategory)),
+    [activeCategoryNames, isIncluded]
+  );
+  const monthlyCategoryTotals = useMemo(
+    () => includedCategories.map((cat) => ({
+      cat,
+      ms: completedMsByCategory[cat] ?? 0,
+    })),
+    [completedMsByCategory, includedCategories]
+  );
+  const monthlyCappedCategoryTotals = useMemo(
+    () => applyMonthlySupportCap(monthlyCategoryTotals, activeCategoryConfigs),
+    [activeCategoryConfigs, monthlyCategoryTotals]
+  );
   const monthlyFilteredMs = monthlyCappedCategoryTotals.reduce((sum, item) => sum + item.ms, 0);
   const monthlyRawFilteredMs = monthlyCategoryTotals.reduce((sum, item) => sum + item.ms, 0);
   const monthlySupportRawMs = monthlyCategoryTotals
@@ -87,18 +103,19 @@ export function StatsView({
 
   // ── ANUAL (año sep–ago) ───────────────────────────────────────────────────
   const serviceYearStart = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-  const serviceYearFrom = new Date(serviceYearStart, 8, 1);
-  const serviceYearTo   = new Date(serviceYearStart + 1, 8, 1);
+  const serviceYearFrom = useMemo(() => new Date(serviceYearStart, 8, 1), [serviceYearStart]);
+  const serviceYearTo = useMemo(() => new Date(serviceYearStart + 1, 8, 1), [serviceYearStart]);
   const serviceYearLabel = `${formatShortMonth(new Date(serviceYearStart, 8, 1), locale)} ${serviceYearStart} - ${formatShortMonth(new Date(serviceYearStart + 1, 7, 1), locale)} ${serviceYearStart + 1}`;
 
-  const serviceYearMonths = Array.from({ length: 12 }, (_, i) => {
+  const serviceYearMonths = useMemo(() => Array.from({ length: 12 }, (_, i) => {
     const calMonth = (8 + i) % 12;
     const calYear  = calMonth >= 8 ? serviceYearStart : serviceYearStart + 1;
     return { month: calMonth, year: calYear, isCurrentMonth: calMonth === now.getMonth() && calYear === now.getFullYear() };
-  });
+  }), [now, serviceYearStart]);
 
-  const yearCompletedEvents = calendarEvents.filter(
-    (e) => e.completed && e.date >= serviceYearFrom && e.date < serviceYearTo
+  const yearCompletedEvents = useMemo(
+    () => calendarEvents.filter((e) => e.completed && e.date >= serviceYearFrom && e.date < serviceYearTo),
+    [calendarEvents, serviceYearFrom, serviceYearTo]
   );
 
   const yearlyCategoryTotals = includedCategories.map((cat) => ({ cat, ms: 0 }));

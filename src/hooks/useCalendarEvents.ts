@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { generateId } from "@/lib/uuid";
-import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
+import { readJsonValue } from "@/lib/jsonFileStorage";
+import { useDebouncedJsonWriter } from "@/hooks/useDebouncedJsonWriter";
 import { clampReminderMinutes } from "@/lib/eventReminders";
 import { findScheduledEventAtTimerStart, findScheduledEventForTimerStart } from "@/lib/timerOverrun";
-import { requestNotificationPermission } from "@/lib/notifications";
 
 export type EventCategory = string;
 export type RecurrenceType = "none" | "weekly" | "monthly";
@@ -134,6 +134,7 @@ function removeCompletedScheduleDuplicates(events: CalendarEvent[], completedEve
 export function useCalendarEvents() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const eventsRef = useRef<CalendarEvent[]>([]);
+  const writeCalendarEvents = useDebouncedJsonWriter("calendar-events");
 
   useEffect(() => {
     readJsonValue<unknown[]>("calendar-events", [])
@@ -151,12 +152,8 @@ export function useCalendarEvents() {
       ...event,
       date: event.date.toISOString(),
     }));
-    void writeJsonValue("calendar-events", persisted).catch((error) => console.error("Error saving events:", error));
-  }, []);
-
-  useEffect(() => {
-    requestNotificationPermission();
-  }, []);
+    writeCalendarEvents(persisted);
+  }, [writeCalendarEvents]);
 
   const markNotified = useCallback((id: string) => {
     setEvents((prev) => {

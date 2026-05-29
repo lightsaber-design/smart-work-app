@@ -1,4 +1,4 @@
-type StorageKey =
+export type StorageKey =
   | "setup"
   | "time-entries"
   | "calendar-events"

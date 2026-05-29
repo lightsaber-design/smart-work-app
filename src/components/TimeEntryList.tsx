@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Trash2 } from "lucide-react";
 import { TimeEntry, formatDuration } from "@/hooks/useTimeTracker";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
@@ -8,6 +9,8 @@ interface TimeEntryListProps {
   onDelete: (id: string) => void;
   onUpdateDescription: (id: string, desc: string) => void;
 }
+
+const listItemRenderHint: CSSProperties = { contentVisibility: "auto", containIntrinsicSize: "80px" };
 
 export function TimeEntryList({ entries, onDelete, onUpdateDescription }: TimeEntryListProps) {
   const t = useT();
@@ -35,6 +38,7 @@ export function TimeEntryList({ entries, onDelete, onUpdateDescription }: TimeEn
         return (
           <div
             key={entry.id}
+            style={listItemRenderHint}
             className="flex items-center gap-3 rounded-xl bg-card p-4 shadow-sm border border-border"
           >
             <div
