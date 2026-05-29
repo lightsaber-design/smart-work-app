@@ -238,6 +238,40 @@ export async function writeJsonValue(key: StorageKey, value: unknown) {
   await writeFile();
 }
 
+export function exportAllData(): void {
+  const blob = new Blob(
+    [JSON.stringify({ ...dataCache, schemaVersion: 1, exportedAt: new Date().toISOString() }, null, 2)],
+    { type: 'application/json' }
+  );
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ministrylog-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const IMPORTABLE_KEYS: StorageKey[] = [
+  'setup', 'time-entries', 'calendar-events', 'estudios',
+  'favorite-places', 'specialCampaign', 'monthly-report-carryover',
+  'darkMode', 'excludedCategories',
+];
+
+export async function importAllData(file: File): Promise<void> {
+  const text = await file.text();
+  const parsed = parseData(text);
+  for (const key of IMPORTABLE_KEYS) {
+    if (parsed[key] !== undefined) {
+      dataCache = { ...dataCache, [key]: parsed[key] };
+      if (!handleCache) {
+        localStorage.setItem(key, key === 'darkMode' ? String(parsed[key]) : JSON.stringify(parsed[key]));
+      }
+    }
+  }
+  if (handleCache) await writeFile();
+  notify();
+}
+
 export async function removeJsonValue(key: StorageKey) {
   await initializeJsonStorage();
   const next = { ...dataCache };

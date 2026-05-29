@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { MinistryMark, MinistryWordmark } from "@/components/MinistryMark";
-import { Trash2, MapPin, User, Moon, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil } from "lucide-react";
+import { Trash2, MapPin, User, Moon, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil, Upload, Download } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -471,6 +471,35 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
         <p className="text-sm text-muted-foreground mb-4">
           {t('set_records', { count: entryCount })}
         </p>
+
+        {/* Export / Import */}
+        <div className="flex flex-col gap-2 mb-4">
+          <button
+            onClick={() => storage.exportData()}
+            className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+          >
+            <Download className="w-4 h-4" />
+            {t('set_export_data')}
+          </button>
+          <label className="flex items-center gap-2 text-sm font-medium text-primary hover:underline cursor-pointer">
+            <Upload className="w-4 h-4" />
+            {t('set_import_data')}
+            <input
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                if (confirm(t('set_import_confirm'))) {
+                  await storage.importData(file);
+                }
+                e.target.value = '';
+              }}
+            />
+          </label>
+        </div>
+
         <button
           onClick={() => { if (confirm(`${t('set_confirm_delete')}\n${t("set_records", { count: entryCount })}`)) onClearAll(); }}
           className="flex items-center gap-2 text-sm font-medium text-destructive hover:underline"

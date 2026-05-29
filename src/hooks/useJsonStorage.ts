@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useSyncExternalStore, useState } from "react";
 import {
   createJsonDataFile,
+  exportAllData,
   getJsonDataFileName,
   hasJsonDataFile,
+  importAllData,
   initializeJsonStorage,
   isJsonFileStorageSupported,
   openJsonDataFile,
@@ -38,6 +40,15 @@ export function useJsonStorageStatus() {
     window.location.reload();
   }, []);
 
+  const exportData = useCallback(() => {
+    exportAllData();
+  }, []);
+
+  const importData = useCallback(async (file: File) => {
+    await importAllData(file);
+    window.location.reload();
+  }, []);
+
   return {
     ready,
     error,
@@ -46,5 +57,7 @@ export function useJsonStorageStatus() {
     fileName: fileName || null,
     createFile,
     openFile,
+    exportData,
+    importData,
   };
 }
