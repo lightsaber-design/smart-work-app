@@ -172,8 +172,13 @@ export function useTimeTracker() {
 
   const deleteEntry = useCallback((id: string) => {
     setEntries((prev) => {
+      const deletedEntry = prev.find((e) => e.id === id);
       const updated = prev.filter((e) => e.id !== id);
       persistEntries(updated);
+      if (deletedEntry?.endTime === null) {
+        setIsRunning(false);
+        setElapsed(0);
+      }
       return updated;
     });
   }, [persistEntries]);

@@ -568,6 +568,14 @@ export function CalendarView({
   const [studySessionFiles, setStudySessionFiles] = useState<SessionFile[]>([]);
   const [studySessionPendingFiles, setStudySessionPendingFiles] = useState<{ file: File; id: string }[]>([]);
   const [savingStudySession, setSavingStudySession] = useState(false);
+  const [deleteEventPromptId, setDeleteEventPromptId] = useState<string | null>(null);
+
+  const confirmDeleteEvent = () => {
+    if (!deleteEventPromptId) return;
+    onDeleteEvent(deleteEventPromptId);
+    if (editEvent?.id === deleteEventPromptId) setEditEvent(null);
+    setDeleteEventPromptId(null);
+  };
 
   useEffect(() => {
     setTime((value) => clampTimeToActivityRange(value, activityStartHour, activityEndHour));
@@ -1175,7 +1183,7 @@ export function CalendarView({
                               : <Circle className="w-3.5 h-3.5 text-foreground/50" />}
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); onDeleteEvent(event.id); }}
+                            onClick={(e) => { e.stopPropagation(); setDeleteEventPromptId(event.id); }}
                             className="p-0.5 text-foreground/40 ml-auto"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -1703,8 +1711,7 @@ export function CalendarView({
                   variant="ghost"
                   className="w-full text-destructive"
                   onClick={() => {
-                    onDeleteEvent(editEvent.id);
-                    setEditEvent(null);
+                    setDeleteEventPromptId(editEvent.id);
                   }}
                 >
                   {t("home_delete_activity")}
@@ -1714,6 +1721,24 @@ export function CalendarView({
           )}
         </div>
       </div>
+
+      <AlertDialog open={!!deleteEventPromptId} onOpenChange={(open) => { if (!open) setDeleteEventPromptId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("cal_delete_confirm_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("cal_delete_confirm_body")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2">
+            <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDeleteEvent}
+            >
+              {t("home_delete_activity")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialogo de conflicto de sesion de estudio */}
       <AlertDialog open={!!pendingEstudioConflict} onOpenChange={(open) => { if (!open) setPendingEstudioConflict(null); }}>

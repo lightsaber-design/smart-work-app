@@ -24,6 +24,16 @@ import { timerLongRunFireAt, getGoalStatus, getForgottenContacts, currentMonthKe
 import { clampTimeValueToHourRange } from "@/lib/activityHours";
 import { formatPlaceName } from "@/lib/placeNames";
 import { formatDateLong, formatTime } from "@/lib/dateFormat";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const StatsView = lazy(() => import("@/components/StatsView").then((module) => ({ default: module.StatsView })));
 const CalendarView = lazy(() => import("@/components/CalendarView").then((module) => ({ default: module.CalendarView })));
@@ -74,6 +84,7 @@ type CurrentWeather = {
 
 const WEATHER_CACHE_KEY = "_ml_weather";
 const WEATHER_TTL = 30 * 60 * 1000;
+const SHORT_ACTIVITY_MS = 5 * 60_000;
 
 function weatherCodeToLabel(code: number, t: TranslateFn): string {
   if (code === 0) return t("weather_clear");
@@ -264,6 +275,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const [summaryViewportHeight, setSummaryViewportHeight] = useState(
     typeof window === "undefined" ? 720 : window.innerHeight
   );
+  const [shortStopPrompt, setShortStopPrompt] = useState<{ customTime?: Date } | null>(null);
+  const [deleteEventPromptId, setDeleteEventPromptId] = useState<string | null>(null);
+  const [showAllEvents, setShowAllEvents] = useState(false);
   const summarySheetRef = useRef<HTMLDivElement | null>(null);
   const dragStartY = useRef<number | null>(null);
   const dragStartOffset = useRef(0);
@@ -296,8 +310,46 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     );
 
   const stopActiveTimer = () => {
-    tracker.clockOut((eventId, endTime) => calendar.updateEvent(eventId, { endTime, completed: true }));
+    completeClockOut();
     setTimerOverrunDismissedId(activeScheduledEvent?.id ?? null);
+  };
+
+  const completeClockOut = (customTime?: Date) => {
+    tracker.clockOut((eventId, endTime) => calendar.updateEvent(eventId, { endTime, completed: true }), customTime);
+  };
+
+  const requestClockOut = (customTime?: Date) => {
+    if (!activeEntry) {
+      completeClockOut(customTime);
+      return;
+    }
+    const end = customTime ?? new Date();
+    if (end.getTime() - activeEntry.startTime.getTime() < SHORT_ACTIVITY_MS) {
+      setShortStopPrompt({ customTime });
+      return;
+    }
+    completeClockOut(customTime);
+  };
+
+  const keepShortActivity = () => {
+    completeClockOut(shortStopPrompt?.customTime);
+    setShortStopPrompt(null);
+  };
+
+  const discardShortActivity = () => {
+    if (!activeEntry) {
+      setShortStopPrompt(null);
+      return;
+    }
+    if (activeEntry.linkedEventId) calendar.deleteEvent(activeEntry.linkedEventId);
+    tracker.deleteEntry(activeEntry.id);
+    setShortStopPrompt(null);
+  };
+
+  const confirmDeleteEvent = () => {
+    if (!deleteEventPromptId) return;
+    calendar.deleteEvent(deleteEventPromptId);
+    setDeleteEventPromptId(null);
   };
 
   const postponeTimerOverrunPrompt = () => {
@@ -590,6 +642,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const monthTotalHrs = Math.floor(calMonthMs / 3_600_000);
   const monthTotalMins = Math.floor((calMonthMs % 3_600_000) / 60_000);
 
+  // ── Keep-alive del mapa ───────────────────────────────────────────────────
+  const mapEverVisited = useRef(false);
+
   // ── Regla 1: Timer activo >3h ─────────────────────────────────────────────
   const timer3hRef = useRef<string | null>(null);
   useEffect(() => {
@@ -786,15 +841,23 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                     <span className="text-base font-bold text-muted-foreground mb-0.5">m</span>
                   </div>
                   {setup.precursorHours && (
-                    <div className="mt-3 space-y-1">
-                      <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                    <div className="mt-4 rounded-2xl border border-primary/20 bg-primary/10 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[11px] font-black uppercase tracking-widest text-primary">
+                          {t("stats_pioneer_goal")}
+                        </p>
+                        <p className="text-3xl font-black leading-none text-primary tabular-nums">
+                          {monthlyGoalPct}%
+                        </p>
+                      </div>
+                      <div className="mt-3 h-4 rounded-full bg-background/70 overflow-hidden ring-1 ring-primary/15">
                         <div
                           className="h-full rounded-full transition-all duration-500"
                           style={{ width: `${monthlyGoalPct}%`, background: "linear-gradient(90deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 70%, white) 100%)" }}
                         />
                       </div>
-                      <p className="text-[10px] text-muted-foreground">
-                        {t("stats_pioneer_goal")}: {setup.precursorHours}h · {monthlyGoalPct}%
+                      <p className="mt-2 text-xs font-semibold text-foreground">
+                        {monthTotalHrs}h {monthTotalMins}m / {setup.precursorHours}h
                       </p>
                     </div>
                   )}
@@ -973,12 +1036,23 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                     {showingUpcomingEvents && (
                       <p className="text-sm font-semibold text-foreground">{t("home_nothing_today")}</p>
                     )}
-                    {groupedSummaryEvents.map((group) => (
-                      <div key={group.key} className="space-y-2">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                          {group.label}
-                        </p>
-                        {group.events.map((event) => {
+                    {(() => {
+                      const MAX_VISIBLE = 8;
+                      const allEvents = groupedSummaryEvents.flatMap((g) => g.events);
+                      const visibleEvents = showAllEvents ? allEvents : allEvents.slice(0, MAX_VISIBLE);
+                      const hiddenCount = allEvents.length - MAX_VISIBLE;
+                      const grouped = groupedSummaryEvents.map((group) => ({
+                        ...group,
+                        events: group.events.filter((e) => visibleEvents.includes(e)),
+                      })).filter((g) => g.events.length > 0);
+                      return (
+                        <>
+                          {grouped.map((group) => (
+                            <div key={group.key} className="space-y-2">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                {group.label}
+                              </p>
+                              {group.events.map((event) => {
                           const style = getCategoryStyle(setup.categorySettings, event.category);
                           const meta = getCategoryMeta(setup.categorySettings, event.category);
                           const timeStr = `${String(event.date.getHours()).padStart(2, "0")}:${String(event.date.getMinutes()).padStart(2, "0")}`;
@@ -1017,13 +1091,13 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                                   tabIndex={0}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    calendar.deleteEvent(event.id);
+                                    setDeleteEventPromptId(event.id);
                                   }}
                                   onKeyDown={(e) => {
                                     if (e.key !== "Enter" && e.key !== " ") return;
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    calendar.deleteEvent(event.id);
+                                    setDeleteEventPromptId(event.id);
                                   }}
                                   className="w-7 h-7 rounded-full bg-background/70 border border-border flex items-center justify-center"
                                   aria-label={t("home_delete_activity")}
@@ -1033,9 +1107,20 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                               </span>
                             </button>
                           );
-                        })}
-                      </div>
-                    ))}
+                              })}
+                            </div>
+                          ))}
+                          {!showAllEvents && hiddenCount > 0 && (
+                            <button
+                              onClick={() => setShowAllEvents(true)}
+                              className="w-full py-2 text-xs font-semibold text-primary rounded-xl bg-primary/8 hover:bg-primary/12 transition-colors"
+                            >
+                              + {hiddenCount} {hiddenCount === 1 ? 'actividad más' : 'actividades más'}
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -1064,12 +1149,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                       customTime
                     )
                   }
-                  onClockOut={(customTime) =>
-                    tracker.clockOut(
-                      (eventId, endTime) => calendar.updateEvent(eventId, { endTime }),
-                      customTime
-                    )
-                  }
+                  onClockOut={requestClockOut}
                   onUpdateCategory={(cat) => {
                     if (!activeEntry) return;
                     tracker.updateCategory(activeEntry.id, cat);
@@ -1225,34 +1305,37 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
           </>
         )}
 
-        {/* ── MAPA (sub-página desde Perfil) ── */}
-        {activeTab === "map" && (
-          <>
-            <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => navigate("profile")}
-                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
-                  aria-label={t("common_back")}
-                >
-                  <ChevronLeft className="w-4 h-4 text-muted-foreground" />
-                </button>
-                <h1 className="text-xl font-bold text-foreground">{t("nav_map")}</h1>
-                <MinistryMark size={32} className="ml-auto" />
+        {/* ── MAPA (keep-alive: monta al primer acceso, luego oculto en vez de desmontar) ── */}
+        {(() => { if (activeTab === "map") mapEverVisited.current = true; return null; })()}
+        <div className={activeTab === "map" && mapEverVisited.current ? "" : "hidden"}>
+          {mapEverVisited.current && (
+            <>
+              <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => navigate("profile")}
+                    className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+                    aria-label={t("common_back")}
+                  >
+                    <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                  <h1 className="text-xl font-bold text-foreground">{t("nav_map")}</h1>
+                  <MinistryMark size={32} className="ml-auto" />
+                </div>
+              </header>
+              <div className="py-4 pb-24">
+                <Suspense fallback={<TabLoading />}>
+                  <LocationMap
+                    favoritePlaces={favorites.places}
+                    onAddFavorite={favorites.addPlace}
+                    onDeleteFavorite={favorites.deletePlace}
+                    defaultCenter={defaultCenter}
+                  />
+                </Suspense>
               </div>
-            </header>
-            <div className="py-4 pb-24">
-              <Suspense fallback={<TabLoading />}>
-                <LocationMap
-                  favoritePlaces={favorites.places}
-                  onAddFavorite={favorites.addPlace}
-                  onDeleteFavorite={favorites.deletePlace}
-                  defaultCenter={defaultCenter}
-                />
-              </Suspense>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </main>
 
       <MissedStudyBanner
@@ -1260,7 +1343,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         onComplete={estudios.completeSession}
         onCancel={estudios.deleteSession}
         onReschedule={(contactId, sessionId, data) => {
-          // Remove the matching CalendarEvent on the old date before rescheduling
+          // Elimina el CalendarEvent anterior antes de reprogramar.
           const contact = estudios.contacts.find((c) => c.id === contactId);
           const session = contact?.sessions.find((s) => s.id === sessionId);
           if (session) {
@@ -1321,6 +1404,42 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
           </div>
         );
       })()}
+
+      <AlertDialog open={!!shortStopPrompt} onOpenChange={(open) => { if (!open) setShortStopPrompt(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("timer_short_activity_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("timer_short_activity_body")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2">
+            <AlertDialogCancel onClick={keepShortActivity}>{t("timer_short_activity_keep")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={discardShortActivity}
+            >
+              {t("timer_short_activity_discard")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deleteEventPromptId} onOpenChange={(open) => { if (!open) setDeleteEventPromptId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("cal_delete_confirm_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("cal_delete_confirm_body")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2">
+            <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDeleteEvent}
+            >
+              {t("home_delete_activity")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <BottomNav
         activeTab={activeTab}

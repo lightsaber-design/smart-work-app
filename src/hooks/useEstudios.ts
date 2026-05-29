@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { generateId } from "@/lib/uuid";
 import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
+import { useDebouncedJsonWriter } from "@/hooks/useDebouncedJsonWriter";
 
 export interface SessionFile {
   id: string;
@@ -206,10 +207,11 @@ function dedupePendingSessions(sessions: EstudioSession[]): EstudioSession[] {
 
 export function useEstudios() {
   const [contacts, setContacts] = useState<EstudioContact[]>([]);
+  const writeEstudios = useDebouncedJsonWriter("estudios", 500);
 
   const persist = useCallback((updated: EstudioContact[]) => {
-    void writeJsonValue("estudios", updated).catch((error) => console.error("Error saving studies:", error));
-  }, []);
+    writeEstudios(updated);
+  }, [writeEstudios]);
 
   useEffect(() => {
     readJsonValue<unknown[]>("estudios", [])

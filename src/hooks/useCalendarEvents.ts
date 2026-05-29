@@ -140,12 +140,19 @@ export function useCalendarEvents() {
     readJsonValue<unknown[]>("calendar-events", [])
       .then((value) => {
         if (!Array.isArray(value)) throw new Error("bad format");
-        const parsedEvents = value.map(parseStoredEvent).filter((event): event is CalendarEvent => event !== null);
-        eventsRef.current = parsedEvents;
-        setEvents(parsedEvents);
+        const parsed = value.map(parseStoredEvent).filter((event): event is CalendarEvent => event !== null);
+        // Limpia eventos completados con más de 6 meses de antigüedad
+        const cutoff = Date.now() - 6 * 30 * 24 * 60 * 60 * 1000;
+        const cleaned = parsed.filter((e) => !(e.completed && e.date.getTime() < cutoff));
+        if (cleaned.length < parsed.length) {
+          // Persiste el cleanup silenciosamente
+          writeCalendarEvents(cleaned.map((e) => ({ ...e, date: e.date.toISOString() })));
+        }
+        eventsRef.current = cleaned;
+        setEvents(cleaned);
       })
       .catch((error) => console.error("Error loading events:", error));
-  }, []);
+  }, [writeCalendarEvents]);
 
   const persistEvents = useCallback((updated: CalendarEvent[]) => {
     const persisted: PersistedCalendarEvent[] = updated.map((event) => ({

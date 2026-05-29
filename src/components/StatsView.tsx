@@ -118,42 +118,35 @@ export function StatsView({
     [calendarEvents, serviceYearFrom, serviceYearTo]
   );
 
-  const yearlyCategoryTotals = includedCategories.map((cat) => ({ cat, ms: 0 }));
-  const monthBars = serviceYearMonths.map(({ month, year, isCurrentMonth }) => {
-    const monthEvents = yearCompletedEvents.filter(
-      (event) => event.date.getMonth() === month && event.date.getFullYear() === year
-    );
-    const monthMsByCategory = monthEvents.reduce<Record<string, number>>((acc, event) => {
-      if (!event.endTime) return acc;
-      const [h, m] = event.endTime.split(":").map(Number);
-      const end = new Date(event.date);
-      end.setHours(h, m, 0, 0);
-      acc[event.category] = (acc[event.category] ?? 0) + Math.max(0, end.getTime() - event.date.getTime());
-      return acc;
-    }, {});
-    const monthTotals = includedCategories.map((cat) => ({
-      cat,
-      ms: monthMsByCategory[cat] ?? 0,
-    }));
-    const cappedMonthTotals = applyMonthlySupportCap(monthTotals, activeCategoryConfigs);
-    cappedMonthTotals.forEach((item) => {
-      const categoryTotal = yearlyCategoryTotals.find((total) => total.cat === item.cat);
-      if (categoryTotal) categoryTotal.ms += item.ms;
+  const { monthBars, yearlyCategoryTotals, maxMonthMs, yearMsByCategory, maxYearCatMs, yearFilteredMs } = useMemo(() => {
+    const catTotals = includedCategories.map((cat) => ({ cat, ms: 0 }));
+    const bars = serviceYearMonths.map(({ month, year, isCurrentMonth }) => {
+      const monthMsByCategory = yearCompletedEvents.reduce<Record<string, number>>((acc, event) => {
+        if (event.date.getMonth() !== month || event.date.getFullYear() !== year || !event.endTime) return acc;
+        const [h, m] = event.endTime.split(":").map(Number);
+        const end = new Date(event.date);
+        end.setHours(h, m, 0, 0);
+        acc[event.category] = (acc[event.category] ?? 0) + Math.max(0, end.getTime() - event.date.getTime());
+        return acc;
+      }, {});
+      const monthTotals = includedCategories.map((cat) => ({ cat, ms: monthMsByCategory[cat] ?? 0 }));
+      const capped = applyMonthlySupportCap(monthTotals, activeCategoryConfigs);
+      capped.forEach((item) => {
+        const t = catTotals.find((total) => total.cat === item.cat);
+        if (t) t.ms += item.ms;
+      });
+      return { month, year, isCurrentMonth, ms: capped.reduce((s, i) => s + i.ms, 0) };
     });
+    const catMap = catTotals.reduce<Record<string, number>>((acc, item) => { acc[item.cat] = item.ms; return acc; }, {});
     return {
-      month,
-      year,
-      isCurrentMonth,
-      ms: cappedMonthTotals.reduce((sum, item) => sum + item.ms, 0),
+      monthBars: bars,
+      yearlyCategoryTotals: catTotals,
+      maxMonthMs: Math.max(...bars.map((b) => b.ms), 1),
+      yearMsByCategory: catMap,
+      maxYearCatMs: Math.max(...activeCategoryNames.map((c) => catMap[c] ?? 0), 1),
+      yearFilteredMs: catTotals.reduce((s, i) => s + i.ms, 0),
     };
-  });
-  const maxMonthMs = Math.max(...monthBars.map((b) => b.ms), 1);
-  const yearMsByCategory = yearlyCategoryTotals.reduce<Record<string, number>>((acc, item) => {
-    acc[item.cat] = item.ms;
-    return acc;
-  }, {});
-  const maxYearCatMs = Math.max(...activeCategoryNames.map((c) => yearMsByCategory[c] ?? 0), 1);
-  const yearFilteredMs = yearlyCategoryTotals.reduce((sum, item) => sum + item.ms, 0);
+  }, [yearCompletedEvents, serviceYearMonths, includedCategories, activeCategoryConfigs, activeCategoryNames]);
 
   return (
     <div className="px-5 pt-4 space-y-4 pb-24">

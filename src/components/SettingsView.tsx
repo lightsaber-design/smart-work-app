@@ -280,8 +280,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                       onCheckedChange={(active) => updateCategory(category.name, { active })}
                     />
                   </div>
-                  {false ? null : (
-                    <>
+                  <>
                       <div className="flex items-center justify-between gap-3">
                         <Label className="text-sm text-muted-foreground">{t("settings_category_color")}</Label>
                         <div className="flex gap-1.5 flex-wrap justify-end">
@@ -333,8 +332,7 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
                           </Button>
                         </div>
                       )}
-                    </>
-                  )}
+                  </>
                 </div>
               ))}
             </div>
