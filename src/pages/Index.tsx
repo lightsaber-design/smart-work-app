@@ -20,6 +20,7 @@ import { removeJsonValue } from "@/lib/jsonFileStorage";
 import { shouldNotifyEvent } from "@/lib/eventReminders";
 import { findActiveScheduledEvent, getEventEndDate, shouldShowTimerOverrunPrompt } from "@/lib/timerOverrun";
 import { showBrowserNotification, scheduleEventNotification, cancelEventNotification } from "@/lib/notifications";
+import { timerLongRunFireAt, getGoalStatus, getForgottenContacts, currentMonthKey } from "@/lib/notificationRules";
 import { clampTimeValueToHourRange } from "@/lib/activityHours";
 import { formatPlaceName } from "@/lib/placeNames";
 import { formatDateLong, formatTime } from "@/lib/dateFormat";
@@ -527,6 +528,75 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   }, [calendarEvents, now]);
   const monthTotalHrs = Math.floor(calMonthMs / 3_600_000);
   const monthTotalMins = Math.floor((calMonthMs % 3_600_000) / 60_000);
+
+  // ── Regla 1: Timer activo >3h ─────────────────────────────────────────────
+  const timer3hRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeEntry) {
+      if (timer3hRef.current) {
+        void cancelEventNotification("timer-3h");
+        timer3hRef.current = null;
+      }
+      return;
+    }
+    if (timer3hRef.current === activeEntry.id) return;
+    timer3hRef.current = activeEntry.id;
+    // Nativo: programa el aviso para exactamente startTime + 3h
+    void scheduleEventNotification(
+      "timer-3h",
+      t("notif_timer_3h_title"),
+      t("notif_timer_3h_body"),
+      timerLongRunFireAt(activeEntry.startTime)
+    );
+    // Web: intervalo de comprobación cada minuto
+    const iv = setInterval(() => {
+      if (Date.now() - activeEntry.startTime.getTime() >= 3 * 3_600_000) {
+        showBrowserNotification(t("notif_timer_3h_title"), { body: t("notif_timer_3h_body") });
+        clearInterval(iv);
+      }
+    }, 60_000);
+    return () => clearInterval(iv);
+  }, [activeEntry, t]);
+
+  // ── Regla 3: Meta mensual ─────────────────────────────────────────────────
+  useEffect(() => {
+    const goalHours = setup.monthlyGoalHours ?? 0;
+    if (!goalHours) return;
+    const status = getGoalStatus(goalHours, calMonthMs);
+    const monthKey = currentMonthKey();
+
+    if (status.kind === "reached") {
+      const key = `_ml_goal_reached_${monthKey}`;
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, "1");
+      showBrowserNotification(t("notif_goal_reached_title"), {
+        body: t("notif_goal_reached_body"),
+      });
+    } else if (status.kind === "reminder") {
+      const key = `_ml_goal_reminder_${monthKey}`;
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, "1");
+      showBrowserNotification(t("notif_goal_reminder_title"), {
+        body: t("notif_goal_reminder_body", {
+          hours: String(Math.ceil(status.remainingHours)),
+          days: String(status.daysLeft),
+        }),
+      });
+    }
+  }, [calMonthMs, setup.monthlyGoalHours, t]);
+
+  // ── Regla 4: Contacto sin cita >14 días ──────────────────────────────────
+  useEffect(() => {
+    const key = `_ml_study_reminder_${new Date().toDateString()}`;
+    if (localStorage.getItem(key)) return;
+    const forgotten = getForgottenContacts(estudios.contacts);
+    if (!forgotten.length) return;
+    localStorage.setItem(key, "1");
+    const body = forgotten.length === 1
+      ? t("notif_study_reminder_body", { name: forgotten[0].name })
+      : t("notif_study_reminder_body_multi", { count: String(forgotten.length) });
+    showBrowserNotification(t("notif_study_reminder_title"), { body });
+  }, [estudios.contacts, t]);
 
   return (
     <div className="min-h-screen bg-background max-w-md mx-auto relative">
