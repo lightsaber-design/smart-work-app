@@ -40,5 +40,7 @@ export function getTravelReminderMinutes(
 export function shouldNotifyEvent(nowMs: number, event: CalendarEvent): boolean {
   if (event.notified || event.completed) return false;
   const reminderAt = event.date.getTime() - clampReminderMinutes(event.reminderMinutesBefore) * 60_000;
-  return nowMs >= reminderAt && nowMs < event.date.getTime() + 60_000;
+  // Ventana de 5 min tras el inicio del evento (cubre retrasos del check de 30 s
+  // y casos donde el timer estaba activo y se retrasó el aviso)
+  return nowMs >= reminderAt && nowMs < event.date.getTime() + 5 * 60_000;
 }

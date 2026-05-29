@@ -19,7 +19,7 @@ import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 import { removeJsonValue } from "@/lib/jsonFileStorage";
 import { shouldNotifyEvent } from "@/lib/eventReminders";
 import { findActiveScheduledEvent, getEventEndDate, shouldShowTimerOverrunPrompt } from "@/lib/timerOverrun";
-import { showBrowserNotification } from "@/lib/notifications";
+import { showBrowserNotification, scheduleEventNotification, cancelEventNotification } from "@/lib/notifications";
 import { clampTimeValueToHourRange } from "@/lib/activityHours";
 import { formatPlaceName } from "@/lib/placeNames";
 import { formatDateLong, formatTime } from "@/lib/dateFormat";
@@ -300,18 +300,48 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     setTimerOverrunNotifiedId(null);
   };
 
+  // ── Pre-programar notificaciones nativas al cambiar los eventos ──────────────
+  const scheduledEventIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const now = Date.now();
+    calendarEvents.forEach((event) => {
+      if (event.completed || event.notified) return;
+      const reminder = event.reminderMinutesBefore ?? 0;
+      if (reminder <= 0) return;
+      const fireAt = new Date(event.date.getTime() - reminder * 60_000);
+      if (fireAt.getTime() <= now) return;
+      if (scheduledEventIds.current.has(event.id)) return;
+      scheduledEventIds.current.add(event.id);
+      void scheduleEventNotification(
+        event.id,
+        t("notif_activity_upcoming"),
+        t("notif_activity_upcoming_body", { category: getCategoryLabel(event.category, t) }),
+        fireAt
+      );
+    });
+    // Cancelar las que ya no existen o están completadas
+    scheduledEventIds.current.forEach((id) => {
+      const ev = calendarEvents.find((e) => e.id === id);
+      if (!ev || ev.completed) {
+        void cancelEventNotification(id);
+        scheduledEventIds.current.delete(id);
+      }
+    });
+  }, [calendarEvents, t]);
+
+  // ── Fallback: check periódico cuando la app está abierta (web / sin reminder) ─
   useEffect(() => {
     const check = () => {
       const now = Date.now();
       calendarEvents.forEach((event) => {
-        if (shouldNotifyEvent(now, event)) {
-          if (!tracker.isRunning) {
-            showBrowserNotification(t("notif_activity_upcoming"), {
-              body: t("notif_activity_upcoming_body", { category: getCategoryLabel(event.category, t) }),
-            });
-          }
-          markNotified(event.id);
-        }
+        if (!shouldNotifyEvent(now, event)) return;
+        // Bug fix: solo marcar notified si realmente se envía el aviso.
+        // Si el timer está activo, se reintenta en el siguiente ciclo (ventana 5 min).
+        if (tracker.isRunning) return;
+        showBrowserNotification(t("notif_activity_upcoming"), {
+          body: t("notif_activity_upcoming_body", { category: getCategoryLabel(event.category, t) }),
+        });
+        markNotified(event.id);
       });
     };
     check();
