@@ -1,5 +1,5 @@
-import { createContext, useContext } from 'react';
-import { Lang, TranslationKey, translate } from './i18n';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { Lang, TranslationKey, loadLanguage, subscribeLanguageLoad, translate } from './i18n';
 
 type TFn = (key: TranslationKey | (string & {}), vars?: Record<string, string | number>) => string;
 
@@ -19,7 +19,23 @@ export function localeForLang(lang: Lang): string {
 }
 
 export function LanguageProvider({ lang, children }: { lang: Lang; children: React.ReactNode }) {
-  const t: TFn = (key, vars) => translate(lang, key, vars);
+  // Trigger re-render when a new language chunk finishes loading
+  const [, setLoadCount] = useState(0);
+
+  useEffect(() => {
+    if (lang === 'es') return;
+    // Subscribe before loading so we catch the callback
+    const unsub = subscribeLanguageLoad(() => setLoadCount((n) => n + 1));
+    void loadLanguage(lang);
+    return unsub;
+  }, [lang]);
+
+  const t: TFn = useCallback(
+    (key, vars) => translate(lang, key, vars),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lang, setLoadCount] // re-memoize after language chunk loads
+  );
+
   return (
     <CurrentLanguageContext.Provider value={lang}>
       <LanguageContext.Provider value={t}>{children}</LanguageContext.Provider>

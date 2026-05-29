@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { translations } from "./i18n";
+import { Lang, translations, type TranslationMap } from "./i18n";
+
+async function loadCatalogs(): Promise<Record<Lang, TranslationMap>> {
+  return {
+    es: translations.es,
+    en: (await import("./i18n/en")).default,
+    pt: (await import("./i18n/pt")).default,
+    fr: (await import("./i18n/fr")).default,
+    it: (await import("./i18n/it")).default,
+    de: (await import("./i18n/de")).default,
+  };
+}
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir)
@@ -17,11 +28,12 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe("i18n catalog", () => {
-  it("keeps the same keys in every language", () => {
-    const baseKeys = Object.keys(translations.es).sort();
+  it("keeps the same keys in every language", async () => {
+    const catalogs = await loadCatalogs();
+    const baseKeys = Object.keys(catalogs.es).sort();
 
-    (Object.keys(translations) as Array<keyof typeof translations>).forEach((lang) => {
-      expect(Object.keys(translations[lang]).sort()).toEqual(baseKeys);
+    (Object.keys(catalogs) as Lang[]).forEach((lang) => {
+      expect(Object.keys(catalogs[lang]).sort()).toEqual(baseKeys);
     });
   });
 

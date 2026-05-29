@@ -1,0 +1,55 @@
+import { describe, expect, it } from "vitest";
+import { EstudioContact } from "@/hooks/useEstudios";
+import { currentMonthKey, getForgottenContacts, getGoalStatus, timerLongRunFireAt } from "./notificationRules";
+
+function contact(overrides: Partial<EstudioContact>): EstudioContact {
+  return {
+    id: "contact-1",
+    name: "Student",
+    sessions: [],
+    active: true,
+    createdAt: new Date(2026, 4, 1).toISOString(),
+    ...overrides,
+  };
+}
+
+describe("notification rules", () => {
+  it("fires long-running timer notifications exactly three hours after start", () => {
+    const start = new Date(2026, 4, 10, 9, 15);
+
+    expect(timerLongRunFireAt(start)).toEqual(new Date(2026, 4, 10, 12, 15));
+  });
+
+  it("reports reached monthly goals before reminders", () => {
+    expect(getGoalStatus(30, 30 * 3_600_000, new Date(2026, 4, 25))).toEqual({ kind: "reached" });
+  });
+
+  it("only reminds near month end when more than two hours remain", () => {
+    expect(getGoalStatus(30, 20 * 3_600_000, new Date(2026, 4, 27))).toEqual({
+      kind: "reminder",
+      daysLeft: 4,
+      remainingHours: 10,
+    });
+    expect(getGoalStatus(30, 29 * 3_600_000, new Date(2026, 4, 27))).toEqual({ kind: "none" });
+    expect(getGoalStatus(30, 20 * 3_600_000, new Date(2026, 4, 20))).toEqual({ kind: "none" });
+  });
+
+  it("formats month keys with a leading zero", () => {
+    expect(currentMonthKey(new Date(2026, 0, 1))).toBe("2026-01");
+  });
+
+  it("finds active study contacts with no upcoming work for more than fourteen days", () => {
+    const now = new Date(2026, 4, 20, 12);
+    const forgotten = contact({
+      id: "forgotten",
+      sessions: [{ id: "done", date: new Date(2026, 4, 1).toISOString(), time: "10:00", files: [], pending: false }],
+    });
+    const upcoming = contact({
+      id: "upcoming",
+      sessions: [{ id: "pending", date: new Date(2026, 4, 21).toISOString(), time: "10:00", files: [], pending: true }],
+    });
+    const archived = contact({ id: "archived", active: false });
+
+    expect(getForgottenContacts([forgotten, upcoming, archived], now).map((item) => item.id)).toEqual(["forgotten"]);
+  });
+});

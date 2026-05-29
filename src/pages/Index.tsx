@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState, useEffect, useRef } from "react";
+import { lazy, Suspense, useMemo, useState, useEffect, useRef, startTransition } from "react";
 import { MinistryMark } from "@/components/MinistryMark";
 import { useTimeTracker } from "@/hooks/useTimeTracker";
 import { useCalendarEvents, EventCategory } from "@/hooks/useCalendarEvents";
@@ -531,15 +531,24 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
 
-  const navigate = (tab: Tab) => setActiveTab(tab);
+  const navigate = (tab: Tab) => startTransition(() => setActiveTab(tab));
+  // ── Pre-carga de chunks lazy tras render inicial ───────────────────────────
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void import('@/components/StatsView');
+      void import('@/components/CalendarView');
+      void import('@/components/EstudiosView');
+    }, 1500);
+    return () => clearTimeout(t);
+  }, []);
   const navigateToStudySession = (contactId: string, sessionId: string) => {
     setSelectedStudySession({ contactId, sessionId });
-    setActiveTab("estudios");
+    startTransition(() => setActiveTab("estudios"));
   };
   const openCalendarEvent = (eventId: string) => {
     setCalendarFocusEventId(eventId);
     setSummaryOpen(false);
-    setActiveTab("calendar");
+    startTransition(() => setActiveTab("calendar"));
   };
   const openMonthlyCalendar = () => {
     const monthDate = new Date(now);
