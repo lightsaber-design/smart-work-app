@@ -16,6 +16,9 @@ export interface SetupData {
   categorySettings: CategoryConfig[];
   completed: boolean;
   language?: Lang;
+  notifTimerOverrun: boolean;
+  notifTimer3h: boolean;
+  notifMonthlyGoal: boolean;
 }
 
 const DEFAULT: SetupData = {
@@ -29,6 +32,9 @@ const DEFAULT: SetupData = {
   categorySettings: DEFAULT_CATEGORY_CONFIGS,
   completed: false,
   language: detectLanguage(),
+  notifTimerOverrun: true,
+  notifTimer3h: true,
+  notifMonthlyGoal: true,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -67,6 +73,9 @@ function parseStoredSetup(value: unknown): SetupData {
     categorySettings: normalizeCategoryConfigs(value.categorySettings),
     completed: typeof value.completed === "boolean" ? value.completed : DEFAULT.completed,
     language: isLanguage(value.language) ? value.language : DEFAULT.language,
+    notifTimerOverrun: typeof value.notifTimerOverrun === "boolean" ? value.notifTimerOverrun : DEFAULT.notifTimerOverrun,
+    notifTimer3h: typeof value.notifTimer3h === "boolean" ? value.notifTimer3h : DEFAULT.notifTimer3h,
+    notifMonthlyGoal: typeof value.notifMonthlyGoal === "boolean" ? value.notifMonthlyGoal : DEFAULT.notifMonthlyGoal,
   };
 }
 

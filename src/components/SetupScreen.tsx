@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SetupData } from "@/hooks/useSetup";
 import { CitySearch } from "@/components/CitySearch";
 import { PrecursorHoursConfig } from "@/components/PrecursorHoursConfig";
@@ -6,11 +6,12 @@ import { TravelTimeConfig } from "@/components/TravelTimeConfig";
 import { LanguageFlag } from "@/components/LanguageFlag";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, ChevronRight, MapPin, User } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, User, Bell } from "lucide-react";
 import { MinistryMark, MinistryWordmark } from "@/components/MinistryMark";
 import { LANGUAGES, Lang, detectLanguage } from "@/lib/i18n";
 import { useT } from "@/lib/LanguageContext";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
+import { requestNotificationPermission, hasNotificationPermission } from "@/lib/notifications";
 import { DEFAULT_CATEGORY_CONFIGS } from "@/lib/categories";
 import { formatPlaceName } from "@/lib/placeNames";
 
@@ -19,7 +20,7 @@ interface SetupScreenProps {
   onLangChange: (lang: Lang) => void;
 }
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
   const t = useT();
@@ -30,6 +31,11 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
   const [travelTimeEnabled, setTravelTimeEnabled] = useState(false);
   const [travelTimeMinutes, setTravelTimeMinutes] = useState(30);
   const [selectedLang, setSelectedLang] = useState<Lang>(detectLanguage());
+  const [notifGranted, setNotifGranted] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    hasNotificationPermission().then(setNotifGranted).catch(() => setNotifGranted(false));
+  }, []);
 
   const handleLangSelect = (lang: Lang) => {
     setSelectedLang(lang);
@@ -153,6 +159,36 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
                   setTravelTimeMinutes(value.minutes);
                 }}
               />
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="space-y-5 text-center">
+              <div className="flex flex-col items-center gap-3">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+                  <Bell className="h-7 w-7 text-primary" />
+                </div>
+                <div className="space-y-1">
+                  <h2 className="text-sm font-semibold text-foreground">{t("setup_notifications_title")}</h2>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{t("setup_notifications_hint")}</p>
+                </div>
+              </div>
+
+              {notifGranted === true ? (
+                <p className="text-sm font-semibold text-green-600">{t("setup_notifications_granted")}</p>
+              ) : notifGranted === false ? (
+                <div className="space-y-3">
+                  <Button
+                    className="w-full"
+                    onClick={() =>
+                      requestNotificationPermission().then((granted) => setNotifGranted(granted))
+                    }
+                  >
+                    <Bell className="h-4 w-4" />
+                    {t("setup_notifications_allow")}
+                  </Button>
+                </div>
+              ) : null}
             </div>
           )}
         </div>

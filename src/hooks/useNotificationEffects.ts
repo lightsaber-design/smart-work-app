@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import type { CalendarEvent } from "@/hooks/useCalendarEvents";
 import type { TimeEntry } from "@/hooks/useTimeTracker";
-import type { EstudioContact } from "@/hooks/useEstudios";
 import { showBrowserNotification, scheduleEventNotification, cancelEventNotification } from "@/lib/notifications";
 import { shouldNotifyEvent } from "@/lib/eventReminders";
-import { timerLongRunFireAt, getGoalStatus, getForgottenContacts, currentMonthKey } from "@/lib/notificationRules";
+import { getEventEndDate } from "@/lib/timerOverrun";
+import { timerLongRunFireAt, getGoalStatus, currentMonthKey } from "@/lib/notificationRules";
 import { getCategoryLabel } from "@/lib/categories";
 
 type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
@@ -14,12 +14,17 @@ interface UseNotificationEffectsParams {
   isTimerRunning: boolean;
   markNotified: (id: string) => void;
   t: TranslateFn;
-  showTimerOverrunPrompt: boolean;
   activeScheduledEvent: CalendarEvent | null;
   activeEntry: TimeEntry | null;
   calMonthMs: number;
   precursorHours: number | null;
-  estudiosContacts: EstudioContact[];
+  // User preferences
+  notifTimerOverrun: boolean;
+  notifTimer3h: boolean;
+  notifMonthlyGoal: boolean;
+  // Travel time for overrun threshold
+  travelTimeEnabled: boolean;
+  travelTimeMinutes: number;
 }
 
 export function useNotificationEffects({
@@ -27,18 +32,22 @@ export function useNotificationEffects({
   isTimerRunning,
   markNotified,
   t,
-  showTimerOverrunPrompt,
   activeScheduledEvent,
   activeEntry,
   calMonthMs,
   precursorHours,
-  estudiosContacts,
+  notifTimerOverrun,
+  notifTimer3h,
+  notifMonthlyGoal,
+  travelTimeEnabled,
+  travelTimeMinutes,
 }: UseNotificationEffectsParams) {
-  const [timerOverrunNotifiedId, setTimerOverrunNotifiedId] = useState<string | null>(null);
   const scheduledEventFireTimes = useRef<Map<string, number>>(new Map());
   const timer3hRef = useRef<string | null>(null);
+  const overrunScheduledKey = useRef<string | null>(null);
+  const [overrunNotifiedId, setOverrunNotifiedId] = useState<string | null>(null);
 
-  // Schedule native event reminders whenever calendarEvents changes
+  // ── Schedule native event reminders ────────────────────────────────────────
   useEffect(() => {
     const now = Date.now();
     const liveReminderIds = new Set<string>();
@@ -61,10 +70,12 @@ export function useNotificationEffects({
         fireAt,
       ).then((scheduled) => {
         if (scheduled) scheduledEventFireTimes.current.set(event.id, fireAtMs);
-        else if (scheduledEventFireTimes.current.get(event.id) === fireAtMs) scheduledEventFireTimes.current.delete(event.id);
+        else if (scheduledEventFireTimes.current.get(event.id) === fireAtMs)
+          scheduledEventFireTimes.current.delete(event.id);
       });
     });
 
+    // Cancel reminders for events that no longer exist or are completed
     scheduledEventFireTimes.current.forEach((_, id) => {
       if (!liveReminderIds.has(id)) {
         void cancelEventNotification(id);
@@ -73,12 +84,12 @@ export function useNotificationEffects({
     });
   }, [calendarEvents, t]);
 
-  // Fallback periodic check when app is open (web / no native reminder)
+  // ── Fallback periodic check (web / app open) ────────────────────────────────
   useEffect(() => {
-    const hasPendingReminder = calendarEvents.some(
-      (event) => !event.completed && !event.notified && Date.now() < event.date.getTime() + 5 * 60_000,
+    const hasPending = calendarEvents.some(
+      (e) => !e.completed && !e.notified && Date.now() < e.date.getTime() + 5 * 60_000,
     );
-    if (!hasPendingReminder) return;
+    if (!hasPending) return;
 
     const check = () => {
       const now = Date.now();
@@ -96,17 +107,47 @@ export function useNotificationEffects({
     return () => clearInterval(interval);
   }, [calendarEvents, isTimerRunning, markNotified, t]);
 
-  // Timer overrun notification
+  // ── Timer overrun → native notification ────────────────────────────────────
   useEffect(() => {
-    if (!showTimerOverrunPrompt || !activeScheduledEvent || timerOverrunNotifiedId === activeScheduledEvent.id) return;
-    showBrowserNotification(t("timer_overrun_title"), {
-      body: t("timer_overrun_notification_body", { category: getCategoryLabel(activeScheduledEvent.category, t) }),
-    });
-    setTimerOverrunNotifiedId(activeScheduledEvent.id);
-  }, [activeScheduledEvent, showTimerOverrunPrompt, t, timerOverrunNotifiedId]);
+    if (!notifTimerOverrun || !activeEntry || !activeScheduledEvent) {
+      if (overrunScheduledKey.current) {
+        void cancelEventNotification("timer-overrun");
+        overrunScheduledKey.current = null;
+      }
+      return;
+    }
 
-  // Rule 1: Active timer > 3h
+    const key = `${activeEntry.id}:${activeScheduledEvent.id}`;
+    if (overrunScheduledKey.current === key) return; // already handled this pair
+    overrunScheduledKey.current = key;
+
+    const end = getEventEndDate(activeScheduledEvent);
+    if (!end) return; // event has no explicit endTime → skip
+
+    const travelMs = travelTimeEnabled ? travelTimeMinutes * 60_000 : 0;
+    const fireAt = new Date(end.getTime() + travelMs);
+
+    if (fireAt.getTime() > Date.now()) {
+      // Schedule for exact time (native platforms deliver even with app closed)
+      void scheduleEventNotification(
+        "timer-overrun",
+        t("timer_overrun_title"),
+        t("timer_overrun_notification_body", { category: getCategoryLabel(activeScheduledEvent.category, t) }),
+        fireAt,
+      );
+    } else if (overrunNotifiedId !== key) {
+      // Already past overrun time when app opened → notify immediately
+      showBrowserNotification(t("timer_overrun_title"), {
+        body: t("timer_overrun_notification_body", { category: getCategoryLabel(activeScheduledEvent.category, t) }),
+      });
+      setOverrunNotifiedId(key);
+    }
+  }, [activeEntry, activeScheduledEvent, notifTimerOverrun, overrunNotifiedId, t, travelTimeEnabled, travelTimeMinutes]);
+
+  // ── Timer active > 3h ───────────────────────────────────────────────────────
   useEffect(() => {
+    if (!notifTimer3h) return;
+
     if (!activeEntry) {
       if (timer3hRef.current) {
         void cancelEventNotification("timer-3h");
@@ -116,12 +157,14 @@ export function useNotificationEffects({
     }
     if (timer3hRef.current === activeEntry.id) return;
     timer3hRef.current = activeEntry.id;
+
     void scheduleEventNotification(
       "timer-3h",
       t("notif_timer_3h_title"),
       t("notif_timer_3h_body"),
       timerLongRunFireAt(activeEntry.startTime),
     );
+    // Web fallback: interval check
     const iv = setInterval(() => {
       if (Date.now() - activeEntry.startTime.getTime() >= 3 * 3_600_000) {
         showBrowserNotification(t("notif_timer_3h_title"), { body: t("notif_timer_3h_body") });
@@ -129,10 +172,11 @@ export function useNotificationEffects({
       }
     }, 60_000);
     return () => clearInterval(iv);
-  }, [activeEntry, t]);
+  }, [activeEntry, notifTimer3h, t]);
 
-  // Rule 3: Monthly goal
+  // ── Monthly goal ────────────────────────────────────────────────────────────
   useEffect(() => {
+    if (!notifMonthlyGoal) return;
     const goalHours = precursorHours ?? 0;
     if (!goalHours) return;
     const status = getGoalStatus(goalHours, calMonthMs);
@@ -154,19 +198,5 @@ export function useNotificationEffects({
         }),
       });
     }
-  }, [calMonthMs, precursorHours, t]);
-
-  // Rule 4: Contact without appointment > 14 days
-  useEffect(() => {
-    const key = `_ml_study_reminder_${new Date().toDateString()}`;
-    if (localStorage.getItem(key)) return;
-    const forgotten = getForgottenContacts(estudiosContacts);
-    if (!forgotten.length) return;
-    localStorage.setItem(key, "1");
-    const body =
-      forgotten.length === 1
-        ? t("notif_study_reminder_body", { name: forgotten[0].name })
-        : t("notif_study_reminder_body_multi", { count: String(forgotten.length) });
-    showBrowserNotification(t("notif_study_reminder_title"), { body });
-  }, [estudiosContacts, t]);
+  }, [calMonthMs, notifMonthlyGoal, precursorHours, t]);
 }

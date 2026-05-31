@@ -15,8 +15,7 @@ import { useSpecialCampaign } from "@/hooks/useSpecialCampaign";
 import { getCategoryMeta } from "@/lib/categories";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 import { removeJsonValue } from "@/lib/jsonFileStorage";
-import { findActiveScheduledEvent, shouldShowTimerOverrunPrompt } from "@/lib/timerOverrun";
-import { clampTimeValueToHourRange } from "@/lib/activityHours";
+import { findActiveScheduledEvent } from "@/lib/timerOverrun";
 import { formatPlaceName } from "@/lib/placeNames";
 import { formatDateLong } from "@/lib/dateFormat";
 import { hexToRgba, getWeatherHeroTheme } from "@/lib/weatherUtils";
@@ -24,7 +23,6 @@ import { useWeather } from "@/hooks/useWeather";
 import { useNotificationEffects } from "@/hooks/useNotificationEffects";
 import { HomeTab } from "@/pages/tabs/HomeTab";
 import { TimerTab } from "@/pages/tabs/TimerTab";
-import { TimerOverrunPrompt } from "@/pages/tabs/TimerOverrunPrompt";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -86,15 +84,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const [calendarFocusEventId, setCalendarFocusEventId] = useState<string | null>(null);
   const [calendarFocusMonthDate, setCalendarFocusMonthDate] = useState<Date | null>(null);
 
-  // ── Timer overrun state ───────────────────────────────────────────────────────
-  const [timerOverrunDismissedId, setTimerOverrunDismissedId] = useState<string | null>(null);
-  const [timerOverrunSnoozes, setTimerOverrunSnoozes] = useState<Record<string, number>>({});
-  const [timerOverrunSnoozeTime, setTimerOverrunSnoozeTime] = useState("15:00");
-
-  useEffect(() => {
-    setTimerOverrunSnoozeTime((v) => clampTimeValueToHourRange(v, setup.activityStartHour, setup.activityEndHour));
-  }, [setup.activityStartHour, setup.activityEndHour]);
-
   // ── Summary sheet state ───────────────────────────────────────────────────────
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryDragOffset, setSummaryDragOffset] = useState<number | null>(null);
@@ -127,16 +116,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const defaultCenter = setup.city ?? undefined;
   const activeScheduledEvent = findActiveScheduledEvent(activeEntry, calendarEvents);
 
-  const showTimerOverrunPrompt =
-    tracker.isRunning &&
-    activeScheduledEvent?.id !== timerOverrunDismissedId &&
-    shouldShowTimerOverrunPrompt(
-      new Date(),
-      activeScheduledEvent,
-      setup.travelTimeEnabled ? setup.travelTimeMinutes : 0,
-      activeScheduledEvent ? timerOverrunSnoozes[activeScheduledEvent.id] : undefined,
-    );
-
   // ── Timer handlers ────────────────────────────────────────────────────────────
   const completeClockOut = (customTime?: Date) => {
     tracker.clockOut((eventId, endTime) => calendar.updateEvent(eventId, { endTime, completed: true }), customTime);
@@ -152,11 +131,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     completeClockOut(customTime);
   };
 
-  const stopActiveTimer = () => {
-    completeClockOut();
-    setTimerOverrunDismissedId(activeScheduledEvent?.id ?? null);
-  };
-
   const keepShortActivity = () => { completeClockOut(shortStopPrompt?.customTime); setShortStopPrompt(null); };
   const discardShortActivity = () => {
     if (!activeEntry) { setShortStopPrompt(null); return; }
@@ -168,15 +142,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     if (!deleteEventPromptId) return;
     calendar.deleteEvent(deleteEventPromptId);
     setDeleteEventPromptId(null);
-  };
-  const postponeTimerOverrunPrompt = () => {
-    if (!activeScheduledEvent) return;
-    const safe = clampTimeValueToHourRange(timerOverrunSnoozeTime, setup.activityStartHour, setup.activityEndHour);
-    const [h, m] = safe.split(":").map(Number);
-    const next = new Date();
-    next.setHours(h, m, 0, 0);
-    if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1);
-    setTimerOverrunSnoozes((prev) => ({ ...prev, [activeScheduledEvent.id]: next.getTime() }));
   };
 
   // ── Monthly total (source of truth: completed calendar events) ────────────────
@@ -202,12 +167,15 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     isTimerRunning: tracker.isRunning,
     markNotified,
     t,
-    showTimerOverrunPrompt,
     activeScheduledEvent: activeScheduledEvent ?? null,
     activeEntry: activeEntry ?? null,
     calMonthMs,
     precursorHours: setup.precursorHours,
-    estudiosContacts: estudios.contacts,
+    notifTimerOverrun: setup.notifTimerOverrun,
+    notifTimer3h: setup.notifTimer3h,
+    notifMonthlyGoal: setup.notifMonthlyGoal,
+    travelTimeEnabled: setup.travelTimeEnabled,
+    travelTimeMinutes: setup.travelTimeMinutes,
   });
 
   // ── Summary sheet: event lists ────────────────────────────────────────────────
@@ -599,20 +567,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
           estudios.updateSession(contactId, sessionId, data);
         }}
       />
-
-      {showTimerOverrunPrompt && activeScheduledEvent && (
-        <TimerOverrunPrompt
-          activeScheduledEvent={activeScheduledEvent}
-          timerOverrunSnoozeTime={timerOverrunSnoozeTime}
-          setTimerOverrunSnoozeTime={setTimerOverrunSnoozeTime}
-          setup={setup}
-          postponeTimerOverrunPrompt={postponeTimerOverrunPrompt}
-          stopActiveTimer={stopActiveTimer}
-          setTimerOverrunDismissedId={setTimerOverrunDismissedId}
-          t={t}
-          locale={locale}
-        />
-      )}
 
       <AlertDialog open={!!shortStopPrompt} onOpenChange={(open) => { if (!open) setShortStopPrompt(null); }}>
         <AlertDialogContent>
