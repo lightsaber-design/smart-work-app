@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { MinistryMark, MinistryWordmark } from "@/components/MinistryMark";
-import { Trash2, MapPin, User, Moon, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil, Upload, Download } from "lucide-react";
+import { Trash2, MapPin, User, Moon, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil, Upload, Download, Bell } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -11,6 +11,7 @@ import { TravelTimeConfig } from "@/components/TravelTimeConfig";
 import { ActivityHoursConfig } from "@/components/ActivityHoursConfig";
 import { LanguageFlag } from "@/components/LanguageFlag";
 import { SetupData } from "@/hooks/useSetup";
+import { hasNotificationPermission, requestNotificationPermission } from "@/lib/notifications";
 import { useT } from "@/lib/LanguageContext";
 import { LANGUAGES, Lang } from "@/lib/i18n";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
@@ -80,7 +81,13 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
   const [profileOpen, setProfileOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [displayOpen, setDisplayOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    hasNotificationPermission().then(setNotifPermission).catch(() => setNotifPermission(false));
+  }, []);
   const [editingCategoryName, setEditingCategoryName] = useState<string | null>(null);
   const [categoryNameDraft, setCategoryNameDraft] = useState("");
 
@@ -432,6 +439,81 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
           </div>
         </SettingsSection>
       )}
+
+      <SettingsSection
+        icon={<Bell className="w-4 h-4" />}
+        title={t("settings_notifications")}
+        summary={
+          notifPermission === null ? undefined : (
+            <span className={`text-xs font-semibold ${notifPermission ? "text-green-500" : "text-destructive"}`}>
+              {notifPermission ? t("settings_notif_status_granted") : t("settings_notif_status_denied")}
+            </span>
+          )
+        }
+        open={notificationsOpen}
+        onToggle={() => setNotificationsOpen((o) => !o)}
+      >
+        {/* Permission row */}
+        <div className="flex items-center justify-between gap-3 pb-1">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              {notifPermission
+                ? t("settings_notif_status_granted")
+                : t("settings_notif_request")}
+            </p>
+            {!notifPermission && (
+              <p className="text-xs text-muted-foreground">{t("settings_notif_status_denied")}</p>
+            )}
+          </div>
+          {!notifPermission && (
+            <Button
+              size="sm"
+              onClick={() =>
+                requestNotificationPermission().then((granted) => setNotifPermission(granted))
+              }
+            >
+              {t("settings_notif_request")}
+            </Button>
+          )}
+        </div>
+
+        {/* Toggle: timer overrun */}
+        <div className="space-y-0.5 pt-1">
+          <div className="flex items-center justify-between gap-3">
+            <Label className="text-sm text-foreground">{t("settings_notif_timer_overrun")}</Label>
+            <Switch
+              checked={setup.notifTimerOverrun}
+              onCheckedChange={(v) => onSaveSetup({ notifTimerOverrun: v })}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">{t("settings_notif_timer_overrun_hint")}</p>
+        </div>
+
+        {/* Toggle: timer 3h */}
+        <div className="space-y-0.5 pt-1">
+          <div className="flex items-center justify-between gap-3">
+            <Label className="text-sm text-foreground">{t("settings_notif_timer_3h")}</Label>
+            <Switch
+              checked={setup.notifTimer3h}
+              onCheckedChange={(v) => onSaveSetup({ notifTimer3h: v })}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">{t("settings_notif_timer_3h_hint")}</p>
+        </div>
+
+        {/* Toggle: monthly goal */}
+        <div className="space-y-0.5 pt-1">
+          <div className="flex items-center justify-between gap-3">
+            <Label className="text-sm text-foreground">{t("settings_notif_monthly_goal")}</Label>
+            <Switch
+              checked={setup.notifMonthlyGoal}
+              onCheckedChange={(v) => onSaveSetup({ notifMonthlyGoal: v })}
+              disabled={!setup.precursorHours}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">{t("settings_notif_monthly_goal_hint")}</p>
+        </div>
+      </SettingsSection>
 
       <SettingsSection
         icon={<FileJson className="w-4 h-4" />}

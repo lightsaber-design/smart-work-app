@@ -375,6 +375,22 @@ const es: TranslationMap = {
     stats_by_month: 'Por mes',
     stats_event: 'actividad',
     stats_events: 'actividades',
+    settings_notifications: 'Notificaciones',
+    settings_notif_status_granted: 'Activadas',
+    settings_notif_status_denied: 'Bloqueadas en el sistema',
+    settings_notif_request: 'Activar notificaciones',
+    settings_notif_timer_overrun: 'Timer pasado de hora',
+    settings_notif_timer_overrun_hint: 'Avisa cuando el timer sigue tras el fin del evento',
+    settings_notif_timer_3h: 'Timer largo (>3 h)',
+    settings_notif_timer_3h_hint: 'Recuerda cerrar el timer si llevas más de 3 horas',
+    settings_notif_monthly_goal: 'Meta mensual',
+    settings_notif_monthly_goal_hint: 'Recordatorios de progreso hacia tu meta de horas',
+    setup_notifications_title: 'Notificaciones',
+    setup_notifications_hint: 'Recibe avisos aunque la app esté cerrada: recordatorios de actividades, timer largo y meta mensual.',
+    setup_notifications_allow: 'Activar notificaciones',
+    setup_notifications_skip: 'Ahora no',
+    setup_notifications_granted: '✓ Notificaciones activadas',
+    setup_notifications_denied: 'Bloqueadas en ajustes del sistema',
 };
 
 export const translations = { es };

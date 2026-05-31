@@ -354,6 +354,22 @@ const pt: TranslationMap = {    // Navigation
     stats_of_goal: '{value} de {goal}',
     stats_by_month: 'Por mês',
     stats_event: 'atividade',
-    stats_events: 'atividades',};
+    stats_events: 'atividades',
+    settings_notifications: 'Notificações',
+    settings_notif_status_granted: 'Ativadas',
+    settings_notif_status_denied: 'Bloqueadas pelo sistema',
+    settings_notif_request: 'Ativar notificações',
+    settings_notif_timer_overrun: 'Timer após horário',
+    settings_notif_timer_overrun_hint: 'Avisa quando o timer continua após o fim do evento',
+    settings_notif_timer_3h: 'Timer longo (>3 h)',
+    settings_notif_timer_3h_hint: 'Lembra de parar o timer após 3 horas',
+    settings_notif_monthly_goal: 'Meta mensal',
+    settings_notif_monthly_goal_hint: 'Lembretes de progresso para sua meta de horas',
+    setup_notifications_title: 'Notificações',
+    setup_notifications_hint: 'Receba avisos mesmo com o app fechado: lembretes de atividades, timer longo e meta mensal.',
+    setup_notifications_allow: 'Ativar notificações',
+    setup_notifications_skip: 'Agora não',
+    setup_notifications_granted: '✓ Notificações ativadas',
+    setup_notifications_denied: 'Bloqueadas nas configurações',};
 
 export default pt;

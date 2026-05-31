@@ -354,6 +354,22 @@ const en: TranslationMap = {    // Navigation
     stats_of_goal: '{value} of {goal}',
     stats_by_month: 'By month',
     stats_event: 'activity',
-    stats_events: 'activities',};
+    stats_events: 'activities',
+    settings_notifications: 'Notifications',
+    settings_notif_status_granted: 'Enabled',
+    settings_notif_status_denied: 'Blocked by system',
+    settings_notif_request: 'Enable notifications',
+    settings_notif_timer_overrun: 'Timer past scheduled end',
+    settings_notif_timer_overrun_hint: 'Alerts when the timer keeps running after the event ends',
+    settings_notif_timer_3h: 'Long timer (>3 h)',
+    settings_notif_timer_3h_hint: 'Reminds you to stop the timer after 3 hours',
+    settings_notif_monthly_goal: 'Monthly goal',
+    settings_notif_monthly_goal_hint: 'Progress reminders for your monthly hour goal',
+    setup_notifications_title: 'Notifications',
+    setup_notifications_hint: 'Receive alerts even when the app is closed: activity reminders, long timer and monthly goal.',
+    setup_notifications_allow: 'Enable notifications',
+    setup_notifications_skip: 'Not now',
+    setup_notifications_granted: '✓ Notifications enabled',
+    setup_notifications_denied: 'Blocked in system settings',};
 
 export default en;
