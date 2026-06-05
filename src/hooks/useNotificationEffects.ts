@@ -55,12 +55,15 @@ export function useNotificationEffects({
     calendarEvents.forEach((event) => {
       if (event.completed || event.notified) return;
       const reminder = event.reminderMinutesBefore ?? 0;
-      if (reminder <= 0) return;
-      const fireAt = new Date(event.date.getTime() - reminder * 60_000);
-      if (fireAt.getTime() <= now) return;
+      const reminderAtMs = event.date.getTime() - reminder * 60_000;
+      const startMs = event.date.getTime();
+      // Si el recordatorio previo aún no pasó, se usa; si ya pasó (o no hay),
+      // se programa para la hora del evento, siempre que siga en el futuro.
+      const fireAtMs = reminderAtMs > now ? reminderAtMs : startMs;
+      if (fireAtMs <= now) return;
+      const fireAt = new Date(fireAtMs);
       liveReminderIds.add(event.id);
 
-      const fireAtMs = fireAt.getTime();
       if (scheduledEventFireTimes.current.get(event.id) === fireAtMs) return;
 
       void scheduleEventNotification(

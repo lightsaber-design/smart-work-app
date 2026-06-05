@@ -99,6 +99,20 @@ async function canUseExactAlarms(): Promise<boolean> {
   }
 }
 
+// Lleva al usuario al ajuste de "Alarmas y recordatorios" si no está concedido.
+// Sin alarmas exactas, Android retrasa o descarta los avisos con la app cerrada.
+export async function ensureExactAlarms(): Promise<void> {
+  if (!isNativeAndroid()) return;
+  try {
+    const { exact_alarm } = await LocalNotifications.checkExactNotificationSetting();
+    if (exact_alarm !== 'granted') {
+      await LocalNotifications.changeExactNotificationSetting();
+    }
+  } catch (e) {
+    console.warn('[Notif] ensureExactAlarms:', e);
+  }
+}
+
 export async function initNotifications(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   await ensureChannel();
@@ -217,7 +231,11 @@ export async function hasNotificationPermission(): Promise<boolean> {
 
 export async function requestNotificationPermission(): Promise<boolean> {
   if (Capacitor.isNativePlatform()) {
-    return requestNativePermission();
+    const granted = await requestNativePermission();
+    // Tras conceder el permiso, asegura las alarmas exactas para que los avisos
+    // lleguen puntuales con la app cerrada.
+    if (granted) await ensureExactAlarms();
+    return granted;
   }
   if (!canRequestNotificationPermission()) return false;
   try {
