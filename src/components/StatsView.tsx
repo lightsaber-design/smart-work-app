@@ -9,7 +9,7 @@ import { applyMonthlySupportCap } from "@/lib/ldcCap";
 import { calculateMonthlyReport } from "@/lib/monthlyReport";
 import { msToLabel } from "@/lib/time";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
-import { Pencil, Check, Send } from "lucide-react";
+import { Pencil, Check, Send, BookOpen, Plus } from "lucide-react";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import { formatMonthYear, formatShortMonth } from "@/lib/dateFormat";
 
@@ -22,6 +22,8 @@ interface StatsViewProps {
   specialCampaignGoals?: Record<string, CampaignGoal>;
   onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
   categoryConfigs: CategoryConfig[];
+  studyCount?: number;
+  onOpenStudies?: () => void;
 }
 
 export function StatsView({
@@ -33,6 +35,8 @@ export function StatsView({
   specialCampaignGoals,
   onSetSpecialCampaign,
   categoryConfigs,
+  studyCount = 0,
+  onOpenStudies,
 }: StatsViewProps) {
   const t = useT();
   const lang = useLang();
@@ -165,6 +169,33 @@ export function StatsView({
           </button>
         ))}
       </div>
+
+      {/* Estudios: opción rápida con + cuando no hay, o número cuando los hay */}
+      {onOpenStudies && (
+        <button
+          onClick={onOpenStudies}
+          className="w-full flex items-center gap-3 rounded-2xl bg-card border border-border shadow-sm px-5 py-4 text-left active:scale-[0.99] transition-transform"
+        >
+          <div className="w-10 h-10 rounded-xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0">
+            <BookOpen className="w-5 h-5 text-pink-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">{t("nav_studies")}</p>
+            {studyCount === 0 && (
+              <p className="text-xs text-muted-foreground">{t("stats_no_studies")}</p>
+            )}
+          </div>
+          {studyCount > 0 ? (
+            <span className="min-w-7 h-7 px-2 rounded-full bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-300 text-sm font-bold flex items-center justify-center tabular-nums flex-shrink-0">
+              {studyCount}
+            </span>
+          ) : (
+            <span className="w-7 h-7 rounded-full bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-300 flex items-center justify-center flex-shrink-0">
+              <Plus className="w-4 h-4" />
+            </span>
+          )}
+        </button>
+      )}
 
       {/* ── MENSUAL ── */}
       {mode === "mensual" && (

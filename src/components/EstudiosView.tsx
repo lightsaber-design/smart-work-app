@@ -16,7 +16,7 @@ import {
 import {
   EstudioContact, EstudioSession, SessionFile,
   ContactFormData, ContactSchedule, ScheduleFrequency,
-  getNextOccurrences,
+  getNextOccurrences, suggestNextLesson,
 } from "@/hooks/useEstudios";
 import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { saveFile, getFileURL, formatFileSize } from "@/lib/sessionFiles";
@@ -258,9 +258,10 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
 }
 
 /* Hoja unificada para agregar, programar o editar sesiones */
-function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onClose }: {
+function SessionEditSheet({ session, contact, defaultLesson, onSave, onComplete, onDelete, onClose }: {
   session: EstudioSession | null;
   contact: EstudioContact;
+  defaultLesson?: string;
   onSave: (data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
   onComplete?: () => void;
   onDelete: () => void;
@@ -273,7 +274,8 @@ function SessionEditSheet({ session, contact, onSave, onComplete, onDelete, onCl
 
   const [date, setDate] = useState(session ? isoToDateStr(session.date) : todayDateStr());
   const [time, setTime] = useState(session?.time ?? nowTime());
-  const [lesson, setLesson] = useState(session?.lesson ?? "");
+  // Para sesiones nuevas sin lección, propone la siguiente automáticamente.
+  const [lesson, setLesson] = useState(session?.lesson ?? defaultLesson ?? "");
   const [notes, setNotes] = useState(session?.notes ?? "");
   const [existingFiles, setExistingFiles] = useState<SessionFile[]>(session?.files ?? []);
   const [pendingFiles, setPendingFiles] = useState<{ file: File; id: string }[]>([]);
@@ -454,7 +456,7 @@ function HistorySessionCard({ session, onOpen }: { session: EstudioSession; onOp
 
 /* Vista de detalle del contacto */
 function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, onArchive, onUnarchive,
-  onAddSession, onUpdateSession, onDeleteSession, onCompleteSession, focusedSessionId, onFocusedSessionHandled,
+  onAddSession, onUpdateSession, onDeleteSession, onCompleteSession, onCompleteSessionNow, focusedSessionId, onFocusedSessionHandled,
 }: {
   contact: EstudioContact;
   favoritePlaces: FavoritePlace[];
@@ -467,6 +469,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
   onUpdateSession: (contactId: string, sessionId: string, data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
   onDeleteSession: (contactId: string, sessionId: string) => void;
   onCompleteSession: (contactId: string, sessionId: string) => void;
+  onCompleteSessionNow: (contactId: string, sessionId: string) => void;
   focusedSessionId?: string;
   onFocusedSessionHandled?: () => void;
 }) {
@@ -487,6 +490,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
     .filter((s) => s.pending)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+  const nextLesson = suggestNextLesson(contact);
   const hasSessions = contact.sessions.length > 0;
   const savedPlace = contact.favoritePlaceId
     ? favoritePlaces.find((p) => p.id === contact.favoritePlaceId)
@@ -628,29 +632,40 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
               {upcomingSessions.slice(0, 4).map((s) => {
                 const isPast = new Date(s.date) < new Date() && new Date(s.date).toDateString() !== new Date().toDateString();
                 return (
-                  <button
+                  <div
                     key={s.id}
-                    onClick={() => setSelectedSession(s)}
-                    className={`w-full text-left rounded-2xl border p-4 space-y-1 active:scale-[0.99] transition-all ${
+                    className={`flex items-center gap-1 rounded-2xl border pr-2 ${
                       isPast ? "bg-orange-50 border-orange-200" : "bg-primary/5 border-primary/20"
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground">{formatDateLabel(s.date, locale)}</p>
-                        {s.lesson && <p className="text-sm font-medium text-foreground mt-0.5">{s.lesson}</p>}
+                    <button
+                      onClick={() => setSelectedSession(s)}
+                      className="flex-1 min-w-0 text-left p-4 active:scale-[0.99] transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs text-muted-foreground">{formatDateLabel(s.date, locale)}</p>
+                          {s.lesson && <p className="text-sm font-medium text-foreground mt-0.5">{s.lesson}</p>}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs text-muted-foreground">{s.time}</span>
+                          {isPast && (
+                            <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-medium">
+                              {t("cal_pending")}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-xs text-muted-foreground">{s.time}</span>
-                        {isPast && (
-                          <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-medium">
-                            {t("cal_pending")}
-                          </span>
-                        )}
-                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                      </div>
-                    </div>
-                  </button>
+                    </button>
+                    <button
+                      onClick={() => onCompleteSessionNow(contact.id, s.id)}
+                      aria-label={t("study_mark_completed")}
+                      title={t("study_mark_completed")}
+                      className="w-10 h-10 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform"
+                    >
+                      <CheckCircle2 className="w-5 h-5" />
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -700,6 +715,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
         <SessionEditSheet
           session={null}
           contact={contact}
+          defaultLesson={nextLesson}
           onSave={(data) => onAddSession(contact.id, { time: data.time, lesson: data.lesson, notes: data.notes, files: data.files })}
           onDelete={() => {}}
           onClose={() => setNewSessionOpen(false)}
@@ -809,6 +825,7 @@ interface EstudiosViewProps {
   onUpdateSession: (contactId: string, sessionId: string, data: { date: string; time: string; lesson?: string; notes?: string; files: SessionFile[] }) => void;
   onDeleteSession: (contactId: string, sessionId: string) => void;
   onCompleteSession: (contactId: string, sessionId: string) => void;
+  onCompleteSessionNow: (contactId: string, sessionId: string) => void;
   focusedSession?: { contactId: string; sessionId: string } | null;
   onFocusedSessionHandled?: () => void;
 }
@@ -816,7 +833,7 @@ interface EstudiosViewProps {
 export function EstudiosView({
   contacts, favoritePlaces,
   onAddContact, onUpdateContact, onDeleteContact, onArchiveContact, onUnarchiveContact,
-  onAddSession, onUpdateSession, onDeleteSession, onCompleteSession,
+  onAddSession, onUpdateSession, onDeleteSession, onCompleteSession, onCompleteSessionNow,
   focusedSession, onFocusedSessionHandled,
 }: EstudiosViewProps) {
   const t = useT();
@@ -846,6 +863,7 @@ export function EstudiosView({
         onUpdateSession={onUpdateSession}
         onDeleteSession={onDeleteSession}
         onCompleteSession={onCompleteSession}
+        onCompleteSessionNow={onCompleteSessionNow}
         focusedSessionId={focusedSession?.contactId === selectedContact.id ? focusedSession.sessionId : undefined}
         onFocusedSessionHandled={onFocusedSessionHandled}
       />

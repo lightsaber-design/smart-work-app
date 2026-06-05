@@ -181,6 +181,20 @@ export function getNextOccurrences(schedule: ContactSchedule, count: number): Da
   return results;
 }
 
+/* Sugiere la siguiente lección a partir de la última registrada: si termina en
+   un número lo incrementa (p. ej. "Lección 5" → "Lección 6"). Puro, no muta. */
+export function suggestNextLesson(contact: EstudioContact): string | undefined {
+  const lastDone = (contact.sessions ?? [])
+    .filter((s) => !s.pending && s.lesson?.trim())
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+  const base = lastDone?.lesson?.trim() || contact.schedule?.lesson?.trim();
+  if (!base) return undefined;
+  const match = base.match(/(\d+)(\D*)$/);
+  if (!match || match.index === undefined) return base;
+  const next = String(Number(match[1]) + 1);
+  return base.slice(0, match.index) + next + match[2];
+}
+
 function now(): string {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -465,6 +479,27 @@ export function useEstudios() {
     });
   }, [persist]);
 
+  /* Marca una sesión como hecha "ahora": fija fecha y hora al momento actual.
+     Pensado para el botón de un toque desde Inicio o la lista de estudios. */
+  const completeSessionNow = useCallback((contactId: string, sessionId: string) => {
+    setContacts((prev) => {
+      const updated = prev.map((c) => {
+        if (c.id !== contactId) return c;
+        const withDone = {
+          ...c,
+          sessions: c.sessions.map((s) =>
+            s.id === sessionId
+              ? { ...s, date: new Date().toISOString(), time: now(), pending: false }
+              : s
+          ),
+        };
+        return fillPendingSessions(withDone);
+      });
+      persist(updated);
+      return updated;
+    });
+  }, [persist]);
+
 
   return {
     contacts,
@@ -478,5 +513,6 @@ export function useEstudios() {
     deleteSession,
     updateSession,
     completeSession,
+    completeSessionNow,
   };
 }

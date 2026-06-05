@@ -368,6 +368,7 @@ const es: TranslationMap = {
     stats_report: 'Informe',
     stats_hours: 'Horas',
     stats_studies: 'Estudios',
+    stats_no_studies: 'No hay estudios',
     stats_send_report: 'Enviar informe',
     stats_total: 'Total',
     stats_annual_pioneer_goal: 'Meta anual precursor',

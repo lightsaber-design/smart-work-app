@@ -19,21 +19,24 @@ export function localeForLang(lang: Lang): string {
 }
 
 export function LanguageProvider({ lang, children }: { lang: Lang; children: React.ReactNode }) {
-  // Trigger re-render when a new language chunk finishes loading
-  const [, setLoadCount] = useState(0);
+  // Fuerza un nuevo valor de contexto cuando termina de cargar un idioma.
+  const [loadCount, setLoadCount] = useState(0);
 
   useEffect(() => {
     if (lang === 'es') return;
-    // Subscribe before loading so we catch the callback
+    // Suscribe antes de cargar para no perder el callback del chunk.
     const unsub = subscribeLanguageLoad(() => setLoadCount((n) => n + 1));
     void loadLanguage(lang);
     return unsub;
   }, [lang]);
 
+  // Identidad estable entre renders normales; cambia solo al cambiar de idioma
+  // o cuando termina de cargar un chunk (loadCount), para propagar traducciones.
   const t: TFn = useCallback(
     (key, vars) => translate(lang, key, vars),
+    // loadCount se incluye a propósito: re-memoiza al cargar un chunk de idioma.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lang, setLoadCount] // re-memoize after language chunk loads
+    [lang, loadCount]
   );
 
   return (

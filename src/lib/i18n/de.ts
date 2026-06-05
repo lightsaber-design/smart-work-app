@@ -348,6 +348,7 @@ const de: TranslationMap = {    // Navigation
     stats_report: 'Bericht',
     stats_hours: 'Stunden',
     stats_studies: 'Studien',
+    stats_no_studies: 'Keine Studien',
     stats_send_report: 'Bericht senden',
     stats_total: 'Gesamt',
     stats_annual_pioneer_goal: 'Jährliches Pionierziel',

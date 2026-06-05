@@ -7,7 +7,7 @@ import { useSetup, SetupData } from "@/hooks/useSetup";
 import { BottomNav, AppTab } from "@/components/BottomNav";
 import { LanguageProvider, localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { detectLanguage, Lang, translate } from "@/lib/i18n";
-import { ChevronLeft, BookOpen, MapPin } from "lucide-react";
+import { ChevronLeft, BookOpen, MapPin, Plus } from "lucide-react";
 import { hasActiveStudyWork, useEstudios } from "@/hooks/useEstudios";
 import { MissedStudyBanner } from "@/components/MissedStudyBanner";
 import { useDarkMode } from "@/hooks/useDarkMode";
@@ -105,6 +105,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const calendar = useCalendarEvents();
   const favorites = useFavoritePlaces();
   const estudios = useEstudios();
+  const activeStudyCount = estudios.contacts.filter((c) => c.active).length;
   const campaign = useSpecialCampaign();
   const { events: calendarEvents, markNotified, getEventsForDate } = calendar;
 
@@ -337,6 +338,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             calMonthMs={calMonthMs}
             navigate={navigate}
             navigateToStudySession={navigateToStudySession}
+            onCompleteStudyNow={estudios.completeSessionNow}
             openMonthlyCalendar={openMonthlyCalendar}
             t={t}
             locale={locale}
@@ -363,6 +365,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 specialCampaignGoals={campaign.goals}
                 onSetSpecialCampaign={campaign.setGoal}
                 categoryConfigs={setup.categorySettings}
+                studyCount={activeStudyCount}
+                onOpenStudies={() => navigate("estudios")}
               />
             </Suspense>
           </>
@@ -465,6 +469,15 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   <BookOpen className="w-4 h-4 text-pink-500" />
                 </div>
                 <span className="text-sm font-semibold text-foreground">{t("nav_studies")}</span>
+                {activeStudyCount > 0 ? (
+                  <span className="ml-auto min-w-6 h-6 px-1.5 rounded-full bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-300 text-xs font-bold flex items-center justify-center tabular-nums flex-shrink-0">
+                    {activeStudyCount}
+                  </span>
+                ) : (
+                  <span className="ml-auto w-6 h-6 rounded-full bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-300 flex items-center justify-center flex-shrink-0">
+                    <Plus className="w-3.5 h-3.5" />
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => navigate("map")}
@@ -519,6 +532,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 onUpdateSession={estudios.updateSession}
                 onDeleteSession={estudios.deleteSession}
                 onCompleteSession={estudios.completeSession}
+                onCompleteSessionNow={estudios.completeSessionNow}
                 focusedSession={selectedStudySession}
                 onFocusedSessionHandled={() => setSelectedStudySession(null)}
               />

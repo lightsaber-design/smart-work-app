@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ChevronRight, MapPin, Plus } from "lucide-react";
+import { ChevronRight, MapPin, Plus, CheckCircle2 } from "lucide-react";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import type { AppTab } from "@/components/BottomNav";
 import type { CalendarEvent } from "@/hooks/useCalendarEvents";
@@ -31,6 +31,7 @@ interface HomeTabProps {
   calMonthMs: number;
   navigate: (tab: AppTab) => void;
   navigateToStudySession: (contactId: string, sessionId: string) => void;
+  onCompleteStudyNow: (contactId: string, sessionId: string) => void;
   openMonthlyCalendar: () => void;
   t: TranslateFn;
   locale: string;
@@ -50,6 +51,7 @@ export function HomeTab({
   calMonthMs,
   navigate,
   navigateToStudySession,
+  onCompleteStudyNow,
   openMonthlyCalendar,
   t,
   locale,
@@ -245,25 +247,41 @@ export function HomeTab({
                   const meta = getCategoryMeta(setup.categorySettings, item.category);
                   const timeStr = `${String(item.date.getHours()).padStart(2, "0")}:${String(item.date.getMinutes()).padStart(2, "0")}`;
                   const forecast = formatActivityWeather(hourlyWeather, item.date, t);
+                  const isStudy = Boolean(item.contactId && item.sessionId);
                   return (
-                    <button
+                    <div
                       key={item.id}
-                      onClick={() =>
-                        item.contactId && item.sessionId
-                          ? navigateToStudySession(item.contactId, item.sessionId)
-                          : navigate("calendar")
-                      }
-                      className={`w-full flex items-center gap-3 rounded-2xl border px-3 py-3 text-left active:scale-[0.98] transition-transform ${style.card}`}
+                      className={`w-full flex items-center gap-2 rounded-2xl border pr-2 ${style.card}`}
                       style={{ borderLeftWidth: 3, borderLeftColor: style.accent }}
                     >
-                      <CategoryIcon icon={meta.icon} className="text-xl leading-none flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-foreground truncate">{item.label}</p>
-                        <p className="text-[11px] text-muted-foreground">{timeStr}</p>
-                        {forecast && <p className="text-[10px] text-muted-foreground truncate">{forecast}</p>}
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                    </button>
+                      <button
+                        onClick={() =>
+                          isStudy
+                            ? navigateToStudySession(item.contactId!, item.sessionId!)
+                            : navigate("calendar")
+                        }
+                        className="flex-1 min-w-0 flex items-center gap-3 px-3 py-3 text-left active:scale-[0.98] transition-transform"
+                      >
+                        <CategoryIcon icon={meta.icon} className="text-xl leading-none flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-foreground truncate">{item.label}</p>
+                          <p className="text-[11px] text-muted-foreground">{timeStr}</p>
+                          {forecast && <p className="text-[10px] text-muted-foreground truncate">{forecast}</p>}
+                        </div>
+                      </button>
+                      {isStudy ? (
+                        <button
+                          onClick={() => onCompleteStudyNow(item.contactId!, item.sessionId!)}
+                          aria-label={t("study_mark_completed")}
+                          title={t("study_mark_completed")}
+                          className="w-10 h-10 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform"
+                        >
+                          <CheckCircle2 className="w-5 h-5" />
+                        </button>
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      )}
+                    </div>
                   );
                 })}
               </div>
