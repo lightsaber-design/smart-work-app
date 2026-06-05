@@ -27,3 +27,8 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# Firma local de Android
+android/release-signing.properties
+android/*.jks
+android/*.keystore

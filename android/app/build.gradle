@@ -1,5 +1,16 @@
 apply plugin: 'com.android.application'
 
+def releaseSigningProperties = new Properties()
+def releaseSigningFile = rootProject.file('release-signing.properties')
+if (releaseSigningFile.exists()) {
+    releaseSigningFile.withInputStream { releaseSigningProperties.load(it) }
+}
+def hasReleaseSigning = releaseSigningProperties['storeFile'] &&
+        releaseSigningProperties['storePassword'] &&
+        releaseSigningProperties['keyAlias'] &&
+        releaseSigningProperties['keyPassword'] &&
+        rootProject.file(releaseSigningProperties['storeFile']).exists()
+
 android {
     namespace = "com.ministrylog.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,9 +27,20 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile rootProject.file(releaseSigningProperties['storeFile'])
+                storePassword releaseSigningProperties['storePassword']
+                keyAlias releaseSigningProperties['keyAlias']
+                keyPassword releaseSigningProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
