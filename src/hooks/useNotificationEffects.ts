@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { CalendarEvent } from "@/hooks/useCalendarEvents";
 import type { TimeEntry } from "@/hooks/useTimeTracker";
-import { showBrowserNotification, scheduleEventNotification, cancelEventNotification } from "@/lib/notifications";
-import { shouldNotifyEvent } from "@/lib/eventReminders";
+import { scheduleEventNotification, cancelEventNotification } from "@/lib/notifications";
 import { getEventEndDate } from "@/lib/timerOverrun";
 import { timerLongRunFireAt, getGoalStatus, currentMonthKey } from "@/lib/notificationRules";
 import { getCategoryLabel } from "@/lib/categories";
@@ -46,20 +45,28 @@ export function useNotificationEffects({
   const scheduledEventFireTimes = useRef<Map<string, number>>(new Map());
   const timer3hRef = useRef<string | null>(null);
   const overrunScheduledKey = useRef<string | null>(null);
-  const [overrunNotifiedId, setOverrunNotifiedId] = useState<string | null>(null);
 
-  // ── Schedule native event reminders ────────────────────────────────────────
+  // ── Schedule / cancel native event reminders ────────────────────────────────
+  // Nota: scheduledEventFireTimes es in-memory y se vacía al reiniciar la app.
+  // Para garantizar que los eventos completados/notificados cancelen su
+  // notificación nativa incluso tras un reinicio, llamamos a
+  // cancelEventNotification para todos ellos (la función es barata porque
+  // comprueba el mapa persistido en localStorage antes de llamar al plugin).
   useEffect(() => {
     const now = Date.now();
     const liveReminderIds = new Set<string>();
 
     calendarEvents.forEach((event) => {
-      if (event.completed || event.notified) return;
+      if (event.completed || event.notified) {
+        // Cancelar la notificación nativa aunque el ref esté vacío (reinicio de app)
+        void cancelEventNotification(event.id);
+        scheduledEventFireTimes.current.delete(event.id);
+        return;
+      }
+
       const reminder = event.reminderMinutesBefore ?? 0;
       const reminderAtMs = event.date.getTime() - reminder * 60_000;
       const startMs = event.date.getTime();
-      // Si el recordatorio previo aún no pasó, se usa; si ya pasó (o no hay),
-      // se programa para la hora del evento, siempre que siga en el futuro.
       const fireAtMs = reminderAtMs > now ? reminderAtMs : startMs;
       if (fireAtMs <= now) return;
       const fireAt = new Date(fireAtMs);
@@ -79,7 +86,7 @@ export function useNotificationEffects({
       });
     });
 
-    // Cancel reminders for events that no longer exist or are completed
+    // Cancelar recordatorios de eventos que ya no existen
     scheduledEventFireTimes.current.forEach((_, id) => {
       if (!liveReminderIds.has(id)) {
         void cancelEventNotification(id);
@@ -88,30 +95,7 @@ export function useNotificationEffects({
     });
   }, [calendarEvents, t]);
 
-  // ── Fallback periodic check (web / app open) ────────────────────────────────
-  useEffect(() => {
-    const hasPending = calendarEvents.some(
-      (e) => !e.completed && !e.notified && Date.now() < e.date.getTime() + 5 * 60_000,
-    );
-    if (!hasPending) return;
-
-    const check = () => {
-      const now = Date.now();
-      calendarEvents.forEach((event) => {
-        if (!shouldNotifyEvent(now, event)) return;
-        if (isTimerRunning) return;
-        showBrowserNotification(t("notif_activity_upcoming"), {
-          body: t("notif_activity_upcoming_body", { category: getCategoryLabel(event.category, t) }),
-        });
-        markNotified(event.id);
-      });
-    };
-    check();
-    const interval = setInterval(check, 30_000);
-    return () => clearInterval(interval);
-  }, [calendarEvents, isTimerRunning, markNotified, t]);
-
-  // ── Timer overrun → native notification ────────────────────────────────────
+  // ── Timer overrun → notificación nativa ────────────────────────────────────
   useEffect(() => {
     if (!notifTimerOverrun || !activeEntry || !activeScheduledEvent) {
       if (overrunScheduledKey.current) {
@@ -122,33 +106,25 @@ export function useNotificationEffects({
     }
 
     const key = `${activeEntry.id}:${activeScheduledEvent.id}`;
-    if (overrunScheduledKey.current === key) return; // already handled this pair
+    if (overrunScheduledKey.current === key) return;
     overrunScheduledKey.current = key;
 
     const end = getEventEndDate(activeScheduledEvent);
-    if (!end) return; // event has no explicit endTime → skip
+    if (!end) return;
 
     const travelMs = travelTimeEnabled ? travelTimeMinutes * 60_000 : 0;
     const fireAt = new Date(end.getTime() + travelMs);
 
-    if (fireAt.getTime() > Date.now()) {
-      // Schedule for exact time (native platforms deliver even with app closed)
-      void scheduleEventNotification(
-        "timer-overrun",
-        t("timer_overrun_title"),
-        t("timer_overrun_notification_body", { category: getCategoryLabel(activeScheduledEvent.category, t) }),
-        fireAt,
-      );
-    } else if (overrunNotifiedId !== key) {
-      // Already past overrun time when app opened → notify immediately
-      showBrowserNotification(t("timer_overrun_title"), {
-        body: t("timer_overrun_notification_body", { category: getCategoryLabel(activeScheduledEvent.category, t) }),
-      });
-      setOverrunNotifiedId(key);
-    }
-  }, [activeEntry, activeScheduledEvent, notifTimerOverrun, overrunNotifiedId, t, travelTimeEnabled, travelTimeMinutes]);
+    // Programar para la hora exacta o, si ya pasó, disparar en 1 s
+    void scheduleEventNotification(
+      "timer-overrun",
+      t("timer_overrun_title"),
+      t("timer_overrun_notification_body", { category: getCategoryLabel(activeScheduledEvent.category, t) }),
+      fireAt.getTime() > Date.now() ? fireAt : new Date(Date.now() + 1_000),
+    );
+  }, [activeEntry, activeScheduledEvent, notifTimerOverrun, t, travelTimeEnabled, travelTimeMinutes]);
 
-  // ── Timer active > 3h ───────────────────────────────────────────────────────
+  // ── Timer activo > 3h ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!notifTimer3h) return;
 
@@ -168,17 +144,9 @@ export function useNotificationEffects({
       t("notif_timer_3h_body"),
       timerLongRunFireAt(activeEntry.startTime),
     );
-    // Web fallback: interval check
-    const iv = setInterval(() => {
-      if (Date.now() - activeEntry.startTime.getTime() >= 3 * 3_600_000) {
-        showBrowserNotification(t("notif_timer_3h_title"), { body: t("notif_timer_3h_body") });
-        clearInterval(iv);
-      }
-    }, 60_000);
-    return () => clearInterval(iv);
   }, [activeEntry, notifTimer3h, t]);
 
-  // ── Persistent ongoing notification while timer is running ─────────────────
+  // ── Notificación persistente mientras el timer está activo ─────────────────
   useEffect(() => {
     if (!activeEntry) {
       void stopTimerNotification();
@@ -192,7 +160,7 @@ export function useNotificationEffects({
     return () => { void stopTimerNotification(); };
   }, [activeEntry, t]);
 
-  // ── Monthly goal ────────────────────────────────────────────────────────────
+  // ── Meta mensual ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!notifMonthlyGoal) return;
     const goalHours = precursorHours ?? 0;
@@ -204,17 +172,29 @@ export function useNotificationEffects({
       const key = `_ml_goal_reached_${monthKey}`;
       if (localStorage.getItem(key)) return;
       localStorage.setItem(key, "1");
-      showBrowserNotification(t("notif_goal_reached_title"), { body: t("notif_goal_reached_body") });
+      void scheduleEventNotification(
+        `goal-reached-${monthKey}`,
+        t("notif_goal_reached_title"),
+        t("notif_goal_reached_body"),
+        new Date(Date.now() + 1_000),
+      );
     } else if (status.kind === "reminder") {
       const key = `_ml_goal_reminder_${monthKey}`;
       if (localStorage.getItem(key)) return;
       localStorage.setItem(key, "1");
-      showBrowserNotification(t("notif_goal_reminder_title"), {
-        body: t("notif_goal_reminder_body", {
+      void scheduleEventNotification(
+        `goal-reminder-${monthKey}`,
+        t("notif_goal_reminder_title"),
+        t("notif_goal_reminder_body", {
           hours: String(Math.ceil(status.remainingHours)),
           days: String(status.daysLeft),
         }),
-      });
+        new Date(Date.now() + 1_000),
+      );
     }
   }, [calMonthMs, notifMonthlyGoal, precursorHours, t]);
+
+  // Referencia estable para markNotified (usado por efectos internos si fuera necesario)
+  void isTimerRunning;
+  void markNotified;
 }

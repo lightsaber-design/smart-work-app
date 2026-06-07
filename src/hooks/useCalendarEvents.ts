@@ -128,7 +128,14 @@ function eventsShareSchedule(a: CalendarEvent, b: CalendarEvent): boolean {
 
 function removeCompletedScheduleDuplicates(events: CalendarEvent[], completedEvent: CalendarEvent): CalendarEvent[] {
   if (!completedEvent.completed) return events;
-  return events.filter((event) => event.id === completedEvent.id || !eventsShareSchedule(event, completedEvent));
+  // Solo elimina eventos PENDIENTES (no completados) que solapen con el evento
+  // completado. Los eventos ya completados (con datos reales de duración) se
+  // conservan siempre para no perder horas registradas.
+  return events.filter((event) =>
+    event.id === completedEvent.id ||
+    event.completed ||
+    !eventsShareSchedule(event, completedEvent)
+  );
 }
 
 export function useCalendarEvents() {
