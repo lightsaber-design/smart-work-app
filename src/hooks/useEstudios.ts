@@ -24,7 +24,8 @@ export type ScheduleFrequency = "weekly" | "fortnightly" | "monthly";
 
 export interface ContactSchedule {
   frequency: ScheduleFrequency;
-  dayOfWeek: number; // 0=Dom … 6=Sáb
+  /** 0=Dom…6=Sáb. Undefined = cualquier día (sin día fijo). */
+  dayOfWeek?: number;
   time: string;      // "HH:MM"
   lesson?: string;   // lección por defecto
 }
@@ -71,12 +72,16 @@ function isScheduleFrequency(value: unknown): value is ScheduleFrequency {
 
 function parseStoredSchedule(value: unknown): ContactSchedule | undefined {
   if (!isRecord(value) || !isScheduleFrequency(value.frequency)) return undefined;
-  if (typeof value.dayOfWeek !== "number" || value.dayOfWeek < 0 || value.dayOfWeek > 6) return undefined;
   if (typeof value.time !== "string") return undefined;
+
+  const dayOfWeek =
+    typeof value.dayOfWeek === "number" && value.dayOfWeek >= 0 && value.dayOfWeek <= 6
+      ? value.dayOfWeek
+      : undefined;
 
   return {
     frequency: value.frequency,
-    dayOfWeek: value.dayOfWeek,
+    dayOfWeek,
     time: value.time,
     lesson: typeof value.lesson === "string" ? value.lesson : undefined,
   };
@@ -127,6 +132,54 @@ function targetPendingCount(freq: ScheduleFrequency): number {
   return freq === "weekly" ? 4 : 2;
 }
 
+/* Días que tarda una sesión pendiente vencida en considerarse "atrasada" y
+   purgarse, para que no siga avisando indefinidamente. Aproximadamente un ciclo
+   de la programación; para contactos sin programación se usa un valor por
+   defecto. */
+const FREQUENCY_INTERVAL_DAYS: Record<ScheduleFrequency, number> = {
+  weekly: 7,
+  fortnightly: 14,
+  monthly: 31,
+};
+const DEFAULT_STALE_DAYS = 14;
+
+function staleThresholdMs(contact: EstudioContact): number {
+  const days = contact.schedule ? FREQUENCY_INTERVAL_DAYS[contact.schedule.frequency] : DEFAULT_STALE_DAYS;
+  return days * 86_400_000;
+}
+
+/* Indica si una sesión pendiente está vencida hace más de un ciclo. */
+export function isStalePendingSession(
+  contact: EstudioContact,
+  session: EstudioSession,
+  nowMs: number
+): boolean {
+  if (!session.pending) return false;
+  return nowMs - new Date(session.date).getTime() > staleThresholdMs(contact);
+}
+
+/* Quita las sesiones pendientes atrasadas hace más de un ciclo. Puro, no muta. */
+function pruneStalePending(contact: EstudioContact, nowMs: number): EstudioContact {
+  const sessions = contact.sessions.filter((s) => !isStalePendingSession(contact, s, nowMs));
+  return sessions.length === contact.sessions.length ? contact : { ...contact, sessions };
+}
+
+/* Selecciona la sesión pendiente más cercana a "ahora" (la de esta semana),
+   no la más antigua. Así, completar un estudio resuelve la sesión que el
+   usuario está haciendo ahora y no una atrasada distinta. Puro, no muta. */
+export function nearestPendingSession(
+  sessions: EstudioSession[],
+  nowMs: number
+): EstudioSession | null {
+  const pending = sessions.filter((s) => s.pending);
+  if (pending.length === 0) return null;
+  return pending.reduce((best, s) =>
+    Math.abs(new Date(s.date).getTime() - nowMs) < Math.abs(new Date(best.date).getTime() - nowMs)
+      ? s
+      : best
+  );
+}
+
 /* Rellena sesiones pendientes hasta el objetivo segun la frecuencia. Puro, no muta. */
 function fillPendingSessions(contact: EstudioContact): EstudioContact {
   if (!contact.schedule) return contact;
@@ -162,13 +215,25 @@ export function getNextOccurrences(schedule: ContactSchedule, count: number): Da
 
   const start = new Date();
   start.setHours(0, 0, 0, 0);
-  const dayDiff = (schedule.dayOfWeek - start.getDay() + 7) % 7;
-  // Si hoy es el dia objetivo pero la hora ya paso, empieza la semana siguiente.
-  const candidateToday = new Date(start);
-  candidateToday.setHours(h, m, 0, 0);
-  const skipToday = dayDiff === 0 && candidateToday <= new Date();
   const cursor = new Date(start);
-  cursor.setDate(cursor.getDate() + (skipToday ? 7 : dayDiff));
+
+  if (schedule.dayOfWeek !== undefined) {
+    // Día fijo: saltar al próximo día de la semana objetivo.
+    const dayDiff = (schedule.dayOfWeek - start.getDay() + 7) % 7;
+    const candidateToday = new Date(start);
+    candidateToday.setHours(h, m, 0, 0);
+    const skipToday = dayDiff === 0 && candidateToday <= new Date();
+    cursor.setDate(cursor.getDate() + (skipToday ? 7 : dayDiff));
+  } else {
+    // Cualquier día: empezar desde hoy; si la hora ya pasó, avanzar un intervalo.
+    const candidateToday = new Date(start);
+    candidateToday.setHours(h, m, 0, 0);
+    if (candidateToday <= new Date()) {
+      if (schedule.frequency === "weekly") cursor.setDate(cursor.getDate() + 7);
+      else if (schedule.frequency === "fortnightly") cursor.setDate(cursor.getDate() + 14);
+      else cursor.setMonth(cursor.getMonth() + 1);
+    }
+  }
 
   while (results.length < count) {
     const d = new Date(cursor);
@@ -231,10 +296,12 @@ export function useEstudios() {
     readJsonValue<unknown[]>("estudios", [])
       .then((value) => {
         if (!Array.isArray(value)) throw new Error("bad format");
+        const nowMs = Date.now();
         const parsed = value
           .map(parseStoredContact)
           .filter((contact): contact is EstudioContact => contact !== null)
-          .map((contact) => ({ ...contact, sessions: dedupePendingSessions(contact.sessions) }));
+          .map((contact) => ({ ...contact, sessions: dedupePendingSessions(contact.sessions) }))
+          .map((contact) => pruneStalePending(contact, nowMs));
         const filled = parsed.map(fillPendingSessions);
         setContacts(filled);
         if (filled.some((contact, index) => contact !== parsed[index])) {
@@ -318,12 +385,11 @@ export function useEstudios() {
       const contact = prev.find((c) => c.id === contactId);
       if (!contact) return prev;
 
-      // Busca la proxima sesion pendiente; si forceNew esta activo se crea una nueva.
+      // Busca la sesion pendiente mas cercana a hoy (la de esta semana); si
+      // forceNew esta activo se crea una nueva.
       const nextPending = data?.forceNew
         ? null
-        : contact.sessions
-            .filter((s) => s.pending)
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] ?? null;
+        : nearestPendingSession(contact.sessions, Date.now());
 
       let newSessions: EstudioSession[];
       if (nextPending) {
@@ -432,9 +498,7 @@ export function useEstudios() {
         };
         const nextPending = data.forceNew
           ? null
-          : c.sessions
-              .filter((session) => session.pending)
-              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] ?? null;
+          : nearestPendingSession(c.sessions, Date.now());
 
         if (nextPending) {
           const sessions = dedupePendingSessions(c.sessions.map((session) =>

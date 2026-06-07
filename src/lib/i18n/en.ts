@@ -82,6 +82,8 @@ const en: TranslationMap = {    // Navigation
     studies_auto_repeat: 'Automatic repeat',
     studies_fortnightly: 'Fortnightly',
     studies_day: 'Day',
+    studies_day_fixed: 'Fixed day',
+    studies_day_flexible: 'Any day',
     studies_default_lesson: 'Default lesson',
     studies_default_lesson_placeholder: 'E.g.: Bible study',
     studies_generated_dates: 'Next generated dates',

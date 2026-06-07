@@ -119,6 +119,7 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
 
   const initFreq: ScheduleFrequency | "none" = contact?.schedule?.frequency ?? "none";
   const [freq, setFreq] = useState<ScheduleFrequency | "none">(initFreq);
+  const [dayFixed, setDayFixed] = useState(contact?.schedule ? contact.schedule.dayOfWeek !== undefined : true);
   const [schedDay, setSchedDay] = useState(contact?.schedule?.dayOfWeek ?? new Date().getDay());
   const [schedTime, setSchedTime] = useState(contact?.schedule?.time ?? "10:00");
   const [schedLesson, setSchedLesson] = useState(contact?.schedule?.lesson ?? "");
@@ -132,7 +133,7 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
     if (!name.trim()) return;
     const schedule: ContactSchedule | undefined =
       freq !== "none"
-        ? { frequency: freq, dayOfWeek: schedDay, time: schedTime, lesson: schedLesson.trim() || undefined }
+        ? { frequency: freq, dayOfWeek: dayFixed ? schedDay : undefined, time: schedTime, lesson: schedLesson.trim() || undefined }
         : undefined;
     onSave({
       name: name.trim(),
@@ -202,20 +203,40 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
 
             {freq !== "none" && (
               <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>{t("studies_day")}</Label>
-                    <Select value={String(schedDay)} onValueChange={(v) => setSchedDay(Number(v))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {[1, 2, 3, 4, 5, 6, 0].map((day) => (
-                          <SelectItem key={day} value={String(day)}>
-                            {formatWeekday(new Date(2024, 0, 7 + day), locale)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                {/* Toggle día fijo / cualquier día */}
+                <div className="flex rounded-lg overflow-hidden border border-border text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setDayFixed(true)}
+                    className={`flex-1 py-2 text-center transition-colors ${dayFixed ? "bg-primary text-primary-foreground font-medium" : "bg-muted text-muted-foreground"}`}
+                  >
+                    {t("studies_day_fixed")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDayFixed(false)}
+                    className={`flex-1 py-2 text-center transition-colors ${!dayFixed ? "bg-primary text-primary-foreground font-medium" : "bg-muted text-muted-foreground"}`}
+                  >
+                    {t("studies_day_flexible")}
+                  </button>
+                </div>
+
+                <div className={`grid gap-3 ${dayFixed ? "grid-cols-2" : "grid-cols-1"}`}>
+                  {dayFixed && (
+                    <div className="space-y-1.5">
+                      <Label>{t("studies_day")}</Label>
+                      <Select value={String(schedDay)} onValueChange={(v) => setSchedDay(Number(v))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {[1, 2, 3, 4, 5, 6, 0].map((day) => (
+                            <SelectItem key={day} value={String(day)}>
+                              {formatWeekday(new Date(2024, 0, 7 + day), locale)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <Label>{t("time_label")}</Label>
                     <input
@@ -236,7 +257,7 @@ function ContactSheet({ contact, favoritePlaces, onSave, onClose }: {
                 </div>
                 <div className="rounded-xl bg-primary/5 border border-primary/20 px-3 py-2 space-y-1">
                   <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">{t("studies_generated_dates")}</p>
-                  {getNextOccurrences({ frequency: freq, dayOfWeek: schedDay, time: schedTime }, 3).map((d, i) => (
+                  {getNextOccurrences({ frequency: freq, dayOfWeek: dayFixed ? schedDay : undefined, time: schedTime }, 3).map((d, i) => (
                     <p key={i} className="text-xs text-foreground">
                       {formatDateLong(d, locale)} · {schedTime}
                     </p>

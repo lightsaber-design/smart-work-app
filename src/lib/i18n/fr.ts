@@ -99,6 +99,8 @@ const fr: TranslationMap = {    // Navigation
     studies_auto_repeat: 'Répétition automatique',
     studies_fortnightly: 'Tous les quinze jours',
     studies_day: 'Jour',
+    studies_day_fixed: 'Jour fixe',
+    studies_day_flexible: 'N\'importe quel jour',
     studies_default_lesson: 'Leçon par défaut',
     studies_default_lesson_placeholder: 'Ex. : Étude biblique',
     studies_generated_dates: 'Prochaines dates générées',

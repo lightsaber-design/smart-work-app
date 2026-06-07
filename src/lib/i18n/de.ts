@@ -99,6 +99,8 @@ const de: TranslationMap = {    // Navigation
     studies_auto_repeat: 'Automatische Wiederholung',
     studies_fortnightly: 'Vierzehntägig',
     studies_day: 'Tag',
+    studies_day_fixed: 'Fester Tag',
+    studies_day_flexible: 'Beliebiger Tag',
     studies_default_lesson: 'Standardlektion',
     studies_default_lesson_placeholder: 'Z. B.: Bibelstudium',
     studies_generated_dates: 'Nächste generierte Termine',

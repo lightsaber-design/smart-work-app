@@ -102,6 +102,8 @@ const es: TranslationMap = {
     studies_auto_repeat: 'Repetición automática',
     studies_fortnightly: 'Quincenal',
     studies_day: 'Día',
+    studies_day_fixed: 'Día fijo',
+    studies_day_flexible: 'Cualquier día',
     studies_default_lesson: 'Lección por defecto',
     studies_default_lesson_placeholder: 'Ej: Estudio de la Biblia',
     studies_generated_dates: 'Próximas fechas generadas',
