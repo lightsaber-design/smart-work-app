@@ -251,11 +251,11 @@ export function useCalendarEvents() {
     [persistEvents]
   );
 
-  const deleteEvent = useCallback((id: string) => {
+  const deleteEvent = useCallback((id: string, scope: "single" | "all" = "all") => {
     setEvents((prev) => {
       const event = prev.find((e) => e.id === id);
       if (!event) return prev;
-      if (event.recurrence !== "none") {
+      if (scope === "all" && event.recurrence !== "none") {
         const parentId = event.parentId || event.id;
         const updated = prev.filter((e) => e.id !== parentId && e.parentId !== parentId);
         eventsRef.current = updated;

@@ -139,9 +139,15 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     tracker.deleteEntry(activeEntry.id);
     setShortStopPrompt(null);
   };
-  const confirmDeleteEvent = () => {
+  const deleteEventIsRecurring = useMemo(() => {
+    if (!deleteEventPromptId) return false;
+    const ev = calendarEvents.find((e) => e.id === deleteEventPromptId);
+    return ev ? ev.recurrence !== "none" : false;
+  }, [deleteEventPromptId, calendarEvents]);
+
+  const confirmDeleteEvent = (scope: "single" | "all" = "all") => {
     if (!deleteEventPromptId) return;
-    calendar.deleteEvent(deleteEventPromptId);
+    calendar.deleteEvent(deleteEventPromptId, scope);
     setDeleteEventPromptId(null);
   };
 
@@ -221,7 +227,18 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     };
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    // Re-mide cuando el contenido del timer cambia de alto (p.ej. aparece el
+    // selector de estudio al elegir la categoría Estudio), para que la hoja
+    // inferior no tape los controles.
+    const contentEl = timerContentRef.current;
+    const observer = contentEl && typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => measure())
+      : null;
+    if (contentEl && observer) observer.observe(contentEl);
+    return () => {
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+    };
   }, [activeTab, todayEventCount, summaryOpen]);
 
   const peekH = Math.round(summaryViewportHeight * 0.34);
@@ -612,16 +629,38 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("cal_delete_confirm_title")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("cal_delete_confirm_body")}</AlertDialogDescription>
+            <AlertDialogDescription>
+              {deleteEventIsRecurring ? t("cal_delete_recurring_body") : t("cal_delete_confirm_body")}
+            </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-2">
-            <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={confirmDeleteEvent}
-            >
-              {t("home_delete_activity")}
-            </AlertDialogAction>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+            {deleteEventIsRecurring ? (
+              <>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => confirmDeleteEvent("all")}
+                >
+                  {t("cal_delete_all_series")}
+                </AlertDialogAction>
+                <AlertDialogAction
+                  className="border border-border bg-background text-foreground hover:bg-muted shadow-none"
+                  onClick={() => confirmDeleteEvent("single")}
+                >
+                  {t("cal_delete_this_only")}
+                </AlertDialogAction>
+                <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
+              </>
+            ) : (
+              <>
+                <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => confirmDeleteEvent("all")}
+                >
+                  {t("home_delete_activity")}
+                </AlertDialogAction>
+              </>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

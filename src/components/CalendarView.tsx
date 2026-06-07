@@ -49,7 +49,7 @@ type CalendarMode = "daily" | "monthly";
 interface CalendarViewProps {
   events: CalendarEvent[];
   onAddEvent: (params: AddEventParams) => void;
-  onDeleteEvent: (id: string) => void;
+  onDeleteEvent: (id: string, scope?: "single" | "all") => void;
   onToggleCompleted: (id: string) => void;
   onUpdateEvent: (
     id: string,
@@ -570,9 +570,15 @@ export function CalendarView({
   const [savingStudySession, setSavingStudySession] = useState(false);
   const [deleteEventPromptId, setDeleteEventPromptId] = useState<string | null>(null);
 
-  const confirmDeleteEvent = () => {
+  const deleteEventIsRecurring = useMemo(() => {
+    if (!deleteEventPromptId) return false;
+    const ev = events.find((e) => e.id === deleteEventPromptId);
+    return ev ? ev.recurrence !== "none" : false;
+  }, [deleteEventPromptId, events]);
+
+  const confirmDeleteEvent = (scope: "single" | "all" = "all") => {
     if (!deleteEventPromptId) return;
-    onDeleteEvent(deleteEventPromptId);
+    onDeleteEvent(deleteEventPromptId, scope);
     if (editEvent?.id === deleteEventPromptId) setEditEvent(null);
     setDeleteEventPromptId(null);
   };
@@ -1726,16 +1732,38 @@ export function CalendarView({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("cal_delete_confirm_title")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("cal_delete_confirm_body")}</AlertDialogDescription>
+            <AlertDialogDescription>
+              {deleteEventIsRecurring ? t("cal_delete_recurring_body") : t("cal_delete_confirm_body")}
+            </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-2">
-            <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={confirmDeleteEvent}
-            >
-              {t("home_delete_activity")}
-            </AlertDialogAction>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+            {deleteEventIsRecurring ? (
+              <>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => confirmDeleteEvent("all")}
+                >
+                  {t("cal_delete_all_series")}
+                </AlertDialogAction>
+                <AlertDialogAction
+                  className="border border-border bg-background text-foreground hover:bg-muted shadow-none"
+                  onClick={() => confirmDeleteEvent("single")}
+                >
+                  {t("cal_delete_this_only")}
+                </AlertDialogAction>
+                <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
+              </>
+            ) : (
+              <>
+                <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => confirmDeleteEvent("all")}
+                >
+                  {t("home_delete_activity")}
+                </AlertDialogAction>
+              </>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
