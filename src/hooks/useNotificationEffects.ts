@@ -6,6 +6,7 @@ import { shouldNotifyEvent } from "@/lib/eventReminders";
 import { getEventEndDate } from "@/lib/timerOverrun";
 import { timerLongRunFireAt, getGoalStatus, currentMonthKey } from "@/lib/notificationRules";
 import { getCategoryLabel } from "@/lib/categories";
+import { startTimerNotification, stopTimerNotification } from "@/lib/timerNotification";
 
 type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -176,6 +177,20 @@ export function useNotificationEffects({
     }, 60_000);
     return () => clearInterval(iv);
   }, [activeEntry, notifTimer3h, t]);
+
+  // ── Persistent ongoing notification while timer is running ─────────────────
+  useEffect(() => {
+    if (!activeEntry) {
+      void stopTimerNotification();
+      return;
+    }
+    void startTimerNotification(
+      activeEntry.startTime,
+      t("notif_timer_running_title"),
+      t("notif_timer_running_body", { category: getCategoryLabel(activeEntry.category, t) }),
+    );
+    return () => { void stopTimerNotification(); };
+  }, [activeEntry, t]);
 
   // ── Monthly goal ────────────────────────────────────────────────────────────
   useEffect(() => {

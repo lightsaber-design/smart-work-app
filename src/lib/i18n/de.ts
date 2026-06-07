@@ -168,6 +168,8 @@ const de: TranslationMap = {    // Navigation
     notif_study_reminder_title: '📖 Studie ohne Termin',
     notif_study_reminder_body: '{name} hat seit über 14 Tagen keinen Termin.',
     notif_study_reminder_body_multi: '{count} Kontakte haben seit über 14 Tagen keinen Termin.',
+    notif_timer_running_title: '⏱ Timer läuft',
+    notif_timer_running_body: '{category}',
     timer_overrun_title: 'Timer läuft noch',
     timer_overrun_notification_body: '{category} hat die geplante Endzeit überschritten.',
     timer_overrun_body: '{category} sollte um {time} enden.',

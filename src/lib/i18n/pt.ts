@@ -168,6 +168,8 @@ const pt: TranslationMap = {    // Navigation
     notif_study_reminder_title: '📖 Estudo sem compromisso',
     notif_study_reminder_body: '{name} está há mais de 14 dias sem compromisso.',
     notif_study_reminder_body_multi: '{count} contatos estão há mais de 14 dias sem compromisso.',
+    notif_timer_running_title: '⏱ Timer ativo',
+    notif_timer_running_body: '{category}',
     timer_overrun_title: 'Timer ainda ativo',
     timer_overrun_notification_body: '{category} passou da hora final programada.',
     timer_overrun_body: '{category} estava programada para terminar às {time}.',

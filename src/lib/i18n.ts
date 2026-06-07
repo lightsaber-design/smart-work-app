@@ -188,6 +188,8 @@ const es: TranslationMap = {
     notif_study_reminder_title: '📖 Estudio sin cita',
     notif_study_reminder_body: '{name} lleva más de 14 días sin cita programada.',
     notif_study_reminder_body_multi: '{count} contactos llevan más de 14 días sin cita.',
+    notif_timer_running_title: '⏱ Timer activo',
+    notif_timer_running_body: '{category}',
     timer_overrun_title: 'Timer aún activo',
     timer_overrun_notification_body: '{category} ya pasó su hora de fin programada.',
     timer_overrun_body: '{category} estaba programada para terminar a las {time}.',
