@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { BookOpen, X, Calendar, Clock } from "lucide-react";
-import { EstudioContact, EstudioSession, SessionFile } from "@/hooks/useEstudios";
+import { EstudioContact, EstudioSession, SessionFile, isStalePendingSession } from "@/hooks/useEstudios";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { formatDateLong } from "@/lib/dateFormat";
 
@@ -63,6 +63,8 @@ export function MissedStudyBanner({ contacts, onComplete, onCancel, onReschedule
     if (!contact.active) continue;
     for (const session of (contact.sessions ?? [])) {
       if (!session.pending) continue;
+      // Atrasada hace más de un ciclo: se considera obsoleta y no se avisa.
+      if (isStalePendingSession(contact, session, now)) continue;
       const sessionMs = new Date(session.date).getTime();
       // Vencida por más de cinco minutos.
       if (now - sessionMs > 5 * 60 * 1000 && !dismissed.has(session.id)) {

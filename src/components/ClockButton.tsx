@@ -1,7 +1,7 @@
 import { Pause, Play, BookOpen, X, Clock } from "lucide-react";
 import { WorkCategory } from "@/hooks/useTimeTracker";
 import { CalendarEvent } from "@/hooks/useCalendarEvents";
-import { EstudioContact, EstudioSession, SessionFile, hasActiveStudyWork } from "@/hooks/useEstudios";
+import { EstudioContact, EstudioSession, SessionFile, hasActiveStudyWork, nearestPendingSession } from "@/hooks/useEstudios";
 import {
   Select,
   SelectContent,
@@ -199,9 +199,8 @@ export function ClockButton({
       if (selectedEstudioId && onEstudioSession) {
         const contact = estudios.find((e) => e.id === selectedEstudioId);
         if (!contact) { onEstudioSession(selectedEstudioId); return; }
-        const nextPending = (contact.sessions ?? [])
-          .filter((s) => s.pending)
-          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] ?? null;
+        // La sesion mas cercana a hoy (la de esta semana), no la mas antigua.
+        const nextPending = nearestPendingSession(contact.sessions ?? [], Date.now());
         const sessionData: SessionData = { time: getCurrentTimeStr(), files: [] };
         if (nextPending) {
           const diffHoursAbs = Math.abs(new Date(nextPending.date).getTime() - Date.now()) / (1000 * 60 * 60);
