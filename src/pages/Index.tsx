@@ -9,7 +9,6 @@ import { LanguageProvider, localeForLang, useLang, useT } from "@/lib/LanguageCo
 import { detectLanguage, Lang, translate } from "@/lib/i18n";
 import { ChevronLeft, BookOpen, MapPin, Plus } from "lucide-react";
 import { hasActiveStudyWork, useEstudios } from "@/hooks/useEstudios";
-import { MissedStudyBanner } from "@/components/MissedStudyBanner";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { useSpecialCampaign } from "@/hooks/useSpecialCampaign";
 import { getCategoryMeta } from "@/lib/categories";
@@ -21,6 +20,7 @@ import { formatDateLong } from "@/lib/dateFormat";
 import { hexToRgba, getWeatherHeroTheme } from "@/lib/weatherUtils";
 import { useWeather } from "@/hooks/useWeather";
 import { useNotificationEffects } from "@/hooks/useNotificationEffects";
+import { useStudyNotifications } from "@/hooks/useStudyNotifications";
 import { HomeTab } from "@/pages/tabs/HomeTab";
 import { TimerTab } from "@/pages/tabs/TimerTab";
 import {
@@ -178,11 +178,18 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     activeEntry: activeEntry ?? null,
     calMonthMs,
     precursorHours: setup.precursorHours,
+    estudiosContacts: estudios.contacts,
     notifTimerOverrun: setup.notifTimerOverrun,
     notifTimer3h: setup.notifTimer3h,
     notifMonthlyGoal: setup.notifMonthlyGoal,
     travelTimeEnabled: setup.travelTimeEnabled,
     travelTimeMinutes: setup.travelTimeMinutes,
+  });
+
+  useStudyNotifications({
+    contacts: estudios.contacts,
+    isTimerRunning: tracker.isRunning,
+    t,
   });
 
   // ── Summary sheet: event lists ────────────────────────────────────────────────
@@ -582,6 +589,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                     onAddFavorite={favorites.addPlace}
                     onDeleteFavorite={favorites.deletePlace}
                     defaultCenter={defaultCenter}
+                    cityName={displayCityName}
                   />
                 </Suspense>
               </div>
@@ -590,22 +598,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         </div>
       </main>
 
-      <MissedStudyBanner
-        contacts={estudios.contacts}
-        onComplete={estudios.completeSession}
-        onCancel={estudios.deleteSession}
-        onReschedule={(contactId, sessionId, data) => {
-          const contact = estudios.contacts.find((c) => c.id === contactId);
-          const session = contact?.sessions.find((s) => s.id === sessionId);
-          if (session) {
-            const oldDate = new Date(session.date);
-            calendarEvents
-              .filter((e) => !e.completed && e.date.toDateString() === oldDate.toDateString() && Math.abs(e.date.getTime() - oldDate.getTime()) < 30 * 60 * 1000)
-              .forEach((e) => calendar.deleteEvent(e.id));
-          }
-          estudios.updateSession(contactId, sessionId, data);
-        }}
-      />
 
       <AlertDialog open={!!shortStopPrompt} onOpenChange={(open) => { if (!open) setShortStopPrompt(null); }}>
         <AlertDialogContent>

@@ -1,7 +1,7 @@
-import { Pause, Play, BookOpen, X, Clock } from "lucide-react";
+import { Pause, Play, BookOpen, X, Clock, StickyNote, Check, Pencil, Paperclip } from "lucide-react";
 import { WorkCategory } from "@/hooks/useTimeTracker";
 import { CalendarEvent } from "@/hooks/useCalendarEvents";
-import { EstudioContact, EstudioSession, SessionFile, hasActiveStudyWork, nearestPendingSession } from "@/hooks/useEstudios";
+import { EstudioContact, EstudioSession, SessionFile, hasActiveStudyWork, nearestPendingSession, weekStartMs } from "@/hooks/useEstudios";
 import {
   Select,
   SelectContent,
@@ -10,6 +10,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useMemo, useState, useEffect, useRef } from "react";
+import { saveFile } from "@/lib/sessionFiles";
+import { generateId } from "@/lib/uuid";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
 import { CategoryConfig, getActiveCategoryConfigs, getCategoryLabel, getCategoryMeta } from "@/lib/categories";
@@ -80,6 +82,8 @@ interface ClockButtonProps {
   activeCategory?: WorkCategory;
   activeEntryId?: string;
   activeEntryStartTime?: Date;
+  activeEventNotes?: string;
+  onSaveNotes?: (notes: string) => void;
   estudios?: EstudioContact[];
   onDisplayCategoryChange?: (category: WorkCategory) => void;
   onEstudioSession?: (
@@ -112,6 +116,7 @@ function detectCategoryFromEvents(events: CalendarEvent[]): WorkCategory | null 
 export function ClockButton({
   isRunning, elapsed, onClockIn, onClockOut, onUpdateCategory, onUpdateStartTime,
   calendarEvents, activeCategory, activeEntryId, activeEntryStartTime,
+  activeEventNotes, onSaveNotes,
   estudios = [], onDisplayCategoryChange, onEstudioSession,
   categoryConfigs,
   activityStartHour = DEFAULT_ACTIVITY_START_HOUR,
@@ -128,6 +133,14 @@ export function ClockButton({
   const [pendingPrompt, setPendingPrompt] = useState<PendingPrompt | null>(null);
   const [wallTime, setWallTime] = useState(getCurrentTimeStr());
   const [seconds, setSeconds] = useState(new Date().getSeconds());
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesText, setNotesText] = useState(activeEventNotes ?? "");
+  const [notesSaved, setNotesSaved] = useState(false);
+  const [sessionLesson, setSessionLesson] = useState("");
+  const [sessionNotes, setSessionNotes] = useState("");
+  const [sessionPendingFiles, setSessionPendingFiles] = useState<{ file: File; id: string }[]>([]);
+  const [sessionEditMode, setSessionEditMode] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Actualiza el reloj de pared cada segundo.
@@ -138,6 +151,37 @@ export function ClockButton({
     }, 1000);
     return () => { if (tickRef.current) clearInterval(tickRef.current); };
   }, []);
+
+  // Sincroniza notas cuando cambia el evento activo.
+  useEffect(() => {
+    setNotesText(activeEventNotes ?? "");
+    setNotesSaved(false);
+  }, [activeEventNotes]);
+
+  // Resetea el estado de notas cuando el timer se detiene.
+  useEffect(() => {
+    if (!isRunning) {
+      setNotesOpen(false);
+      setNotesText("");
+      setNotesSaved(false);
+      setSessionLesson("");
+      setSessionNotes("");
+      setSessionPendingFiles([]);
+      setSessionEditMode(false);
+    }
+  }, [isRunning]);
+
+  // Precarga los datos de la sesión más cercana cuando cambia el contacto seleccionado.
+  useEffect(() => {
+    if (!selectedEstudioId) return;
+    const contact = estudios.find((e) => e.id === selectedEstudioId);
+    if (!contact) return;
+    const nearest = nearestPendingSession(contact.sessions ?? [], Date.now());
+    setSessionLesson(nearest?.lesson ?? "");
+    setSessionNotes(nearest?.notes ?? "");
+    setSessionPendingFiles([]);
+    setSessionEditMode(false);
+  }, [selectedEstudioId, estudios]);
 
   const activeStudios = useMemo(() => estudios.filter(hasActiveStudyWork), [estudios]);
   const categories = useMemo(
@@ -193,20 +237,36 @@ export function ClockButton({
     setEditingTime(false);
   };
 
-  const handleAction = () => {
+  const handleAction = async () => {
     if (isRunning) {
       onClockOut();
       if (selectedEstudioId && onEstudioSession) {
         const contact = estudios.find((e) => e.id === selectedEstudioId);
         if (!contact) { onEstudioSession(selectedEstudioId); return; }
-        // La sesion mas cercana a hoy (la de esta semana), no la mas antigua.
+
+        // Guarda los archivos pendientes antes de pasar los metadatos.
+        const savedFiles: SessionFile[] = [];
+        for (const { file, id } of sessionPendingFiles) {
+          await saveFile(id, file);
+          savedFiles.push({ id, name: file.name, type: file.type, size: file.size });
+        }
+
         const nextPending = nearestPendingSession(contact.sessions ?? [], Date.now());
-        const sessionData: SessionData = { time: getCurrentTimeStr(), files: [] };
+        const sessionData = {
+          time: getCurrentTimeStr(),
+          files: savedFiles,
+          lesson: sessionLesson.trim() || undefined,
+          notes: sessionNotes.trim() || undefined,
+        };
+
         if (nextPending) {
-          const diffHoursAbs = Math.abs(new Date(nextPending.date).getTime() - Date.now()) / (1000 * 60 * 60);
-          if (diffHoursAbs <= 1) {
+          // Si la sesión pendiente es de esta misma semana, la reescribimos
+          // directamente sin pedir confirmación (modelo "semana a semana").
+          const isCurrentWeek = weekStartMs(new Date(nextPending.date)) === weekStartMs(new Date());
+          if (isCurrentWeek) {
             onEstudioSession(selectedEstudioId, sessionData);
           } else {
+            // Sesión de una semana futura: preguntar si es la correcta
             setPendingPrompt({ contactId: selectedEstudioId, contactName: contact.name, nextSession: nextPending, sessionData });
           }
         } else {
@@ -437,9 +497,13 @@ export function ClockButton({
 
         {/* Selector de estudio */}
         {showEstudioPicker && (
-          <div className="mt-4 w-56">
+          <div className="mt-4 w-full px-1 space-y-3">
+            {/* Nombre del contacto */}
             {activeStudios.length === 1 ? (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/10 text-sm text-primary">
+              <div
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm ${isRunning ? "text-white/90" : "bg-primary/10 text-primary"}`}
+                style={isRunning ? { background: "rgba(255,255,255,0.15)" } : undefined}
+              >
                 <BookOpen className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="truncate font-medium">{activeStudios[0].name}</span>
               </div>
@@ -459,6 +523,124 @@ export function ClockButton({
                   ))}
                 </SelectContent>
               </Select>
+            )}
+
+            {/* Panel de sesión programada */}
+            {selectedEstudioId && (
+              <div
+                className="rounded-2xl px-3.5 py-3 space-y-2.5"
+                style={{ background: isRunning ? "rgba(255,255,255,0.13)" : "rgba(255,255,255,0.90)", border: isRunning ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(0,0,0,0.12)" }}
+              >
+                {/* Cabecera con título y lápiz */}
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] font-bold uppercase tracking-widest ${isRunning ? "text-white/60" : "text-slate-500"}`}>
+                    {t("timer_session_header")}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSessionEditMode((v) => !v)}
+                    className={`p-1 rounded-lg transition-colors cursor-pointer ${isRunning ? "text-white/60 hover:text-white hover:bg-white/10" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"}`}
+                  >
+                    {sessionEditMode
+                      ? <X className="w-3.5 h-3.5" />
+                      : <Pencil className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+
+                {!sessionEditMode ? (
+                  /* Vista de solo lectura */
+                  <div className="space-y-1.5">
+                    <div className="flex items-start gap-2">
+                      <span className={`text-[10px] font-semibold w-14 flex-shrink-0 pt-0.5 ${isRunning ? "text-white/50" : "text-slate-500"}`}>
+                        {t("study_lesson")}
+                      </span>
+                      <span className={`text-[11px] font-medium leading-snug flex-1 ${isRunning ? "text-white/80" : "text-slate-800"} ${!sessionLesson ? (isRunning ? "opacity-40" : "opacity-60") + " italic" : ""}`}>
+                        {sessionLesson || t("cal_optional")}
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className={`text-[10px] font-semibold w-14 flex-shrink-0 pt-0.5 ${isRunning ? "text-white/50" : "text-slate-500"}`}>
+                        {t("study_notes")}
+                      </span>
+                      <span className={`text-[11px] font-medium leading-snug flex-1 ${isRunning ? "text-white/80" : "text-slate-800"} ${!sessionNotes ? (isRunning ? "opacity-40" : "opacity-60") + " italic" : ""}`}>
+                        {sessionNotes || t("cal_optional")}
+                      </span>
+                    </div>
+                    {sessionPendingFiles.length > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <Paperclip className={`w-3 h-3 flex-shrink-0 ${isRunning ? "text-white/50" : "text-slate-500"}`} />
+                        <span className={`text-[11px] ${isRunning ? "text-white/70" : "text-slate-800"}`}>
+                          {sessionPendingFiles.length} {sessionPendingFiles.length === 1 ? t("study_attach_file").split(" ")[0] : t("study_files")}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Modo edición */
+                  <div className="space-y-2.5">
+                    {/* Lección */}
+                    <div className="space-y-1">
+                      <label className={`text-[10px] font-semibold uppercase tracking-wide ${isRunning ? "text-white/60" : "text-slate-500"}`}>
+                        {t("study_lesson")}
+                      </label>
+                      <input
+                        type="text"
+                        value={sessionLesson}
+                        onChange={(e) => setSessionLesson(e.target.value)}
+                        placeholder={t("studies_lesson_placeholder")}
+                        className={`w-full rounded-xl px-3 py-2 text-sm border-0 shadow-sm focus:outline-none focus:ring-2 ${isRunning ? "bg-white/90 text-foreground placeholder:text-slate-400 focus:ring-white/40" : "bg-white text-slate-900 placeholder:text-slate-400 focus:ring-slate-300"}`}
+                      />
+                    </div>
+                    {/* Notas de sesión */}
+                    <div className="space-y-1">
+                      <label className={`text-[10px] font-semibold uppercase tracking-wide ${isRunning ? "text-white/60" : "text-slate-500"}`}>
+                        {t("study_notes")}
+                      </label>
+                      <textarea
+                        value={sessionNotes}
+                        onChange={(e) => setSessionNotes(e.target.value)}
+                        placeholder={t("studies_session_notes_placeholder")}
+                        rows={2}
+                        className={`w-full resize-none rounded-xl px-3 py-2 text-sm border-0 shadow-sm focus:outline-none focus:ring-2 ${isRunning ? "bg-white/90 text-foreground placeholder:text-slate-400 focus:ring-white/40" : "bg-white text-slate-900 placeholder:text-slate-400 focus:ring-slate-300"}`}
+                      />
+                    </div>
+                    {/* Archivos */}
+                    <div className="space-y-1">
+                      <label className={`text-[10px] font-semibold uppercase tracking-wide ${isRunning ? "text-white/60" : "text-slate-500"}`}>
+                        {t("study_files")}
+                      </label>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          const selected = Array.from(e.target.files ?? []);
+                          setSessionPendingFiles((prev) => [...prev, ...selected.map((file) => ({ file, id: generateId() }))]);
+                          e.target.value = "";
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs border-2 border-dashed cursor-pointer"
+                        style={{ borderColor: isRunning ? "rgba(255,255,255,0.3)" : undefined, color: isRunning ? "rgba(255,255,255,0.6)" : undefined }}
+                      >
+                        <Paperclip className="w-3.5 h-3.5" />
+                        {t("study_attach_file")}
+                      </button>
+                      {sessionPendingFiles.map(({ file, id }) => (
+                        <div key={id} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl ${isRunning ? "bg-white/20" : "bg-slate-100"}`}>
+                          <span className={`flex-1 text-xs truncate ${isRunning ? "text-white/80" : "text-slate-800"}`}>{file.name}</span>
+                          <button type="button" onClick={() => setSessionPendingFiles((prev) => prev.filter((f) => f.id !== id))} className="cursor-pointer">
+                            <X className={`w-3 h-3 ${isRunning ? "text-white/60" : "text-slate-500"}`} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -493,6 +675,52 @@ export function ClockButton({
             </>
           )}
         </div>
+
+        {/* Sección de notas — solo visible mientras el timer está activo */}
+        {isRunning && (
+          <div className="w-full mt-5 px-1">
+            <button
+              onClick={() => setNotesOpen((v) => !v)}
+              className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-2xl transition-colors cursor-pointer"
+              style={{ background: "rgba(255,255,255,0.13)" }}
+            >
+              <span className="flex items-center gap-2 text-white/80 text-xs font-semibold">
+                <StickyNote className="w-3.5 h-3.5" />
+                {t("timer_notes")}
+                {notesText.trim() && !notesOpen && (
+                  <span className="max-w-[140px] truncate text-white/55 font-normal">{notesText}</span>
+                )}
+              </span>
+              <span className={`text-white/50 text-[10px] transition-transform duration-200 ${notesOpen ? "rotate-180" : ""}`}>▾</span>
+            </button>
+
+            {notesOpen && (
+              <div className="mt-2 px-1">
+                <textarea
+                  value={notesText}
+                  onChange={(e) => { setNotesText(e.target.value); setNotesSaved(false); }}
+                  placeholder={t("timer_notes_placeholder")}
+                  rows={3}
+                  className="w-full resize-none rounded-2xl px-3.5 py-3 text-sm text-slate-900 placeholder:text-slate-400 bg-white/90 border-0 shadow-sm focus:outline-none focus:ring-2 focus:ring-white/50"
+                />
+                <button
+                  onClick={() => {
+                    onSaveNotes?.(notesText.trim());
+                    setNotesSaved(true);
+                    setTimeout(() => setNotesSaved(false), 2000);
+                  }}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                  style={{ background: notesSaved ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.18)" }}
+                >
+                  {notesSaved
+                    ? <><Check className="w-3.5 h-3.5 text-white" /><span className="text-white">{t("timer_save")}</span></>
+                    : <span className="text-white/80">{t("timer_notes_save")}</span>
+                  }
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
 

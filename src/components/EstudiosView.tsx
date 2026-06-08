@@ -6,6 +6,7 @@ import {
   Paperclip, X, FileText, Image, File,
   CalendarPlus, History, ArrowLeft, MoreVertical,
   StickyNote, Pencil, RefreshCw, Archive, ChevronRight, ExternalLink,
+  Search, AlertTriangle, ChevronsRight, BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +58,56 @@ function nowTime(): string {
 function isoToDateStr(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function addDays(isoDate: string, days: number): string {
+  const d = new Date(isoDate);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function getSessionsThisMonth(contacts: EstudioContact[]): number {
+  const now = new Date();
+  const month = now.getMonth();
+  const year = now.getFullYear();
+  let count = 0;
+  for (const c of contacts) {
+    for (const s of c.sessions ?? []) {
+      if (s.pending) continue;
+      const d = new Date(s.date);
+      if (d.getMonth() === month && d.getFullYear() === year) count++;
+    }
+  }
+  return count;
+}
+
+function getNextUpcoming(contacts: EstudioContact[]): { contact: EstudioContact; session: EstudioSession } | null {
+  const nowMs = Date.now();
+  let nearest: { contact: EstudioContact; session: EstudioSession } | null = null;
+  for (const c of contacts) {
+    if (!c.active) continue;
+    for (const s of c.sessions ?? []) {
+      if (!s.pending) continue;
+      const ms = new Date(s.date).getTime();
+      if (ms < nowMs) continue;
+      if (!nearest || ms < new Date(nearest.session.date).getTime()) {
+        nearest = { contact: c, session: s };
+      }
+    }
+  }
+  return nearest;
+}
+
+function nextSessionLabel(
+  isoDate: string,
+  t: (key: string, vars?: Record<string, string | number>) => string
+): string {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(isoDate); d.setHours(0, 0, 0, 0);
+  const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
+  if (diff <= 0) return t("studies_stats_today");
+  if (diff === 1) return t("studies_stats_tomorrow");
+  return t("studies_stats_in_days", { count: diff });
 }
 
 /* Componentes compartidos pequenos */
@@ -679,7 +730,27 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                       </div>
                     </button>
                     <button
-                      onClick={() => onCompleteSessionNow(contact.id, s.id)}
+                      onClick={() => {
+                        navigator.vibrate?.(40);
+                        onUpdateSession(contact.id, s.id, {
+                          date: addDays(s.date, 7),
+                          time: s.time,
+                          lesson: s.lesson,
+                          notes: s.notes,
+                          files: s.files ?? [],
+                        });
+                      }}
+                      aria-label={t("studies_postpone")}
+                      title={t("studies_postpone")}
+                      className="w-10 h-10 rounded-full bg-muted text-muted-foreground flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform"
+                    >
+                      <ChevronsRight className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigator.vibrate?.(60);
+                        onCompleteSessionNow(contact.id, s.id);
+                      }}
                       aria-label={t("study_mark_completed")}
                       title={t("study_mark_completed")}
                       className="w-10 h-10 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform"
@@ -772,7 +843,11 @@ function ContactCard({ contact, favoritePlaces, onClick }: {
   const doneSessions = (contact.sessions ?? []).filter((s) => !s.pending)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const lastSession = doneSessions[0] ?? null;
+  const now = new Date();
   const upcomingCount = (contact.sessions ?? []).filter((s) => s.pending).length;
+  const overdueCount = (contact.sessions ?? []).filter(
+    (s) => s.pending && new Date(s.date) < now && new Date(s.date).toDateString() !== now.toDateString()
+  ).length;
   const savedPlace = contact.favoritePlaceId
     ? favoritePlaces.find((p) => p.id === contact.favoritePlaceId)
     : null;
@@ -800,6 +875,12 @@ function ContactCard({ contact, favoritePlaces, onClick }: {
             <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full flex-shrink-0 flex items-center gap-0.5">
               <RefreshCw className="w-2.5 h-2.5" />
               {t(`studies_frequency_${contact.schedule.frequency}`)}
+            </span>
+          )}
+          {overdueCount > 0 && (
+            <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full flex-shrink-0 flex items-center gap-0.5">
+              <AlertTriangle className="w-2.5 h-2.5" />
+              {t("studies_overdue_sessions", { count: overdueCount })}
             </span>
           )}
         </div>
@@ -860,6 +941,7 @@ export function EstudiosView({
   const t = useT();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
   const selectedContact = selectedId ? contacts.find((c) => c.id === selectedId) ?? null : null;
 
@@ -869,6 +951,15 @@ export function EstudiosView({
 
   const active = contacts.filter((c) => c.active);
   const archived = contacts.filter((c) => !c.active);
+
+  // Stats
+  const sessionsThisMonth = getSessionsThisMonth(contacts);
+  const nextUp = getNextUpcoming(contacts);
+
+  // Search filter
+  const q = search.trim().toLowerCase();
+  const filteredActive = q ? active.filter((c) => c.name.toLowerCase().includes(q)) : active;
+  const filteredArchived = q ? archived.filter((c) => c.name.toLowerCase().includes(q)) : archived;
 
   if (selectedContact) {
     return (
@@ -893,6 +984,7 @@ export function EstudiosView({
 
   return (
     <div className="pb-24">
+      {/* Header */}
       <div className="px-4 pt-4 pb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -908,7 +1000,54 @@ export function EstudiosView({
         </Button>
       </div>
 
-      <div className="px-4 space-y-3 mt-2">
+      {/* Stats card — only shown when there are contacts */}
+      {contacts.length > 0 && (
+        <div className="px-4 mb-3">
+          <div className="rounded-2xl bg-primary/5 border border-primary/15 px-4 py-3 flex items-center gap-4">
+            <BarChart3 className="w-4 h-4 text-primary flex-shrink-0" />
+            <div className="flex-1 min-w-0 flex items-center gap-4 text-xs">
+              <span className="text-muted-foreground">
+                {t("studies_stats_month", { count: sessionsThisMonth })}
+              </span>
+              <span className="text-border">·</span>
+              <span className="text-muted-foreground truncate">
+                {t("studies_stats_next")}{" "}
+                {nextUp
+                  ? <span className="font-medium text-foreground">
+                      {nextUp.contact.name} – {nextSessionLabel(nextUp.session.date, t)}
+                    </span>
+                  : <span>{t("studies_stats_none")}</span>
+                }
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search bar */}
+      {contacts.length > 2 && (
+        <div className="px-4 mb-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t("studies_search_placeholder")}
+              className="pl-9 h-9 text-sm rounded-xl bg-muted border-0 focus-visible:ring-1"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-muted-foreground/20 flex items-center justify-center"
+              >
+                <X className="w-3 h-3 text-muted-foreground" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="px-4 space-y-3">
         {contacts.length === 0 && (
           <div className="text-center py-16 space-y-2">
             <BookOpen className="w-10 h-10 text-muted-foreground mx-auto" />
@@ -916,16 +1055,22 @@ export function EstudiosView({
             <p className="text-xs text-muted-foreground">{t("studies_empty_hint")}</p>
           </div>
         )}
-        {active.map((c) => (
+        {filteredActive.map((c) => (
           <ContactCard key={c.id} contact={c} favoritePlaces={favoritePlaces} onClick={() => setSelectedId(c.id)} />
         ))}
-        {archived.length > 0 && (
+        {filteredArchived.length > 0 && (
           <>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-2">{t("studies_archived")}</p>
-            {archived.map((c) => (
+            {filteredArchived.map((c) => (
               <ContactCard key={c.id} contact={c} favoritePlaces={favoritePlaces} onClick={() => setSelectedId(c.id)} />
             ))}
           </>
+        )}
+        {q && filteredActive.length === 0 && filteredArchived.length === 0 && (
+          <div className="text-center py-10">
+            <Search className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">{t("studies_none")}</p>
+          </div>
         )}
       </div>
 

@@ -132,30 +132,34 @@ function targetPendingCount(freq: ScheduleFrequency): number {
   return freq === "weekly" ? 4 : 2;
 }
 
-/* Días que tarda una sesión pendiente vencida en considerarse "atrasada" y
-   purgarse, para que no siga avisando indefinidamente. Aproximadamente un ciclo
-   de la programación; para contactos sin programación se usa un valor por
-   defecto. */
-const FREQUENCY_INTERVAL_DAYS: Record<ScheduleFrequency, number> = {
-  weekly: 7,
-  fortnightly: 14,
-  monthly: 31,
-};
-const DEFAULT_STALE_DAYS = 14;
-
-function staleThresholdMs(contact: EstudioContact): number {
-  const days = contact.schedule ? FREQUENCY_INTERVAL_DAYS[contact.schedule.frequency] : DEFAULT_STALE_DAYS;
-  return days * 86_400_000;
+/* Retorna el timestamp al final del domingo (23:59:59.999) de la semana
+   que contiene `date`. Semana = lunes–domingo. */
+function endOfWeekMs(date: Date): number {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  const dow = d.getDay(); // 0=Dom, 1=Lun … 6=Sáb
+  d.setDate(d.getDate() + (dow === 0 ? 0 : 7 - dow));
+  return d.getTime();
 }
 
-/* Indica si una sesión pendiente está vencida hace más de un ciclo. */
+/* Una sesión pendiente se considera cancelada cuando ha pasado el domingo
+   de la semana en la que estaba programada (modelo "semana a semana"). */
 export function isStalePendingSession(
-  contact: EstudioContact,
+  _contact: EstudioContact,
   session: EstudioSession,
   nowMs: number
 ): boolean {
   if (!session.pending) return false;
-  return nowMs - new Date(session.date).getTime() > staleThresholdMs(contact);
+  return nowMs > endOfWeekMs(new Date(session.date));
+}
+
+/* Retorna el timestamp del lunes (00:00:00.000) de la semana de `date`. */
+export function weekStartMs(date: Date): number {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const dow = d.getDay();
+  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  return d.getTime();
 }
 
 /* Quita las sesiones pendientes atrasadas hace más de un ciclo. Puro, no muta. */
@@ -427,8 +431,6 @@ export function useEstudios() {
       return updated;
     });
   }, [persist]);
-
-
 
   const deleteSession = useCallback((contactId: string, sessionId: string) => {
     setContacts((prev) => {

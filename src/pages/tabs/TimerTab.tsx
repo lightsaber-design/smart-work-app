@@ -1,4 +1,4 @@
-import { ChevronLeft, Check, Pencil, Trash2 } from "lucide-react";
+import { ChevronLeft, Check, Pencil, Trash2, Activity } from "lucide-react";
 import { ClockButton } from "@/components/ClockButton";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import type { AppTab } from "@/components/BottomNav";
@@ -124,7 +124,7 @@ export function TimerTab({
       <div
         ref={summarySheetRef}
         className={`absolute left-0 right-0 bottom-16 z-30 touch-none select-none ${summaryDragOffset === null ? "transition-transform duration-300 ease-out" : ""}`}
-        style={{ transform: `translateY(${activeSummaryOffset}px)` }}
+        style={{ transform: `translateY(${activeSummaryOffset + (tracker.isRunning && !summaryOpen ? 36 : 0)}px)` }}
         onPointerDown={(e) => {
           startDrag(e.clientY);
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -143,10 +143,17 @@ export function TimerTab({
           <button onClick={toggleSummary} className="w-full flex flex-col items-center pt-2.5 pb-1.5 gap-1">
             <div className="w-10 h-1 rounded-full bg-border" />
             {!summaryOpen && (
-              <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
-                <ChevronLeft className="w-3 h-3 rotate-90" />
-                {showingUpcomingEvents ? t("home_upcoming_activities") : t("day_today")}
-              </p>
+              tracker.isRunning ? (
+                <p className="text-[11px] font-semibold text-primary flex items-center gap-1">
+                  <Activity className="w-3 h-3" />
+                  {t("timer_ongoing")}
+                </p>
+              ) : (
+                <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                  <ChevronLeft className="w-3 h-3 rotate-90" />
+                  {showingUpcomingEvents ? t("home_upcoming_activities") : t("day_today")}
+                </p>
+              )
             )}
           </button>
 
@@ -306,6 +313,12 @@ export function TimerTab({
             activeCategory={activeEntry?.category}
             activeEntryId={activeEntry?.id}
             activeEntryStartTime={activeEntry?.startTime}
+            activeEventNotes={activeEntry?.linkedEventId ? calendar.events.find((e) => e.id === activeEntry.linkedEventId)?.notes : undefined}
+            onSaveNotes={(notes) => {
+              if (activeEntry?.linkedEventId) {
+                calendar.updateEvent(activeEntry.linkedEventId, { notes: notes || undefined });
+              }
+            }}
             estudios={estudios.contacts.filter((c) => c.active)}
             onDisplayCategoryChange={setTimerDisplayCategory}
             onEstudioSession={estudios.addSession}

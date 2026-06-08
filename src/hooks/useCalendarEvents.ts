@@ -19,6 +19,7 @@ export interface CalendarEvent {
   recurrence: RecurrenceType;
   parentId?: string;
   completed: boolean;
+  notes?: string;
 }
 
 export interface AddEventParams {
@@ -77,6 +78,7 @@ function parseStoredEvent(value: unknown): CalendarEvent | null {
     recurrence,
     parentId: typeof value.parentId === "string" ? value.parentId : undefined,
     completed: typeof value.completed === "boolean" ? value.completed : false,
+    notes: typeof value.notes === "string" && value.notes.trim() ? value.notes : undefined,
   };
 }
 
@@ -317,6 +319,7 @@ export function useCalendarEvents() {
         location?: { lat: number; lng: number };
         recurrence?: RecurrenceType;
         parentId?: string;
+        notes?: string;
       }
     ) => {
       setEvents((prev) => {

@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { CalendarEvent } from "@/hooks/useCalendarEvents";
 import type { TimeEntry } from "@/hooks/useTimeTracker";
+import type { EstudioContact } from "@/hooks/useEstudios";
+import { isStalePendingSession } from "@/hooks/useEstudios";
 import { scheduleEventNotification, cancelEventNotification } from "@/lib/notifications";
 import { getEventEndDate } from "@/lib/timerOverrun";
 import { timerLongRunFireAt, getGoalStatus, currentMonthKey } from "@/lib/notificationRules";
@@ -18,6 +20,7 @@ interface UseNotificationEffectsParams {
   activeEntry: TimeEntry | null;
   calMonthMs: number;
   precursorHours: number | null;
+  estudiosContacts: EstudioContact[];
   // User preferences
   notifTimerOverrun: boolean;
   notifTimer3h: boolean;
@@ -36,6 +39,7 @@ export function useNotificationEffects({
   activeEntry,
   calMonthMs,
   precursorHours,
+  estudiosContacts,
   notifTimerOverrun,
   notifTimer3h,
   notifMonthlyGoal,
@@ -45,6 +49,9 @@ export function useNotificationEffects({
   const scheduledEventFireTimes = useRef<Map<string, number>>(new Map());
   const timer3hRef = useRef<string | null>(null);
   const overrunScheduledKey = useRef<string | null>(null);
+  // Rastrea el estado pending anterior de cada sesión para detectar
+  // cuándo pasa de pendiente → completada y cancelar su notificación.
+  const sessionPendingRef = useRef<Map<string, boolean>>(new Map());
 
   // ── Schedule / cancel native event reminders ────────────────────────────────
   // Nota: scheduledEventFireTimes es in-memory y se vacía al reiniciar la app.
@@ -160,6 +167,45 @@ export function useNotificationEffects({
     return () => { void stopTimerNotification(); };
   }, [activeEntry, t]);
 
+  // ── Cancelar notificación cuando una sesión pasa de pendiente → completada ──
+  useEffect(() => {
+    const prevMap = sessionPendingRef.current;
+    for (const contact of estudiosContacts) {
+      for (const session of contact.sessions ?? []) {
+        const wasPending = prevMap.get(session.id);
+        // Si antes estaba pendiente y ahora no → se acaba de completar
+        if (wasPending === true && !session.pending) {
+          void cancelEventNotification(`missed-study-${session.id}`);
+        }
+        prevMap.set(session.id, session.pending ?? false);
+      }
+    }
+  }, [estudiosContacts]);
+
+  // ── Estudios perdidos → notificación una vez por sesión ───────────────────
+  useEffect(() => {
+    const now = Date.now();
+    for (const contact of estudiosContacts) {
+      if (!contact.active) continue;
+      for (const session of contact.sessions ?? []) {
+        if (!session.pending) continue;
+        if (isStalePendingSession(contact, session, now)) continue;
+        const sessionMs = new Date(session.date).getTime();
+        if (now - sessionMs <= 5 * 60_000) continue; // aún no vencida
+        const key = `_ml_missed_${session.id}`;
+        try { if (localStorage.getItem(key)) continue; } catch { continue; }
+        try { localStorage.setItem(key, "1"); } catch { /* nada */ }
+        const isToday = now - sessionMs < 24 * 3_600_000;
+        void scheduleEventNotification(
+          `missed-study-${session.id}`,
+          t("notif_study_missed_title"),
+          t(isToday ? "notif_study_missed_today" : "notif_study_missed_week", { name: contact.name }),
+          new Date(Date.now() + 2_000),
+        );
+      }
+    }
+  }, [estudiosContacts, t]);
+
   // ── Meta mensual ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!notifMonthlyGoal) return;
@@ -194,7 +240,4 @@ export function useNotificationEffects({
     }
   }, [calMonthMs, notifMonthlyGoal, precursorHours, t]);
 
-  // Referencia estable para markNotified (usado por efectos internos si fuera necesario)
-  void isTimerRunning;
-  void markNotified;
 }

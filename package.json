@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "cap:sync": "npm run build && npx cap sync",
     "cap:android": "npm run build && npx cap sync android && npx cap open android",
-    "cap:ios": "npm run build && npx cap sync ios && npx cap open ios"
+    "cap:ios": "npm run build && npx cap sync ios && npx cap open ios",
+    "build:apk": "npm run build && npx cap sync android && cd android && JAVA_HOME=\"/c/Program Files/Android/Android Studio/jbr\" ./gradlew assembleRelease"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",

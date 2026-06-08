@@ -63,6 +63,7 @@ interface CalendarViewProps {
       location?: { lat: number; lng: number };
       recurrence?: RecurrenceType;
       parentId?: string;
+      notes?: string;
     }
   ) => void;
   getEventsForDate: (date: Date) => CalendarEvent[];
@@ -410,6 +411,7 @@ function EventMonthGrid({
               const isToday = day.toDateString() === today.toDateString();
               const dayEvents = events.filter((e) => e.date.toDateString() === day.toDateString());
               const dayTotal = dayTotalFromEvents(dayEvents);
+              const hasNotes = dayEvents.some((e) => e.notes);
               const hasCompleted = dayEvents.some((e) => e.completed);
               const hasFuture = dayEvents.some((e) => {
                 const d = new Date(e.date); d.setHours(0, 0, 0, 0);
@@ -444,6 +446,12 @@ function EventMonthGrid({
                     isToday && !isSelected ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : ""
                   }`}
                 >
+                  {hasNotes && (
+                    <span
+                      className="absolute top-0.5 right-0.5 w-[7px] h-[7px] rounded-full"
+                      style={{ background: isSelected ? "rgba(255,255,255,0.7)" : "rgba(245,158,11,0.85)" }}
+                    />
+                  )}
                   <span className={`font-bold leading-none ${dayTotal.ms > 0 ? "text-[10px]" : "text-sm"} ${isSelected ? "text-primary-foreground" : ""}`}>
                     {day.getDate()}
                   </span>
@@ -1175,6 +1183,11 @@ export function CalendarView({
                           {height > 54 && (
                             <p className="text-[9px] text-foreground/60 mt-0.5 leading-none">
                               {formatEventTime(event.date, locale)}{event.endTime ? ` - ${event.endTime}` : ""}
+                            </p>
+                          )}
+                          {event.notes && height > 62 && eventEndDate(event).getTime() <= Date.now() && (
+                            <p className="text-[9px] text-foreground/70 mt-1 leading-snug line-clamp-2 italic">
+                              {event.notes}
                             </p>
                           )}
                         </div>
