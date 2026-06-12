@@ -3,6 +3,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 interface TimerNotificationPlugin {
   start(options: { startTimeMs: number; title: string; body: string; category?: string }): Promise<void>;
   stop(): Promise<void>;
+  consumeWidgetAction(): Promise<{ action: string }>;
 }
 
 const TimerNotification = registerPlugin<TimerNotificationPlugin>('TimerNotification');
@@ -22,5 +23,16 @@ export async function stopTimerNotification(): Promise<void> {
     await TimerNotification.stop();
   } catch (e) {
     console.warn('[TimerNotif] stop:', e);
+  }
+}
+
+export async function consumeWidgetAction(): Promise<string> {
+  if (!Capacitor.isNativePlatform()) return '';
+  try {
+    const result = await TimerNotification.consumeWidgetAction();
+    return result.action ?? '';
+  } catch (e) {
+    console.warn('[TimerNotif] consumeWidgetAction:', e);
+    return '';
   }
 }

@@ -15,6 +15,7 @@ import { getCategoryMeta } from "@/lib/categories";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 import { removeJsonValue } from "@/lib/jsonFileStorage";
 import { findActiveScheduledEvent } from "@/lib/timerOverrun";
+import { consumeWidgetAction } from "@/lib/timerNotification";
 import { formatPlaceName } from "@/lib/placeNames";
 import { formatDateLong } from "@/lib/dateFormat";
 import { hexToRgba, getWeatherHeroTheme } from "@/lib/weatherUtils";
@@ -198,6 +199,22 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     isTimerRunning: tracker.isRunning,
     t,
   });
+
+  // ── Widget action: detener timer desde el widget de escritorio ───────────────
+  useEffect(() => {
+    const check = () => {
+      if (document.visibilityState === 'visible') {
+        consumeWidgetAction().then((action) => {
+          if (action === 'CLOCK_OUT') requestClockOut();
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', check);
+    // Comprobar también al montar (app abierta directamente por el widget)
+    check();
+    return () => document.removeEventListener('visibilitychange', check);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Summary sheet: event lists ────────────────────────────────────────────────
   const todayEvents = useMemo(

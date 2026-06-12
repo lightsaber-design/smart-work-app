@@ -85,6 +85,20 @@ public class TimerNotificationPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void consumeWidgetAction(PluginCall call) {
+        Context ctx = getContext();
+        android.content.SharedPreferences prefs =
+            ctx.getSharedPreferences(TimerWidget.PREFS_NAME, Context.MODE_PRIVATE);
+        String action = prefs.getString(TimerWidget.KEY_PENDING_ACTION, "");
+        if (!action.isEmpty()) {
+            prefs.edit().remove(TimerWidget.KEY_PENDING_ACTION).apply();
+        }
+        com.getcapacitor.JSObject result = new com.getcapacitor.JSObject();
+        result.put("action", action);
+        call.resolve(result);
+    }
+
+    @PluginMethod
     public void stop(PluginCall call) {
         Context ctx = getContext();
         NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
