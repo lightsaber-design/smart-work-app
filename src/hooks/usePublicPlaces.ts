@@ -141,7 +141,8 @@ out center tags;`;
 
     fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",
-      body: query,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `data=${encodeURIComponent(query)}`,
       signal: ctrl.signal,
     })
       .then((r) => r.json())

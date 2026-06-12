@@ -1,5 +1,7 @@
-import { useMemo } from "react";
-import { ChevronRight, MapPin, Plus, CheckCircle2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronRight, MapPin, Plus, CheckCircle2, BookMarked } from "lucide-react";
+import { TimerWidget } from "@/components/TimerWidget";
+import { PrepMode } from "@/components/PrepMode";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import type { AppTab } from "@/components/BottomNav";
 import type { CalendarEvent } from "@/hooks/useCalendarEvents";
@@ -33,6 +35,10 @@ interface HomeTabProps {
   navigateToStudySession: (contactId: string, sessionId: string) => void;
   onCompleteStudyNow: (contactId: string, sessionId: string) => void;
   openMonthlyCalendar: () => void;
+  timerIsRunning: boolean;
+  timerElapsed: number;
+  timerCategory?: string;
+  onNavigateToTimer: () => void;
   t: TranslateFn;
   locale: string;
   todayKey: string;
@@ -53,11 +59,21 @@ export function HomeTab({
   navigateToStudySession,
   onCompleteStudyNow,
   openMonthlyCalendar,
+  timerIsRunning,
+  timerElapsed,
+  timerCategory,
+  onNavigateToTimer,
   t,
   locale,
   todayKey,
 }: HomeTabProps) {
   const WeatherHeroIcon = heroTheme.Icon;
+  const [prepSession, setPrepSession] = useState<{ contactId: string; sessionId: string } | null>(null);
+
+  const prepContact = prepSession
+    ? estudiosContacts.find((c) => c.id === prepSession.contactId) ?? null
+    : null;
+  const prepSessionData = prepContact?.sessions.find((s) => s.id === prepSession?.sessionId) ?? null;
 
   const monthTotalHrs = Math.floor(calMonthMs / 3_600_000);
   const monthTotalMins = Math.floor((calMonthMs % 3_600_000) / 60_000);
@@ -172,6 +188,14 @@ export function HomeTab({
 
       {/* Content card */}
       <div className="bg-background rounded-t-[32px] -mt-10 relative z-10 px-5 pt-5 pb-4">
+        {/* Running timer widget */}
+        <TimerWidget
+          isRunning={timerIsRunning}
+          elapsed={timerElapsed}
+          category={timerCategory}
+          onNavigate={onNavigateToTimer}
+          t={t}
+        />
         {/* Monthly hours card */}
         <button
           type="button"
@@ -190,12 +214,21 @@ export function HomeTab({
           {setup.precursorHours && (
             <div className="mt-4 rounded-2xl border border-primary/20 bg-primary/10 p-3">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] font-black uppercase tracking-widest text-primary">
-                  {t("stats_pioneer_goal")}
-                </p>
-                <p className="text-3xl font-black leading-none text-primary tabular-nums">{monthlyGoalPct}%</p>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-0.5">
+                    {t("stats_pioneer_goal")}
+                  </p>
+                  <p className="text-2xl font-black leading-none text-primary tabular-nums">
+                    {setup.precursorHours}h
+                    <span className="text-sm font-bold text-primary/60 ml-1">{t("home_goal_target")}</span>
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-bold text-primary/70 mb-0.5">{monthTotalHrs}h {monthTotalMins}m</p>
+                  <p className="text-2xl font-black leading-none text-primary tabular-nums">{monthlyGoalPct}<span className="text-base">%</span></p>
+                </div>
               </div>
-              <div className="mt-3 h-4 rounded-full bg-background/70 overflow-hidden ring-1 ring-primary/15">
+              <div className="mt-3 h-3 rounded-full bg-background/70 overflow-hidden ring-1 ring-primary/15">
                 <div
                   className="h-full rounded-full transition-all duration-500"
                   style={{
@@ -205,9 +238,6 @@ export function HomeTab({
                   }}
                 />
               </div>
-              <p className="mt-2 text-xs font-semibold text-foreground">
-                {monthTotalHrs}h {monthTotalMins}m / {setup.precursorHours}h
-              </p>
             </div>
           )}
         </button>
@@ -270,14 +300,24 @@ export function HomeTab({
                         </div>
                       </button>
                       {isStudy ? (
-                        <button
-                          onClick={() => onCompleteStudyNow(item.contactId!, item.sessionId!)}
-                          aria-label={t("study_mark_completed")}
-                          title={t("study_mark_completed")}
-                          className="w-10 h-10 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform"
-                        >
-                          <CheckCircle2 className="w-5 h-5" />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => setPrepSession({ contactId: item.contactId!, sessionId: item.sessionId! })}
+                            aria-label={t("prep_mode_title")}
+                            title={t("prep_mode_title")}
+                            className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform"
+                          >
+                            <BookMarked className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => onCompleteStudyNow(item.contactId!, item.sessionId!)}
+                            aria-label={t("study_mark_completed")}
+                            title={t("study_mark_completed")}
+                            className="w-10 h-10 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform"
+                          >
+                            <CheckCircle2 className="w-5 h-5" />
+                          </button>
+                        </>
                       ) : (
                         <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                       )}
@@ -299,6 +339,21 @@ export function HomeTab({
           </div>
         )}
       </div>
+
+      {/* Modo Preparación */}
+      {prepContact && prepSessionData && (
+        <PrepMode
+          contact={prepContact}
+          session={prepSessionData}
+          locale={locale}
+          t={t}
+          onClose={() => setPrepSession(null)}
+          onOpenFull={() => {
+            setPrepSession(null);
+            navigateToStudySession(prepContact.id, prepSessionData.id);
+          }}
+        />
+      )}
     </div>
   );
 }

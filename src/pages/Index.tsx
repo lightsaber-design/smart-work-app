@@ -7,7 +7,7 @@ import { useSetup, SetupData } from "@/hooks/useSetup";
 import { BottomNav, AppTab } from "@/components/BottomNav";
 import { LanguageProvider, localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { detectLanguage, Lang, translate } from "@/lib/i18n";
-import { ChevronLeft, BookOpen, MapPin, Plus } from "lucide-react";
+import { ChevronLeft, BookOpen, MapPin, Plus, Search } from "lucide-react";
 import { hasActiveStudyWork, useEstudios } from "@/hooks/useEstudios";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { useSpecialCampaign } from "@/hooks/useSpecialCampaign";
@@ -23,6 +23,8 @@ import { useNotificationEffects } from "@/hooks/useNotificationEffects";
 import { useStudyNotifications } from "@/hooks/useStudyNotifications";
 import { HomeTab } from "@/pages/tabs/HomeTab";
 import { TimerTab } from "@/pages/tabs/TimerTab";
+import { GlobalSearch } from "@/components/GlobalSearch";
+import { useAutoBackup } from "@/hooks/useAutoBackup";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,12 +77,16 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const t = useT();
   const lang = useLang();
   const locale = localeForLang(lang);
-  const { isDark, toggle: toggleDark } = useDarkMode();
+  const { isDark, toggle: toggleDark } = useDarkMode({
+    autoDark: setup.autoDarkMode,
+    city: setup.city,
+  });
 
   // ── Navigation ───────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<Tab>("timer");
   const [timerDisplayCategory, setTimerDisplayCategory] = useState<Category>("Predi");
   const [selectedStudySession, setSelectedStudySession] = useState<{ contactId: string; sessionId: string } | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [calendarFocusEventId, setCalendarFocusEventId] = useState<string | null>(null);
   const [calendarFocusMonthDate, setCalendarFocusMonthDate] = useState<Date | null>(null);
 
@@ -108,6 +114,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const activeStudyCount = estudios.contacts.filter((c) => c.active).length;
   const campaign = useSpecialCampaign();
   const { events: calendarEvents, markNotified, getEventsForDate } = calendar;
+  const { justBacked } = useAutoBackup();
 
   const handleClearAll = () => {
     void removeJsonValue("time-entries").finally(() => window.location.reload());
@@ -345,6 +352,42 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         </div>
       )}
 
+      {/* Auto-backup toast */}
+      {justBacked && (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[150] max-w-xs w-max bg-green-600 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg animate-in fade-in slide-in-from-top-2 duration-300">
+          {t("backup_saved")}
+        </div>
+      )}
+
+      {/* Global search overlay */}
+      {searchOpen && (
+        <GlobalSearch
+          contacts={estudios.contacts}
+          events={calendarEvents}
+          onSelectContact={(contactId) => navigateToStudySession(contactId, "")}
+          onSelectSession={navigateToStudySession}
+          onSelectEvent={openCalendarEvent}
+          onClose={() => setSearchOpen(false)}
+          t={t}
+          locale={locale}
+        />
+      )}
+
+      {/* Search FAB — fixed within the max-w-md container */}
+      {activeTab !== "timer" && (
+        <div className="fixed top-0 left-0 right-0 max-w-md mx-auto z-[90] pointer-events-none">
+          <div className="flex justify-end pr-3 pt-3">
+            <button
+              onClick={() => setSearchOpen(true)}
+              aria-label={t("search_placeholder")}
+              className="pointer-events-auto w-9 h-9 rounded-full bg-background/90 border border-border shadow-md flex items-center justify-center active:scale-95 transition-transform"
+            >
+              <Search className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <main className={`${!isOnline ? "pt-7" : ""} ${activeTab === "timer" ? "" : "pb-24"}`}>
 
         {/* ── HOME ── */}
@@ -359,11 +402,15 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             calendarEvents={calendarEvents}
             estudiosContacts={estudios.contacts}
             setup={setup}
-            calMonthMs={calMonthMs}
+            calMonthMs={tracker.monthTotal}
             navigate={navigate}
             navigateToStudySession={navigateToStudySession}
             onCompleteStudyNow={estudios.completeSessionNow}
             openMonthlyCalendar={openMonthlyCalendar}
+            timerIsRunning={tracker.isRunning}
+            timerElapsed={tracker.elapsed}
+            timerCategory={activeEntry?.category}
+            onNavigateToTimer={() => navigate("timer")}
             t={t}
             locale={locale}
             todayKey={todayKey}
@@ -431,6 +478,18 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             openCalendarEvent={openCalendarEvent}
             setDeleteEventPromptId={setDeleteEventPromptId}
             setTimerDisplayCategory={setTimerDisplayCategory}
+            onUpdateEstudioNotes={(contactId, sessionId, notes) => {
+              const contact = estudios.contacts.find((c) => c.id === contactId);
+              const session = contact?.sessions.find((s) => s.id === sessionId);
+              if (!contact || !session) return;
+              estudios.updateSession(contactId, sessionId, {
+                date: session.date.split("T")[0],
+                time: session.time ?? "10:00",
+                lesson: session.lesson,
+                notes: notes || undefined,
+                files: session.files ?? [],
+              });
+            }}
             t={t}
           />
         )}
@@ -516,11 +575,17 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             <Suspense fallback={<TabLoading />}>
               <SettingsView
                 entryCount={tracker.entries.length}
+                firstEntryDate={tracker.entries.length > 0
+                  ? new Date(Math.min(...tracker.entries.map((e) => new Date(e.startTime).getTime())))
+                  : null
+                }
                 onClearAll={handleClearAll}
                 setup={setup}
                 onSaveSetup={saveSetup}
                 isDark={isDark}
                 onToggleDark={toggleDark}
+                autoDarkMode={setup.autoDarkMode}
+                onToggleAutoDark={() => saveSetup({ autoDarkMode: !setup.autoDarkMode })}
                 hasActiveStudies={estudios.contacts.some(hasActiveStudyWork)}
               />
             </Suspense>

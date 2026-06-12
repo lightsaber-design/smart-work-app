@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="14dp"
+    android:gravity="center">
+
+    <!-- App label -->
+    <TextView
+        android:id="@+id/widget_app_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="MINISTRYLOG"
+        android:textSize="9sp"
+        android:textColor="#8034B1AF"
+        android:textAllCaps="true"
+        android:letterSpacing="0.15"
+        android:textStyle="bold" />
+
+    <!-- Chronometer (counts up automatically, no polling needed) -->
+    <Chronometer
+        android:id="@+id/widget_elapsed"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="28sp"
+        android:textColor="#FFFFFFFF"
+        android:textStyle="bold"
+        android:fontFamily="monospace"
+        android:layout_marginTop="2dp"
+        android:gravity="center" />
+
+    <!-- Category / status text -->
+    <TextView
+        android:id="@+id/widget_category"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Toca para abrir"
+        android:textSize="10sp"
+        android:textColor="#7034B1AF"
+        android:layout_marginTop="2dp"
+        android:gravity="center" />
+
+</LinearLayout>

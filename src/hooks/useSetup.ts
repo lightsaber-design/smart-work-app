@@ -19,6 +19,7 @@ export interface SetupData {
   notifTimerOverrun: boolean;
   notifTimer3h: boolean;
   notifMonthlyGoal: boolean;
+  autoDarkMode: boolean;
 }
 
 const DEFAULT: SetupData = {
@@ -35,6 +36,7 @@ const DEFAULT: SetupData = {
   notifTimerOverrun: true,
   notifTimer3h: true,
   notifMonthlyGoal: true,
+  autoDarkMode: false,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -76,6 +78,7 @@ function parseStoredSetup(value: unknown): SetupData {
     notifTimerOverrun: typeof value.notifTimerOverrun === "boolean" ? value.notifTimerOverrun : DEFAULT.notifTimerOverrun,
     notifTimer3h: typeof value.notifTimer3h === "boolean" ? value.notifTimer3h : DEFAULT.notifTimer3h,
     notifMonthlyGoal: typeof value.notifMonthlyGoal === "boolean" ? value.notifMonthlyGoal : DEFAULT.notifMonthlyGoal,
+    autoDarkMode: typeof value.autoDarkMode === "boolean" ? value.autoDarkMode : DEFAULT.autoDarkMode,
   };
 }
 

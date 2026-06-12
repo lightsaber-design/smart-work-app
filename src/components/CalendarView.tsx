@@ -246,6 +246,7 @@ function EventMonthGrid({
   monthBase,
   monthLabel,
   events,
+  estudiosContacts,
   selectedDate,
   onSelectDate,
   onPreviousMonth,
@@ -269,6 +270,7 @@ function EventMonthGrid({
   monthBase: Date;
   monthLabel: string;
   events: CalendarEvent[];
+  estudiosContacts?: EstudioContact[];
   selectedDate: Date;
   onSelectDate: (date: Date) => void;
   onPreviousMonth: () => void;
@@ -413,7 +415,13 @@ function EventMonthGrid({
               const dayTotal = dayTotalFromEvents(dayEvents);
               const hasNotes = dayEvents.some((e) => e.notes);
               const hasCompleted = dayEvents.some((e) => e.completed);
-              const hasFuture = dayEvents.some((e) => {
+              const dayStudySessions = (estudiosContacts ?? []).flatMap((c) =>
+                (c.sessions ?? []).filter(
+                  (s) => s.pending && new Date(s.date).toDateString() === day.toDateString()
+                )
+              );
+              const hasPendingStudy = dayStudySessions.length > 0;
+              const hasFuture = hasPendingStudy || dayEvents.some((e) => {
                 const d = new Date(e.date); d.setHours(0, 0, 0, 0);
                 return d >= todayMidnight && !e.completed;
               });
@@ -455,7 +463,7 @@ function EventMonthGrid({
                   <span className={`font-bold leading-none ${dayTotal.ms > 0 ? "text-[10px]" : "text-sm"} ${isSelected ? "text-primary-foreground" : ""}`}>
                     {day.getDate()}
                   </span>
-                  {categoryDots.length > 0 && (
+                  {(categoryDots.length > 0 || hasPendingStudy) && (
                     <div className="flex items-center gap-[2px]">
                       {categoryDots.map((cat) => (
                         <span
@@ -464,6 +472,12 @@ function EventMonthGrid({
                           style={{ backgroundColor: isSelected ? "rgba(255,255,255,0.7)" : getCategoryStyle(categoryConfigs, cat).dotColor }}
                         />
                       ))}
+                      {hasPendingStudy && (
+                        <span
+                          className="w-[4px] h-[4px] rounded-full flex-shrink-0"
+                          style={{ backgroundColor: isSelected ? "rgba(255,255,255,0.7)" : "#3b82f6" }}
+                        />
+                      )}
                     </div>
                   )}
                   {dayTotal.ms > 0 && (
@@ -1271,6 +1285,7 @@ export function CalendarView({
             monthBase={monthBase}
             monthLabel={monthLabel}
             events={events}
+            estudiosContacts={estudiosContacts}
             selectedDate={selectedDate}
             onSelectDate={(d) => { setSelectedDate(d); setMode("daily"); }}
             onPreviousMonth={() => setMonthOffset((v) => v - 1)}

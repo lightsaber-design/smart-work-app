@@ -1,4 +1,4 @@
-import { Pause, Play, BookOpen, X, Clock, StickyNote, Check, Pencil, Paperclip } from "lucide-react";
+import { Pause, Play, BookOpen, X, Clock, StickyNote, Check, Paperclip, Mic, Square, Trash2 } from "lucide-react";
 import { WorkCategory } from "@/hooks/useTimeTracker";
 import { CalendarEvent } from "@/hooks/useCalendarEvents";
 import { EstudioContact, EstudioSession, SessionFile, hasActiveStudyWork, nearestPendingSession, weekStartMs } from "@/hooks/useEstudios";
@@ -70,6 +70,16 @@ type PendingPrompt = {
   nextSession: EstudioSession;
   sessionData: SessionData;
 };
+type PostStudyState = {
+  contactId: string;
+  contactName: string;
+  sessionId: string;
+  sessionDate: string;
+  sessionLesson?: string;
+  notes: string;
+};
+
+const POST_STUDY_SECONDS = 10;
 
 interface ClockButtonProps {
   isRunning: boolean;
@@ -90,6 +100,7 @@ interface ClockButtonProps {
     contactId: string,
     data?: { time?: string; lesson?: string; notes?: string; files?: SessionFile[]; forceNew?: boolean }
   ) => void;
+  onUpdateEstudioNotes?: (contactId: string, sessionId: string, notes: string) => void;
   categoryConfigs: CategoryConfig[];
   activityStartHour?: number;
   activityEndHour?: number;
@@ -117,7 +128,7 @@ export function ClockButton({
   isRunning, elapsed, onClockIn, onClockOut, onUpdateCategory, onUpdateStartTime,
   calendarEvents, activeCategory, activeEntryId, activeEntryStartTime,
   activeEventNotes, onSaveNotes,
-  estudios = [], onDisplayCategoryChange, onEstudioSession,
+  estudios = [], onDisplayCategoryChange, onEstudioSession, onUpdateEstudioNotes,
   categoryConfigs,
   activityStartHour = DEFAULT_ACTIVITY_START_HOUR,
   activityEndHour = DEFAULT_ACTIVITY_END_HOUR,
@@ -138,10 +149,24 @@ export function ClockButton({
   const [notesSaved, setNotesSaved] = useState(false);
   const [sessionLesson, setSessionLesson] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
+  const [sessionNearestDate, setSessionNearestDate] = useState<string | null>(null);
   const [sessionPendingFiles, setSessionPendingFiles] = useState<{ file: File; id: string }[]>([]);
-  const [sessionEditMode, setSessionEditMode] = useState(false);
+  const [postStudy, setPostStudy] = useState<PostStudyState | null>(null);
+  const [postStudyCountdown, setPostStudyCountdown] = useState(POST_STUDY_SECONDS);
+  // Voice note state
+  const [isRecording, setIsRecording] = useState(false);
+  const isRecordingRef = useRef(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [voiceNoteDataUrl, setVoiceNoteDataUrl] = useState<string | null>(null);
+  const [isPlayingVoice, setIsPlayingVoice] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const estudiosRef = useRef(estudios);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const postStudyIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Actualiza el reloj de pared cada segundo.
   useEffect(() => {
@@ -158,6 +183,9 @@ export function ClockButton({
     setNotesSaved(false);
   }, [activeEventNotes]);
 
+  // Mantiene la ref de estudios actualizada sin causar re-renders.
+  useEffect(() => { estudiosRef.current = estudios; }, [estudios]);
+
   // Resetea el estado de notas cuando el timer se detiene.
   useEffect(() => {
     if (!isRunning) {
@@ -166,22 +194,23 @@ export function ClockButton({
       setNotesSaved(false);
       setSessionLesson("");
       setSessionNotes("");
+      setSessionNearestDate(null);
       setSessionPendingFiles([]);
-      setSessionEditMode(false);
     }
   }, [isRunning]);
 
   // Precarga los datos de la sesión más cercana cuando cambia el contacto seleccionado.
+  // Sólo depende de selectedEstudioId para no resetear el estado al re-renderizarse el padre.
   useEffect(() => {
     if (!selectedEstudioId) return;
-    const contact = estudios.find((e) => e.id === selectedEstudioId);
+    const contact = estudiosRef.current.find((e) => e.id === selectedEstudioId);
     if (!contact) return;
     const nearest = nearestPendingSession(contact.sessions ?? [], Date.now());
     setSessionLesson(nearest?.lesson ?? "");
     setSessionNotes(nearest?.notes ?? "");
+    setSessionNearestDate(nearest?.date ?? null);
     setSessionPendingFiles([]);
-    setSessionEditMode(false);
-  }, [selectedEstudioId, estudios]);
+  }, [selectedEstudioId]);
 
   const activeStudios = useMemo(() => estudios.filter(hasActiveStudyWork), [estudios]);
   const categories = useMemo(
@@ -215,6 +244,111 @@ export function ClockButton({
   useEffect(() => {
     setCustomTimeStr((value) => clampTimeToActivityRange(value, activityStartHour, activityEndHour));
   }, [activityStartHour, activityEndHour]);
+
+  // ── Post-study popup helpers ────────────────────────────────────────────────
+  const dismissPostStudy = () => {
+    if (postStudyIntervalRef.current) clearInterval(postStudyIntervalRef.current);
+    postStudyIntervalRef.current = null;
+    setPostStudy(null);
+    setPostStudyCountdown(POST_STUDY_SECONDS);
+    stopRecording();
+    setVoiceNoteDataUrl(null);
+    setIsPlayingVoice(false);
+  };
+
+  // ── Voice recording helpers ───────────────────────────────────────────────
+  const startRecording = async () => {
+    // Pause the auto-dismiss countdown while recording
+    setPostStudyCountdown(POST_STUDY_SECONDS);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      recordingChunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size > 0) recordingChunksRef.current.push(e.data); };
+      mr.onstop = () => {
+        const blob = new Blob(recordingChunksRef.current, { type: mr.mimeType || "audio/webm" });
+        const reader = new FileReader();
+        reader.onloadend = () => { setVoiceNoteDataUrl(reader.result as string); };
+        reader.readAsDataURL(blob);
+        stream.getTracks().forEach((tr) => tr.stop());
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setIsRecording(true);
+      isRecordingRef.current = true;
+      setRecordingSeconds(0);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+    } catch {
+      // microphone permission denied or not available
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    recordingTimerRef.current = null;
+    setIsRecording(false);
+    isRecordingRef.current = false;
+  };
+
+  const toggleVoicePlay = () => {
+    if (!voiceNoteDataUrl) return;
+    if (!voiceAudioRef.current) {
+      voiceAudioRef.current = new Audio(voiceNoteDataUrl);
+      voiceAudioRef.current.onended = () => setIsPlayingVoice(false);
+    }
+    if (isPlayingVoice) {
+      voiceAudioRef.current.pause();
+      setIsPlayingVoice(false);
+    } else {
+      void voiceAudioRef.current.play();
+      setIsPlayingVoice(true);
+    }
+  };
+
+  const deleteVoiceNote = () => {
+    voiceAudioRef.current?.pause();
+    voiceAudioRef.current = null;
+    setVoiceNoteDataUrl(null);
+    setIsPlayingVoice(false);
+  };
+
+  const savePostStudyNotes = () => {
+    if (postStudy?.notes.trim()) {
+      onUpdateEstudioNotes?.(postStudy.contactId, postStudy.sessionId, postStudy.notes.trim());
+    }
+    if (voiceNoteDataUrl && postStudy?.sessionId) {
+      try { localStorage.setItem(`vn-${postStudy.sessionId}`, voiceNoteDataUrl); } catch { /* quota */ }
+    }
+    dismissPostStudy();
+  };
+
+  const showPostStudyFor = (contactId: string) => {
+    // Busca la próxima sesión programada tras un pequeño delay para que
+    // estudiosRef tenga los datos ya actualizados por el padre.
+    setTimeout(() => {
+      const contact = estudiosRef.current.find((e) => e.id === contactId);
+      if (!contact) return;
+      const next = nearestPendingSession(contact.sessions ?? [], Date.now());
+      if (!next) return;
+      if (postStudyIntervalRef.current) clearInterval(postStudyIntervalRef.current);
+      setPostStudy({ contactId, contactName: contact.name, sessionId: next.id, sessionDate: next.date, sessionLesson: next.lesson, notes: "" });
+      setPostStudyCountdown(POST_STUDY_SECONDS);
+      postStudyIntervalRef.current = setInterval(() => {
+        if (isRecordingRef.current) return; // pause countdown while recording
+        setPostStudyCountdown((prev) => {
+          if (prev <= 1) {
+            if (postStudyIntervalRef.current) clearInterval(postStudyIntervalRef.current);
+            postStudyIntervalRef.current = null;
+            setPostStudy(null);
+            return POST_STUDY_SECONDS;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }, 350);
+  };
 
   const handleToggleEdit = () => {
     if (!editingTime) {
@@ -265,12 +399,14 @@ export function ClockButton({
           const isCurrentWeek = weekStartMs(new Date(nextPending.date)) === weekStartMs(new Date());
           if (isCurrentWeek) {
             onEstudioSession(selectedEstudioId, sessionData);
+            showPostStudyFor(selectedEstudioId);
           } else {
             // Sesión de una semana futura: preguntar si es la correcta
             setPendingPrompt({ contactId: selectedEstudioId, contactName: contact.name, nextSession: nextPending, sessionData });
           }
         } else {
           onEstudioSession(selectedEstudioId, sessionData);
+          showPostStudyFor(selectedEstudioId);
         }
       }
     } else {
@@ -525,121 +661,87 @@ export function ClockButton({
               </Select>
             )}
 
-            {/* Panel de sesión programada */}
+            {/* Panel de sesión programada — siempre editable */}
             {selectedEstudioId && (
               <div
                 className="rounded-2xl px-3.5 py-3 space-y-2.5"
                 style={{ background: isRunning ? "rgba(255,255,255,0.13)" : "rgba(255,255,255,0.90)", border: isRunning ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(0,0,0,0.12)" }}
               >
-                {/* Cabecera con título y lápiz */}
-                <div className="flex items-center justify-between">
+                {/* Cabecera con título y fecha de la sesión */}
+                <div className="flex items-center justify-between gap-2">
                   <span className={`text-[10px] font-bold uppercase tracking-widest ${isRunning ? "text-white/60" : "text-slate-500"}`}>
                     {t("timer_session_header")}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setSessionEditMode((v) => !v)}
-                    className={`p-1 rounded-lg transition-colors cursor-pointer ${isRunning ? "text-white/60 hover:text-white hover:bg-white/10" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"}`}
-                  >
-                    {sessionEditMode
-                      ? <X className="w-3.5 h-3.5" />
-                      : <Pencil className="w-3.5 h-3.5" />}
-                  </button>
+                  {sessionNearestDate && (
+                    <span className={`text-[10px] font-semibold ${isRunning ? "text-white/70" : "text-slate-600"}`}>
+                      {formatSessionDay(sessionNearestDate, t, locale)}
+                    </span>
+                  )}
                 </div>
 
-                {!sessionEditMode ? (
-                  /* Vista de solo lectura */
-                  <div className="space-y-1.5">
-                    <div className="flex items-start gap-2">
-                      <span className={`text-[10px] font-semibold w-14 flex-shrink-0 pt-0.5 ${isRunning ? "text-white/50" : "text-slate-500"}`}>
-                        {t("study_lesson")}
-                      </span>
-                      <span className={`text-[11px] font-medium leading-snug flex-1 ${isRunning ? "text-white/80" : "text-slate-800"} ${!sessionLesson ? (isRunning ? "opacity-40" : "opacity-60") + " italic" : ""}`}>
-                        {sessionLesson || t("cal_optional")}
-                      </span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className={`text-[10px] font-semibold w-14 flex-shrink-0 pt-0.5 ${isRunning ? "text-white/50" : "text-slate-500"}`}>
-                        {t("study_notes")}
-                      </span>
-                      <span className={`text-[11px] font-medium leading-snug flex-1 ${isRunning ? "text-white/80" : "text-slate-800"} ${!sessionNotes ? (isRunning ? "opacity-40" : "opacity-60") + " italic" : ""}`}>
-                        {sessionNotes || t("cal_optional")}
-                      </span>
-                    </div>
-                    {sessionPendingFiles.length > 0 && (
-                      <div className="flex items-center gap-1.5">
-                        <Paperclip className={`w-3 h-3 flex-shrink-0 ${isRunning ? "text-white/50" : "text-slate-500"}`} />
-                        <span className={`text-[11px] ${isRunning ? "text-white/70" : "text-slate-800"}`}>
-                          {sessionPendingFiles.length} {sessionPendingFiles.length === 1 ? t("study_attach_file").split(" ")[0] : t("study_files")}
-                        </span>
+                {/* Campos siempre editables */}
+                <div className="space-y-2.5">
+                  {/* Lección */}
+                  <div className="space-y-1">
+                    <label className={`text-[10px] font-semibold uppercase tracking-wide ${isRunning ? "text-white/60" : "text-slate-500"}`}>
+                      {t("study_lesson")}
+                    </label>
+                    <input
+                      type="text"
+                      value={sessionLesson}
+                      onChange={(e) => setSessionLesson(e.target.value)}
+                      placeholder={t("studies_lesson_placeholder")}
+                      className={`w-full rounded-xl px-3 py-2 text-sm border-0 shadow-sm focus:outline-none focus:ring-2 ${isRunning ? "bg-white/90 text-slate-900 placeholder:text-slate-400 focus:ring-white/40" : "bg-white text-slate-900 placeholder:text-slate-400 focus:ring-slate-300"}`}
+                    />
+                  </div>
+                  {/* Notas de sesión */}
+                  <div className="space-y-1">
+                    <label className={`text-[10px] font-semibold uppercase tracking-wide ${isRunning ? "text-white/60" : "text-slate-500"}`}>
+                      {t("study_notes")}
+                    </label>
+                    <textarea
+                      value={sessionNotes}
+                      onChange={(e) => setSessionNotes(e.target.value)}
+                      placeholder={t("studies_session_notes_placeholder")}
+                      rows={2}
+                      className={`w-full resize-none rounded-xl px-3 py-2 text-sm border-0 shadow-sm focus:outline-none focus:ring-2 ${isRunning ? "bg-white/90 text-slate-900 placeholder:text-slate-400 focus:ring-white/40" : "bg-white text-slate-900 placeholder:text-slate-400 focus:ring-slate-300"}`}
+                    />
+                  </div>
+                  {/* Archivos */}
+                  <div className="space-y-1">
+                    <label className={`text-[10px] font-semibold uppercase tracking-wide ${isRunning ? "text-white/60" : "text-slate-500"}`}>
+                      {t("study_files")}
+                    </label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        const selected = Array.from(e.target.files ?? []);
+                        setSessionPendingFiles((prev) => [...prev, ...selected.map((file) => ({ file, id: generateId() }))]);
+                        e.target.value = "";
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`w-full flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs border-2 border-dashed cursor-pointer ${isRunning ? "text-white/60" : "text-slate-500"}`}
+                      style={{ borderColor: isRunning ? "rgba(255,255,255,0.3)" : undefined }}
+                    >
+                      <Paperclip className="w-3.5 h-3.5" />
+                      {t("study_attach_file")}
+                    </button>
+                    {sessionPendingFiles.map(({ file, id }) => (
+                      <div key={id} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl ${isRunning ? "bg-white/20" : "bg-slate-100"}`}>
+                        <span className={`flex-1 text-xs truncate ${isRunning ? "text-white/80" : "text-slate-800"}`}>{file.name}</span>
+                        <button type="button" onClick={() => setSessionPendingFiles((prev) => prev.filter((f) => f.id !== id))} className="cursor-pointer">
+                          <X className={`w-3 h-3 ${isRunning ? "text-white/60" : "text-slate-500"}`} />
+                        </button>
                       </div>
-                    )}
+                    ))}
                   </div>
-                ) : (
-                  /* Modo edición */
-                  <div className="space-y-2.5">
-                    {/* Lección */}
-                    <div className="space-y-1">
-                      <label className={`text-[10px] font-semibold uppercase tracking-wide ${isRunning ? "text-white/60" : "text-slate-500"}`}>
-                        {t("study_lesson")}
-                      </label>
-                      <input
-                        type="text"
-                        value={sessionLesson}
-                        onChange={(e) => setSessionLesson(e.target.value)}
-                        placeholder={t("studies_lesson_placeholder")}
-                        className={`w-full rounded-xl px-3 py-2 text-sm border-0 shadow-sm focus:outline-none focus:ring-2 ${isRunning ? "bg-white/90 text-foreground placeholder:text-slate-400 focus:ring-white/40" : "bg-white text-slate-900 placeholder:text-slate-400 focus:ring-slate-300"}`}
-                      />
-                    </div>
-                    {/* Notas de sesión */}
-                    <div className="space-y-1">
-                      <label className={`text-[10px] font-semibold uppercase tracking-wide ${isRunning ? "text-white/60" : "text-slate-500"}`}>
-                        {t("study_notes")}
-                      </label>
-                      <textarea
-                        value={sessionNotes}
-                        onChange={(e) => setSessionNotes(e.target.value)}
-                        placeholder={t("studies_session_notes_placeholder")}
-                        rows={2}
-                        className={`w-full resize-none rounded-xl px-3 py-2 text-sm border-0 shadow-sm focus:outline-none focus:ring-2 ${isRunning ? "bg-white/90 text-foreground placeholder:text-slate-400 focus:ring-white/40" : "bg-white text-slate-900 placeholder:text-slate-400 focus:ring-slate-300"}`}
-                      />
-                    </div>
-                    {/* Archivos */}
-                    <div className="space-y-1">
-                      <label className={`text-[10px] font-semibold uppercase tracking-wide ${isRunning ? "text-white/60" : "text-slate-500"}`}>
-                        {t("study_files")}
-                      </label>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => {
-                          const selected = Array.from(e.target.files ?? []);
-                          setSessionPendingFiles((prev) => [...prev, ...selected.map((file) => ({ file, id: generateId() }))]);
-                          e.target.value = "";
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs border-2 border-dashed cursor-pointer"
-                        style={{ borderColor: isRunning ? "rgba(255,255,255,0.3)" : undefined, color: isRunning ? "rgba(255,255,255,0.6)" : undefined }}
-                      >
-                        <Paperclip className="w-3.5 h-3.5" />
-                        {t("study_attach_file")}
-                      </button>
-                      {sessionPendingFiles.map(({ file, id }) => (
-                        <div key={id} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl ${isRunning ? "bg-white/20" : "bg-slate-100"}`}>
-                          <span className={`flex-1 text-xs truncate ${isRunning ? "text-white/80" : "text-slate-800"}`}>{file.name}</span>
-                          <button type="button" onClick={() => setSessionPendingFiles((prev) => prev.filter((f) => f.id !== id))} className="cursor-pointer">
-                            <X className={`w-3 h-3 ${isRunning ? "text-white/60" : "text-slate-500"}`} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
             )}
           </div>
@@ -746,17 +848,145 @@ export function ClockButton({
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => { onEstudioSession?.(pendingPrompt.contactId, pendingPrompt.sessionData); setPendingPrompt(null); }}
+                onClick={() => {
+                  onEstudioSession?.(pendingPrompt.contactId, pendingPrompt.sessionData);
+                  showPostStudyFor(pendingPrompt.contactId);
+                  setPendingPrompt(null);
+                }}
                 className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold cursor-pointer"
               >
                 {t("common_yes")}
               </button>
               <button
-                onClick={() => { onEstudioSession?.(pendingPrompt.contactId, { ...pendingPrompt.sessionData, forceNew: true }); setPendingPrompt(null); }}
+                onClick={() => {
+                  onEstudioSession?.(pendingPrompt.contactId, { ...pendingPrompt.sessionData, forceNew: true });
+                  showPostStudyFor(pendingPrompt.contactId);
+                  setPendingPrompt(null);
+                }}
                 className="flex-1 py-2 rounded-xl bg-muted text-foreground text-sm font-medium cursor-pointer"
               >
                 {t("clock_new_session")}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Popup post-estudio: notas para la próxima sesión */}
+      {postStudy && (
+        <div className="fixed bottom-20 left-0 right-0 px-4 max-w-md mx-auto z-50 animate-in slide-in-from-bottom-4 duration-300">
+          <div className="relative bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
+            {/* Barra de cuenta atrás */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-border/40">
+              <div
+                className="h-full bg-primary transition-all duration-1000 ease-linear"
+                style={{ width: `${(postStudyCountdown / POST_STUDY_SECONDS) * 100}%` }}
+              />
+            </div>
+
+            <div className="px-4 pt-5 pb-4 space-y-3">
+              {/* Cabecera */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-primary">
+                    {t("timer_post_study_header")}
+                  </p>
+                  <p className="text-sm font-semibold text-foreground truncate">
+                    {postStudy.contactName}
+                    <span className="text-muted-foreground font-normal"> · {formatSessionDay(postStudy.sessionDate, t, locale)}</span>
+                  </p>
+                  {postStudy.sessionLesson && (
+                    <p className="text-xs text-muted-foreground italic mt-0.5 truncate">{postStudy.sessionLesson}</p>
+                  )}
+                </div>
+                <button
+                  onClick={dismissPostStudy}
+                  className="flex-shrink-0 p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Textarea de notas */}
+              <textarea
+                value={postStudy.notes}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPostStudy((s) => s ? { ...s, notes: val } : s);
+                  setPostStudyCountdown(POST_STUDY_SECONDS);
+                }}
+                placeholder={t("timer_post_study_placeholder")}
+                rows={3}
+                autoFocus
+                className="w-full resize-none rounded-xl px-3 py-2.5 text-sm bg-muted text-foreground placeholder:text-muted-foreground border-0 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+
+              {/* Nota de voz */}
+              <div className="flex items-center gap-2">
+                {!voiceNoteDataUrl ? (
+                  /* Record button */
+                  <button
+                    type="button"
+                    onClick={isRecording ? stopRecording : startRecording}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
+                      isRecording
+                        ? "bg-red-500 text-white"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {isRecording ? (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                        <Square className="w-3 h-3" />
+                        <span className="tabular-nums">
+                          {String(Math.floor(recordingSeconds / 60)).padStart(2, "0")}:{String(recordingSeconds % 60).padStart(2, "0")}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="w-3.5 h-3.5" />
+                        {t("voice_note_record")}
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  /* Playback + delete */
+                  <>
+                    <button
+                      type="button"
+                      onClick={toggleVoicePlay}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/10 text-primary text-xs font-semibold"
+                    >
+                      {isPlayingVoice ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                      {t("voice_note_play")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={deleteVoiceNote}
+                      className="w-8 h-8 rounded-xl bg-muted flex items-center justify-center text-destructive"
+                      aria-label={t("voice_note_delete")}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Botones */}
+              <div className="flex gap-2">
+                <button
+                  onClick={savePostStudyNotes}
+                  className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold cursor-pointer"
+                >
+                  {t("timer_post_study_save")}
+                </button>
+                <button
+                  onClick={dismissPostStudy}
+                  className="px-4 py-2 rounded-xl bg-muted text-muted-foreground text-sm font-medium cursor-pointer"
+                >
+                  {t("timer_post_study_skip")}
+                </button>
+              </div>
             </div>
           </div>
         </div>

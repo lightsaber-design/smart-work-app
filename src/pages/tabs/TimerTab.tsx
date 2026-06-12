@@ -50,6 +50,7 @@ interface TimerTabProps {
   openCalendarEvent: (id: string) => void;
   setDeleteEventPromptId: (id: string) => void;
   setTimerDisplayCategory: (cat: string) => void;
+  onUpdateEstudioNotes?: (contactId: string, sessionId: string, notes: string) => void;
   t: TranslateFn;
 }
 
@@ -86,6 +87,7 @@ export function TimerTab({
   openCalendarEvent,
   setDeleteEventPromptId,
   setTimerDisplayCategory,
+  onUpdateEstudioNotes,
   t,
 }: TimerTabProps) {
   const MAX_VISIBLE = 8;
@@ -322,6 +324,7 @@ export function TimerTab({
             estudios={estudios.contacts.filter((c) => c.active)}
             onDisplayCategoryChange={setTimerDisplayCategory}
             onEstudioSession={estudios.addSession}
+            onUpdateEstudioNotes={onUpdateEstudioNotes}
             categoryConfigs={setup.categorySettings}
             activityStartHour={setup.activityStartHour}
             activityEndHour={setup.activityEndHour}

@@ -1,6 +1,6 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { MinistryMark, MinistryWordmark } from "@/components/MinistryMark";
-import { Trash2, MapPin, User, Moon, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil, Upload, Download, Bell } from "lucide-react";
+import { Trash2, MapPin, User, Moon, Sunrise, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil, Upload, Download, Bell } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -12,7 +12,7 @@ import { ActivityHoursConfig } from "@/components/ActivityHoursConfig";
 import { LanguageFlag } from "@/components/LanguageFlag";
 import { SetupData } from "@/hooks/useSetup";
 import { hasNotificationPermission, requestNotificationPermission } from "@/lib/notifications";
-import { useT } from "@/lib/LanguageContext";
+import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { LANGUAGES, Lang } from "@/lib/i18n";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 import { CategoryConfig, getCategoryLabel, isDefaultCategoryName } from "@/lib/categories";
@@ -21,10 +21,13 @@ import { formatPlaceName } from "@/lib/placeNames";
 interface SettingsViewProps {
   onClearAll: () => void;
   entryCount: number;
+  firstEntryDate?: Date | null;
   setup: SetupData;
   onSaveSetup: (data: Partial<SetupData>) => void;
   isDark?: boolean;
   onToggleDark?: () => void;
+  autoDarkMode?: boolean;
+  onToggleAutoDark?: () => void;
   hasActiveStudies?: boolean;
 }
 
@@ -69,8 +72,13 @@ function SettingsSection({
   );
 }
 
-export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDark, onToggleDark, hasActiveStudies = false }: SettingsViewProps) {
+export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, onSaveSetup, isDark, onToggleDark, autoDarkMode, onToggleAutoDark, hasActiveStudies = false }: SettingsViewProps) {
   const t = useT();
+  const lang = useLang();
+  const locale = localeForLang(lang);
+  const sinceDateLabel = firstEntryDate
+    ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", year: "numeric" }).format(firstEntryDate)
+    : null;
   const storage = useJsonStorageStatus();
   const [editingCity, setEditingCity] = useState(false);
   const [cityDraft, setCityDraft] = useState(setup.city ?? undefined);
@@ -435,8 +443,24 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
               <Moon className="w-4 h-4 text-primary" />
               {t("settings_dark_mode")}
             </Label>
-            <Switch id="dark-mode-toggle" checked={!!isDark} onCheckedChange={onToggleDark} />
+            <Switch id="dark-mode-toggle" checked={!!isDark} onCheckedChange={onToggleDark} disabled={!!autoDarkMode} />
           </div>
+          {setup.city && onToggleAutoDark !== undefined && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2 text-sm text-foreground cursor-pointer" htmlFor="auto-dark-toggle">
+                  <Sunrise className="w-4 h-4 text-amber-500" />
+                  {t("settings_dark_auto")}
+                </Label>
+                <Switch id="auto-dark-toggle" checked={!!autoDarkMode} onCheckedChange={onToggleAutoDark} />
+              </div>
+              {autoDarkMode && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">
+                  {t("settings_dark_auto_hint")}
+                </p>
+              )}
+            </div>
+          )}
         </SettingsSection>
       )}
 
@@ -519,10 +543,17 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
         icon={<FileJson className="w-4 h-4" />}
         title={t("set_data")}
         summary={
-          <>
-            <FileJson className="h-3.5 w-3.5" />
-            <span className="tabular-nums">{entryCount}</span>
-          </>
+          sinceDateLabel ? (
+            <>
+              <FileJson className="h-3.5 w-3.5" />
+              <span className="truncate">{t("set_data_since", { date: sinceDateLabel })}</span>
+            </>
+          ) : (
+            <>
+              <FileJson className="h-3.5 w-3.5" />
+              <span className="tabular-nums">{entryCount}</span>
+            </>
+          )
         }
         open={dataOpen}
         onToggle={() => setDataOpen((open) => !open)}
@@ -549,9 +580,11 @@ export function SettingsView({ onClearAll, entryCount, setup, onSaveSetup, isDar
             </button>
           )}
         </div>
-        <p className="text-sm text-muted-foreground mb-4">
-          {t('set_records', { count: entryCount })}
-        </p>
+        {sinceDateLabel && (
+          <p className="text-sm text-muted-foreground mb-4">
+            {t('set_data_since', { date: sinceDateLabel })}
+          </p>
+        )}
 
         {/* Export / Import */}
         <div className="flex flex-col gap-2 mb-4">

@@ -529,13 +529,17 @@ export function useEstudios() {
   }, [persist]);
 
   const completeSession = useCallback((contactId: string, sessionId: string) => {
+    const completedDate = new Date().toISOString();
+    const completedTime = now();
     setContacts((prev) => {
       const updated = prev.map((c) => {
         if (c.id !== contactId) return c;
         const withCompleted = {
           ...c,
           sessions: c.sessions.map((s) =>
-            s.id === sessionId ? { ...s, pending: false } : s
+            s.id === sessionId
+              ? { ...s, date: completedDate, time: completedTime, pending: false }
+              : s
           ),
         };
         return fillPendingSessions(withCompleted);

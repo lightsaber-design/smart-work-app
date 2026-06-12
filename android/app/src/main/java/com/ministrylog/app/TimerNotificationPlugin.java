@@ -5,6 +5,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Build;
 
 import androidx.core.app.NotificationCompat;
@@ -75,14 +76,34 @@ public class TimerNotificationPlugin extends Plugin {
         NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
         nm.notify(NOTIF_ID, builder.build());
 
+        // Persist timer state for the home-screen widget
+        String category = call.getString("category", "");
+        saveWidgetState(ctx, true, startTimeMs, category);
+        TimerWidget.refreshAll(ctx);
+
         call.resolve();
     }
 
     @PluginMethod
     public void stop(PluginCall call) {
-        NotificationManager nm = (NotificationManager) getContext()
-            .getSystemService(Context.NOTIFICATION_SERVICE);
+        Context ctx = getContext();
+        NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
         nm.cancel(NOTIF_ID);
+
+        // Clear timer state for the home-screen widget
+        saveWidgetState(ctx, false, 0, "");
+        TimerWidget.refreshAll(ctx);
+
         call.resolve();
+    }
+
+    private void saveWidgetState(Context ctx, boolean running, long startMs, String category) {
+        SharedPreferences.Editor ed = ctx
+            .getSharedPreferences(TimerWidget.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit();
+        ed.putBoolean(TimerWidget.KEY_RUNNING, running);
+        ed.putLong(TimerWidget.KEY_START_MS, startMs);
+        ed.putString(TimerWidget.KEY_CATEGORY, category != null ? category : "");
+        ed.apply();
     }
 }

@@ -55,6 +55,14 @@ export function useStudyNotifications({
 
       const { schedule } = contact;
 
+      // Last completed session context
+      const lastDone = contact.sessions
+        .filter((s) => s.pending === false)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] ?? null;
+      const lessonSuffix = lastDone?.lesson
+        ? t("notif_study_ctx_lesson").replace("{lesson}", lastDone.lesson)
+        : "";
+
       if (schedule.dayOfWeek !== undefined) {
         // Cancelar posible notificación flexible residual si el usuario cambió el tipo
         void cancelEventNotification(flexId);
@@ -84,7 +92,7 @@ export function useStudyNotifications({
         void scheduleEventNotification(
           fixedId,
           t("notif_study_missed_title"),
-          t("notif_study_missed_today", { name: contact.name }),
+          t("notif_study_missed_today", { name: contact.name }) + lessonSuffix,
           new Date(Date.now() + 1_000),
         );
 
@@ -109,7 +117,7 @@ export function useStudyNotifications({
         void scheduleEventNotification(
           flexId,
           t("notif_study_missed_title"),
-          t("notif_study_missed_week", { name: contact.name }),
+          t("notif_study_missed_week", { name: contact.name }) + lessonSuffix,
           nextSundayEvening(),
         );
       }

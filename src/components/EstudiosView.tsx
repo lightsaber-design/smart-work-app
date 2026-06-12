@@ -6,7 +6,7 @@ import {
   Paperclip, X, FileText, Image, File,
   CalendarPlus, History, ArrowLeft, MoreVertical,
   StickyNote, Pencil, RefreshCw, Archive, ChevronRight, ExternalLink,
-  Search, AlertTriangle, ChevronsRight, BarChart3,
+  Search, AlertTriangle, ChevronsRight, BarChart3, Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -424,6 +424,18 @@ function SessionEditSheet({ session, contact, defaultLesson, onSave, onComplete,
               onChange={(e) => setNotes(e.target.value)}
             />
           </div>
+          {/* Voice note playback */}
+          {!isNew && session && (() => {
+            const vn = localStorage.getItem(`vn-${session.id}`);
+            if (!vn) return null;
+            return (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/5 border border-primary/20">
+                <span className="text-sm">🎙️</span>
+                <p className="text-xs font-medium text-foreground flex-1">{t("voice_note_play")}</p>
+                <audio src={vn} controls className="h-8 flex-1 min-w-0" style={{ maxWidth: "160px" }} />
+              </div>
+            );
+          })()}
 
           {existingFiles.length > 0 && (
             <div className="space-y-1.5">
@@ -498,6 +510,7 @@ function HistorySessionCard({ session, onOpen }: { session: EstudioSession; onOp
   const t = useT();
   const lang = useLang();
   const locale = localeForLang(lang);
+  const hasVoiceNote = !!localStorage.getItem(`vn-${session.id}`);
   return (
     <button
       onClick={onOpen}
@@ -514,6 +527,11 @@ function HistorySessionCard({ session, onOpen }: { session: EstudioSession; onOp
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-xs text-muted-foreground">{session.time}</span>
           {session.notes && <StickyNote className="w-3.5 h-3.5 text-muted-foreground" />}
+          {hasVoiceNote && (
+            <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium flex items-center gap-0.5">
+              🎙️
+            </span>
+          )}
           {(session.files ?? []).length > 0 && (
             <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full font-medium">
               {t(session.files.length === 1 ? "study_file_count_one" : "study_file_count_many", { count: session.files.length })}
@@ -553,6 +571,44 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState<EstudioSession | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
+  const [exportToast, setExportToast] = useState(false);
+
+  const handleExportContact = async () => {
+    setMenuOpen(false);
+    const doneSessions = [...contact.sessions]
+      .filter((s) => s.pending === false)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const fmt = new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", year: "numeric" });
+    const lines: string[] = [
+      `📖 ${contact.name}`,
+      contact.address ? `📍 ${contact.address}` : "",
+      "",
+      doneSessions.length > 0
+        ? t("export_sessions_count").replace("{n}", String(doneSessions.length))
+        : t("prep_mode_no_history"),
+    ].filter(Boolean);
+    if (doneSessions.length > 0) {
+      const firstDate = new Date(doneSessions[0].date);
+      lines.push(t("export_studying_since").replace("{date}", fmt.format(firstDate)));
+    }
+    lines.push("");
+    for (const s of doneSessions) {
+      lines.push(`• ${fmt.format(new Date(s.date))}${s.lesson ? `  –  ${s.lesson}` : ""}`);
+      if (s.notes) lines.push(`  ${s.notes}`);
+    }
+    const text = lines.join("\n");
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: contact.name, text });
+      } else {
+        await navigator.clipboard.writeText(text);
+        setExportToast(true);
+        setTimeout(() => setExportToast(false), 2500);
+      }
+    } catch {
+      // share cancelled
+    }
+  };
 
   const doneSessions = (contact.sessions ?? [])
     .filter((s) => !s.pending)
@@ -585,6 +641,12 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
 
   return (
     <div className="pb-24">
+      {/* Export toast */}
+      {exportToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-green-600 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
+          {t("export_contact_copied")}
+        </div>
+      )}
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-3">
         <div className="flex items-center gap-3">
@@ -653,6 +715,14 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                       {t("studies_reactivate")}
                     </button>
                   )}
+                  <div className="h-px bg-border mx-3" />
+                  <button
+                    onClick={handleExportContact}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left active:bg-muted"
+                  >
+                    <Share2 className="w-4 h-4 text-muted-foreground" />
+                    {t("export_contact_title")}
+                  </button>
                   {!hasSessions && (
                     <>
                       <div className="h-px bg-border mx-3" />
@@ -671,15 +741,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
           </div>
         </div>
 
-        {/* Action buttons */}
-        {contact.active && (
-          <div className="mt-3">
-            <Button size="sm" onClick={() => setNewSessionOpen(true)} className="w-full gap-1.5">
-              <BookOpen className="w-4 h-4" />
-              {sessionToday ? t("studies_add_another_session") : t("studies_register_today")}
-            </Button>
-          </div>
-        )}
+        {/* Action buttons (removed "add today session" – use upcoming cards or history instead) */}
       </div>
 
       <div className="px-4 pt-4 space-y-6">
@@ -701,13 +763,18 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
             </div>
           ) : (
             <div className="space-y-2">
-              {upcomingSessions.slice(0, 4).map((s) => {
+              {upcomingSessions.slice(0, 4).map((s, idx) => {
                 const isPast = new Date(s.date) < new Date() && new Date(s.date).toDateString() !== new Date().toDateString();
+                const isNext = idx === 0;
                 return (
                   <div
                     key={s.id}
                     className={`flex items-center gap-1 rounded-2xl border pr-2 ${
-                      isPast ? "bg-orange-50 border-orange-200" : "bg-primary/5 border-primary/20"
+                      isPast
+                        ? "bg-orange-50 border-orange-200"
+                        : isNext
+                          ? "bg-blue-50 border-blue-300 dark:bg-blue-950/30 dark:border-blue-600 shadow-sm"
+                          : "bg-primary/5 border-primary/20"
                     }`}
                   >
                     <button
@@ -716,8 +783,15 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="text-xs text-muted-foreground">{formatDateLabel(s.date, locale)}</p>
-                          {s.lesson && <p className="text-sm font-medium text-foreground mt-0.5">{s.lesson}</p>}
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs text-muted-foreground">{formatDateLabel(s.date, locale)}</p>
+                            {isNext && !isPast && (
+                              <span className="text-[9px] bg-blue-500 text-white px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">
+                                {t("studies_stats_next").replace(":", "").trim()}
+                              </span>
+                            )}
+                          </div>
+                          {s.lesson && <p className="text-sm font-semibold text-foreground mt-0.5">{s.lesson}</p>}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className="text-xs text-muted-foreground">{s.time}</span>
@@ -753,9 +827,14 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                       }}
                       aria-label={t("study_mark_completed")}
                       title={t("study_mark_completed")}
-                      className="w-10 h-10 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform"
+                      className={
+                        isNext && !isPast
+                          ? "flex items-center gap-1 px-3 py-2 rounded-full bg-green-500 text-white text-xs font-semibold flex-shrink-0 active:scale-95 transition-transform"
+                          : "w-10 h-10 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform"
+                      }
                     >
-                      <CheckCircle2 className="w-5 h-5" />
+                      <CheckCircle2 className={isNext && !isPast ? "w-3.5 h-3.5" : "w-5 h-5"} />
+                      {isNext && !isPast && <span>{t("studies_register")}</span>}
                     </button>
                   </div>
                 );

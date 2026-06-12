@@ -238,6 +238,10 @@ export async function writeJsonValue(key: StorageKey, value: unknown) {
   await writeFile();
 }
 
+export function getDataSnapshot(): string {
+  return JSON.stringify({ ...dataCache, schemaVersion: 1, savedAt: new Date().toISOString() });
+}
+
 export function exportAllData(): void {
   const blob = new Blob(
     [JSON.stringify({ ...dataCache, schemaVersion: 1, exportedAt: new Date().toISOString() }, null, 2)],

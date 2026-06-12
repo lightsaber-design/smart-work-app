@@ -163,6 +163,7 @@ export function useNotificationEffects({
       activeEntry.startTime,
       t("notif_timer_running_title"),
       t("notif_timer_running_body", { category: getCategoryLabel(activeEntry.category, t) }),
+      getCategoryLabel(activeEntry.category, t),
     );
     return () => { void stopTimerNotification(); };
   }, [activeEntry, t]);
