@@ -1,15 +1,12 @@
 import { useState, useCallback, useEffect } from "react";
 import { generateId } from "@/lib/uuid";
 import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
+import { isRecord } from "@/lib/utils";
 
 export interface FavoritePlace {
   id: string;
   name: string;
   location: { lat: number; lng: number };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function parseStoredPlace(value: unknown): FavoritePlace | null {

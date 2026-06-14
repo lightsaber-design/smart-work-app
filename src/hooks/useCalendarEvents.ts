@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { generateId } from "@/lib/uuid";
 import { readJsonValue } from "@/lib/jsonFileStorage";
 import { useDebouncedJsonWriter } from "@/hooks/useDebouncedJsonWriter";
 import { clampReminderMinutes } from "@/lib/eventReminders";
 import { findScheduledEventAtTimerStart, findScheduledEventForTimerStart } from "@/lib/timerOverrun";
+import { isRecord } from "@/lib/utils";
 
 export type EventCategory = string;
 export type RecurrenceType = "none" | "weekly" | "monthly";
@@ -33,10 +34,6 @@ export interface AddEventParams {
 
 interface PersistedCalendarEvent extends Omit<CalendarEvent, "date"> {
   date: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function isEventCategory(value: unknown): value is EventCategory {
@@ -344,5 +341,18 @@ export function useCalendarEvents() {
     [persistEvents]
   );
 
-  return { events, addEvent, addCompletedEventNow, deleteEvent, getEventsForDate, toggleEventCompleted, updateEvent, markNotified };
+  const calMonthMs = useMemo(() => {
+    const now = new Date();
+    return events
+      .filter((e) => e.completed && e.endTime && e.date.getMonth() === now.getMonth() && e.date.getFullYear() === now.getFullYear())
+      .reduce((acc, e) => {
+        if (!e.endTime) return acc;
+        const [h, m] = e.endTime.split(":").map(Number);
+        const end = new Date(e.date);
+        end.setHours(h, m, 0, 0);
+        return acc + Math.max(0, end.getTime() - e.date.getTime());
+      }, 0);
+  }, [events]);
+
+  return { events, calMonthMs, addEvent, addCompletedEventNow, deleteEvent, getEventsForDate, toggleEventCompleted, updateEvent, markNotified };
 }

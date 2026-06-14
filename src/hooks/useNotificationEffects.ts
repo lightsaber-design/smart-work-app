@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Capacitor } from "@capacitor/core";
 import type { CalendarEvent } from "@/hooks/useCalendarEvents";
 import type { TimeEntry } from "@/hooks/useTimeTracker";
 import type { EstudioContact } from "@/hooks/useEstudios";
@@ -206,6 +207,86 @@ export function useNotificationEffects({
       }
     }
   }, [estudiosContacts, t]);
+
+  // ── Notificaciones semanales de estudio ────────────────────────────────────
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    if (isTimerRunning) return;
+
+    const now = Date.now();
+    const today = new Date();
+    const todayStr = today.toDateString();
+    const weekStart = new Date(today);
+    weekStart.setHours(0, 0, 0, 0);
+    const dow = weekStart.getDay();
+    weekStart.setDate(weekStart.getDate() - (dow === 0 ? 6 : dow - 1));
+    const weekStartMs = weekStart.getTime();
+    const weekKey = weekStart.toDateString();
+
+    const nextSundayEvening = (): Date => {
+      const d = new Date();
+      d.setHours(20, 0, 0, 0);
+      const d2 = d.getDay();
+      d.setDate(d.getDate() + (d2 === 0 ? 0 : 7 - d2));
+      if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 7);
+      return d;
+    };
+
+    estudiosContacts.forEach((contact) => {
+      const fixedId = `study-fixed-${contact.id}`;
+      const flexId = `study-flex-${contact.id}`;
+
+      if (!contact.active || !contact.schedule) {
+        void cancelEventNotification(fixedId);
+        void cancelEventNotification(flexId);
+        return;
+      }
+
+      const { schedule } = contact;
+      const lastDone = contact.sessions
+        .filter((s) => s.pending === false)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] ?? null;
+      const lessonSuffix = lastDone?.lesson
+        ? t("notif_study_ctx_lesson").replace("{lesson}", lastDone.lesson)
+        : "";
+
+      if (schedule.dayOfWeek !== undefined) {
+        void cancelEventNotification(flexId);
+        if (today.getDay() !== schedule.dayOfWeek) return;
+        const doneToday = contact.sessions.some(
+          (s) => !s.pending && new Date(s.date).toDateString() === todayStr
+        );
+        if (doneToday) { void cancelEventNotification(fixedId); return; }
+        const [h, m] = schedule.time.split(":").map(Number);
+        const scheduledMs = new Date(today).setHours(h, m, 0, 0);
+        if (now < scheduledMs + 90 * 60_000) return;
+        const storageKey = `_sn_fixed_${contact.id}_${todayStr}`;
+        if (localStorage.getItem(storageKey)) return;
+        localStorage.setItem(storageKey, "1");
+        void scheduleEventNotification(
+          fixedId,
+          t("notif_study_missed_title"),
+          t("notif_study_missed_today", { name: contact.name }) + lessonSuffix,
+          new Date(Date.now() + 1_000),
+        );
+      } else {
+        void cancelEventNotification(fixedId);
+        const doneThisWeek = contact.sessions.some(
+          (s) => !s.pending && new Date(s.date).getTime() >= weekStartMs
+        );
+        if (doneThisWeek) { void cancelEventNotification(flexId); return; }
+        const storageKey = `_sn_flex_${contact.id}_${weekKey}`;
+        if (localStorage.getItem(storageKey)) return;
+        localStorage.setItem(storageKey, "1");
+        void scheduleEventNotification(
+          flexId,
+          t("notif_study_missed_title"),
+          t("notif_study_missed_week", { name: contact.name }) + lessonSuffix,
+          nextSundayEvening(),
+        );
+      }
+    });
+  }, [estudiosContacts, isTimerRunning, t]);
 
   // ── Meta mensual ────────────────────────────────────────────────────────────
   useEffect(() => {

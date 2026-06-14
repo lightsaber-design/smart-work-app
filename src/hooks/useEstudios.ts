@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { generateId } from "@/lib/uuid";
 import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 import { useDebouncedJsonWriter } from "@/hooks/useDebouncedJsonWriter";
+import { isRecord } from "@/lib/utils";
 
 export interface SessionFile {
   id: string;
@@ -60,10 +61,6 @@ export function hasActiveStudyWork(contact: EstudioContact): boolean {
     Boolean(contact.schedule) ||
     (contact.sessions ?? []).some((session) => session.pending)
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function isScheduleFrequency(value: unknown): value is ScheduleFrequency {

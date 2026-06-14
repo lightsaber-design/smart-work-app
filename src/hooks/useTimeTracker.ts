@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { generateId } from "@/lib/uuid";
 import { readJsonValue } from "@/lib/jsonFileStorage";
 import { useDebouncedJsonWriter } from "@/hooks/useDebouncedJsonWriter";
+import { isRecord } from "@/lib/utils";
 
 export interface GeoLocation {
   lat: number;
@@ -19,10 +20,6 @@ export interface TimeEntry {
   startLocation: GeoLocation | null;
   endLocation: GeoLocation | null;
   linkedEventId?: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function isWorkCategory(value: unknown): value is WorkCategory {
@@ -65,11 +62,8 @@ export function useTimeTracker() {
   const persistEntries = useDebouncedJsonWriter("time-entries");
 
   const activeEntry = useMemo(() => entries.find((e) => e.endTime === null), [entries]);
-  const [isRunning, setIsRunning] = useState(() => entries.some((e) => e.endTime === null));
-  const [elapsed, setElapsed] = useState(() => {
-    const active = entries.find((e) => e.endTime === null);
-    return active ? Math.floor((Date.now() - active.startTime.getTime()) / 1000) : 0;
-  });
+  const isRunning = activeEntry !== undefined;
+  const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
     readJsonValue<unknown[]>("time-entries", [])
@@ -78,19 +72,18 @@ export function useTimeTracker() {
         const parsed = value.map(parseStoredEntry).filter((entry): entry is TimeEntry => entry !== null);
         setEntries(parsed);
         const active = parsed.find((e) => e.endTime === null);
-        setIsRunning(Boolean(active));
         setElapsed(active ? Math.floor((Date.now() - active.startTime.getTime()) / 1000) : 0);
       })
       .catch((error) => console.error("Error loading entries:", error));
   }, []);
 
   useEffect(() => {
-    if (!isRunning || !activeEntry) return;
+    if (!activeEntry) return;
     const interval = setInterval(() => {
       setElapsed(Math.floor((Date.now() - activeEntry.startTime.getTime()) / 1000));
     }, 1000);
     return () => clearInterval(interval);
-  }, [isRunning, activeEntry]);
+  }, [activeEntry]);
 
   const clockIn = useCallback(
     async (
@@ -118,7 +111,6 @@ export function useTimeTracker() {
         persistEntries(updated);
         return updated;
       });
-      setIsRunning(true);
       setElapsed(Math.floor((Date.now() - startTime.getTime()) / 1000));
     },
     [persistEntries]
@@ -139,7 +131,6 @@ export function useTimeTracker() {
         persistEntries(updated);
         return updated;
       });
-      setIsRunning(false);
       setElapsed(0);
     },
     [persistEntries]
@@ -175,10 +166,7 @@ export function useTimeTracker() {
       const deletedEntry = prev.find((e) => e.id === id);
       const updated = prev.filter((e) => e.id !== id);
       persistEntries(updated);
-      if (deletedEntry?.endTime === null) {
-        setIsRunning(false);
-        setElapsed(0);
-      }
+      if (deletedEntry?.endTime === null) setElapsed(0);
       return updated;
     });
   }, [persistEntries]);

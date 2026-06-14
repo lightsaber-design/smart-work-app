@@ -3,6 +3,7 @@ import { Lang, detectLanguage } from "@/lib/i18n";
 import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR, normalizeActivityHours } from "@/lib/activityHours";
 import { CategoryConfig, DEFAULT_CATEGORY_CONFIGS, normalizeCategoryConfigs } from "@/lib/categories";
+import { isRecord } from "@/lib/utils";
 
 export interface SetupData {
   name?: string;
@@ -38,10 +39,6 @@ const DEFAULT: SetupData = {
   notifMonthlyGoal: true,
   autoDarkMode: false,
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 function isLanguage(value: unknown): value is Lang {
   return value === "es" || value === "en" || value === "pt" || value === "fr" || value === "it" || value === "de";

@@ -21,21 +21,12 @@ import { formatDateLong } from "@/lib/dateFormat";
 import { hexToRgba, getWeatherHeroTheme } from "@/lib/weatherUtils";
 import { useWeather } from "@/hooks/useWeather";
 import { useNotificationEffects } from "@/hooks/useNotificationEffects";
-import { useStudyNotifications } from "@/hooks/useStudyNotifications";
+import { useSummarySheet } from "@/hooks/useSummarySheet";
+import { AppDialogs } from "@/components/AppDialogs";
 import { HomeTab } from "@/pages/tabs/HomeTab";
 import { TimerTab } from "@/pages/tabs/TimerTab";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { useAutoBackup } from "@/hooks/useAutoBackup";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 const StatsView = lazy(() => import("@/components/StatsView").then((m) => ({ default: m.StatsView })));
 const CalendarView = lazy(() => import("@/components/CalendarView").then((m) => ({ default: m.CalendarView })));
@@ -92,19 +83,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const [calendarFocusMonthDate, setCalendarFocusMonthDate] = useState<Date | null>(null);
 
   // ── Summary sheet state ───────────────────────────────────────────────────────
-  const [summaryOpen, setSummaryOpen] = useState(false);
-  const [summaryDragOffset, setSummaryDragOffset] = useState<number | null>(null);
-  const [summarySheetHeight, setSummarySheetHeight] = useState(0);
-  const [summaryViewportHeight, setSummaryViewportHeight] = useState(
-    typeof window === "undefined" ? 720 : window.innerHeight,
-  );
   const [shortStopPrompt, setShortStopPrompt] = useState<{ customTime?: Date } | null>(null);
   const [deleteEventPromptId, setDeleteEventPromptId] = useState<string | null>(null);
   const [showAllEvents, setShowAllEvents] = useState(false);
-  const summarySheetRef = useRef<HTMLDivElement | null>(null);
-  const dragStartY = useRef<number | null>(null);
-  const dragStartOffset = useRef(0);
-  const summaryDidDrag = useRef(false);
   const timerContentRef = useRef<HTMLDivElement>(null);
 
   // ── Data hooks ────────────────────────────────────────────────────────────────
@@ -159,22 +140,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     setDeleteEventPromptId(null);
   };
 
-  // ── Monthly total (source of truth: completed calendar events) ────────────────
   const todayKey = new Date().toDateString();
   const now = useMemo(() => new Date(todayKey), [todayKey]);
-  const calMonthMs = useMemo(
-    () =>
-      calendarEvents
-        .filter((e) => e.completed && e.endTime && e.date.getMonth() === now.getMonth() && e.date.getFullYear() === now.getFullYear())
-        .reduce((acc, e) => {
-          if (!e.endTime) return acc;
-          const [h, m] = e.endTime.split(":").map(Number);
-          const end = new Date(e.date);
-          end.setHours(h, m, 0, 0);
-          return acc + Math.max(0, end.getTime() - e.date.getTime());
-        }, 0),
-    [calendarEvents, now],
-  );
+  const { calMonthMs } = calendar;
 
   // ── Notification effects ──────────────────────────────────────────────────────
   useNotificationEffects({
@@ -192,12 +160,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     notifMonthlyGoal: setup.notifMonthlyGoal,
     travelTimeEnabled: setup.travelTimeEnabled,
     travelTimeMinutes: setup.travelTimeMinutes,
-  });
-
-  useStudyNotifications({
-    contacts: estudios.contacts,
-    isTimerRunning: tracker.isRunning,
-    t,
   });
 
   // ── Widget action: detener timer desde el widget de escritorio ───────────────
@@ -245,66 +207,14 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     [locale, summaryEvents, t, todayKey],
   );
 
-  // ── Summary sheet: drag + measurement ────────────────────────────────────────
+  // ── Summary sheet ─────────────────────────────────────────────────────────────
   const todayEventCount = summaryEvents.length;
-  const [timerContentBottomY, setTimerContentBottomY] = useState(0);
-  useEffect(() => {
-    if (activeTab !== "timer") return;
-    const measure = () => {
-      setSummaryViewportHeight(window.innerHeight);
-      setSummarySheetHeight(summarySheetRef.current?.offsetHeight ?? 0);
-      const rect = timerContentRef.current?.getBoundingClientRect();
-      setTimerContentBottomY(rect?.bottom ?? 0);
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    // Re-mide cuando el contenido del timer cambia de alto (p.ej. aparece el
-    // selector de estudio al elegir la categoría Estudio), para que la hoja
-    // inferior no tape los controles.
-    const contentEl = timerContentRef.current;
-    const observer = contentEl && typeof ResizeObserver !== "undefined"
-      ? new ResizeObserver(() => measure())
-      : null;
-    if (contentEl && observer) observer.observe(contentEl);
-    return () => {
-      window.removeEventListener("resize", measure);
-      observer?.disconnect();
-    };
-  }, [activeTab, todayEventCount, summaryOpen]);
-
-  const peekH = Math.round(summaryViewportHeight * 0.34);
-  const contentSafeOffset =
-    timerContentBottomY > 0
-      ? Math.max(0, timerContentBottomY + 24 - summaryViewportHeight + 64 + summarySheetHeight)
-      : 0;
-  const collapsedSummaryOffset = Math.max(Math.max(0, summarySheetHeight - peekH), contentSafeOffset);
-  const restingSummaryOffset = summaryOpen ? 0 : collapsedSummaryOffset;
-  const activeSummaryOffset = summaryDragOffset ?? restingSummaryOffset;
-
-  const startDrag = (clientY: number) => {
-    dragStartY.current = clientY;
-    dragStartOffset.current = activeSummaryOffset;
-    summaryDidDrag.current = false;
-    setSummaryDragOffset(activeSummaryOffset);
-  };
-  const moveDrag = (clientY: number) => {
-    if (dragStartY.current === null) return;
-    const delta = clientY - dragStartY.current;
-    if (Math.abs(delta) > 6) summaryDidDrag.current = true;
-    setSummaryDragOffset(Math.min(collapsedSummaryOffset, Math.max(0, dragStartOffset.current + delta)));
-  };
-  const endDrag = (clientY: number) => {
-    if (dragStartY.current === null) return;
-    const delta = clientY - dragStartY.current;
-    const finalOffset = Math.min(collapsedSummaryOffset, Math.max(0, dragStartOffset.current + delta));
-    dragStartY.current = null;
-    setSummaryOpen(finalOffset < collapsedSummaryOffset * 0.55);
-    setSummaryDragOffset(null);
-  };
-  const toggleSummary = () => {
-    if (summaryDidDrag.current) { summaryDidDrag.current = false; return; }
-    setSummaryOpen((v) => !v);
-  };
+  const {
+    summaryOpen, setSummaryOpen,
+    summaryDragOffset, summarySheetHeight,
+    activeSummaryOffset, summarySheetRef,
+    startDrag, moveDrag, endDrag, toggleSummary,
+  } = useSummarySheet({ activeTab, todayEventCount, timerContentRef });
 
   // ── Online state ──────────────────────────────────────────────────────────────
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
@@ -681,63 +591,17 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       </main>
 
 
-      <AlertDialog open={!!shortStopPrompt} onOpenChange={(open) => { if (!open) setShortStopPrompt(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("timer_short_activity_title")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("timer_short_activity_body")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-2">
-            <AlertDialogCancel onClick={keepShortActivity}>{t("timer_short_activity_keep")}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={discardShortActivity}
-            >
-              {t("timer_short_activity_discard")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={!!deleteEventPromptId} onOpenChange={(open) => { if (!open) setDeleteEventPromptId(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("cal_delete_confirm_title")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteEventIsRecurring ? t("cal_delete_recurring_body") : t("cal_delete_confirm_body")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
-            {deleteEventIsRecurring ? (
-              <>
-                <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  onClick={() => confirmDeleteEvent("all")}
-                >
-                  {t("cal_delete_all_series")}
-                </AlertDialogAction>
-                <AlertDialogAction
-                  className="border border-border bg-background text-foreground hover:bg-muted shadow-none"
-                  onClick={() => confirmDeleteEvent("single")}
-                >
-                  {t("cal_delete_this_only")}
-                </AlertDialogAction>
-                <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
-              </>
-            ) : (
-              <>
-                <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
-                <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  onClick={() => confirmDeleteEvent("all")}
-                >
-                  {t("home_delete_activity")}
-                </AlertDialogAction>
-              </>
-            )}
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <AppDialogs
+        shortStopPrompt={shortStopPrompt}
+        onShortStopClose={() => setShortStopPrompt(null)}
+        onKeepShortActivity={keepShortActivity}
+        onDiscardShortActivity={discardShortActivity}
+        deleteEventPromptId={deleteEventPromptId}
+        deleteEventIsRecurring={deleteEventIsRecurring}
+        onDeleteEventClose={() => setDeleteEventPromptId(null)}
+        onConfirmDeleteEvent={confirmDeleteEvent}
+        t={t}
+      />
 
       <BottomNav
         activeTab={activeTab}
