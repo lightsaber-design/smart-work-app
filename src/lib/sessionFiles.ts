@@ -41,6 +41,8 @@ export async function getFileURL(id: string): Promise<string | null> {
   });
 }
 
+// TODO: deleteFile is never called — files accumulate in IndexedDB indefinitely.
+// Call this when deleting a session that has attached files.
 export async function deleteFile(id: string): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {

@@ -1,8 +1,10 @@
 import { lazy, Suspense, useState, useMemo } from "react";
-import { MapPin, Loader2, WifiOff, RefreshCw, LocateFixed, X, List, Map } from "lucide-react";
+import { MapPin, Loader2, WifiOff, RefreshCw, LocateFixed, X, List, Map, ChevronRight, Clock, Star, Check } from "lucide-react";
 import { usePublicPlaces, PlaceType, PlaceAmenity, PublicPlace } from "@/hooks/usePublicPlaces";
 import { useT } from "@/lib/LanguageContext";
 import { openGoogleMaps } from "@/lib/maps";
+import { getPlaceHints } from "@/lib/placeHints";
+import { isOpenNow } from "@/lib/openingHours";
 
 const PlacesMapView = lazy(() =>
   import("@/components/PlacesMapView").then((m) => ({ default: m.PlacesMapView }))
@@ -11,6 +13,7 @@ const PlacesMapView = lazy(() =>
 interface PublicPlacesViewProps {
   center: { lat: number; lng: number } | undefined;
   cityName?: string;
+  onAddFavorite?: (name: string, location: { lat: number; lng: number }) => void;
 }
 
 const TYPE_ICON: Record<PlaceType, string> = {
@@ -23,15 +26,13 @@ const TYPE_ICON: Record<PlaceType, string> = {
   other:            "📍",
 };
 
-const AMENITY_ICON: Record<PlaceAmenity, string> = {
-  bathroom: "🚽",
-  quiet:    "🤫",
-  free:     "🆓",
-  climate:  "🌡️",
-};
-
 type ActiveFilter = PlaceAmenity | "all";
 type ViewMode = "list" | "map";
+
+// El mapa ocupa el espacio restante hasta el final de la pantalla (restando la
+// cabecera, el selector de pestañas, la barra de ubicación, los filtros y la
+// barra de navegación inferior).
+const MAP_FILL_HEIGHT = "calc(100dvh - 410px)";
 
 function distanceLabel(m: number): string {
   if (m < 1000) return `${m} m`;
@@ -41,47 +42,84 @@ function distanceLabel(m: number): string {
 interface PlaceCardProps {
   place: PublicPlace;
   toiletLabel: string;
+  hintText?: string;
   openLabel: string;
+  closedLabel: string;
+  accessibleLabel: string;
+  onSelect: () => void;
 }
 
-function PlaceCard({ place, toiletLabel, openLabel }: PlaceCardProps) {
-  const name = place.name || toiletLabel;
+function AccessibleBadge({ label }: { label: string }) {
   return (
-    <div className="flex items-start gap-3 py-3 px-3 rounded-2xl bg-secondary/40 hover:bg-secondary/70 transition-colors">
-      <span className="text-2xl leading-none mt-0.5 flex-shrink-0">{TYPE_ICON[place.type]}</span>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-foreground leading-tight truncate">{name}</p>
-        <p className="text-[11px] text-muted-foreground mt-0.5">{distanceLabel(place.distance)}</p>
-        {place.amenities.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5">
-            {place.amenities.map((a) => (
-              <span
-                key={a}
-                className="inline-flex items-center gap-0.5 text-[10px] font-semibold rounded-full px-1.5 py-0.5 bg-background border border-border text-muted-foreground"
-              >
-                {AMENITY_ICON[a]}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-      <button
-        type="button"
-        onClick={() => openGoogleMaps({ lat: place.lat, lng: place.lng })}
-        aria-label={openLabel}
-        title={openLabel}
-        className="flex-shrink-0 mt-0.5 p-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 active:scale-95 transition-all"
-      >
-        <MapPin className="w-4 h-4" />
-      </button>
-    </div>
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold bg-sky-500/15 text-sky-600 dark:text-sky-400"
+      title={label}
+    >
+      <span aria-hidden>♿</span>
+      {label}
+    </span>
   );
 }
 
-export function PublicPlacesView({ center: cityCenter, cityName }: PublicPlacesViewProps) {
+function OpenBadge({ open, openLabel, closedLabel }: { open: boolean | null; openLabel: string; closedLabel: string }) {
+  if (open === null) return null;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+        open
+          ? "bg-green-500/15 text-green-600 dark:text-green-400"
+          : "bg-muted text-muted-foreground"
+      }`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${open ? "bg-green-500" : "bg-muted-foreground/60"}`} />
+      {open ? openLabel : closedLabel}
+    </span>
+  );
+}
+
+function PlaceCard({ place, toiletLabel, hintText, openLabel, closedLabel, accessibleLabel, onSelect }: PlaceCardProps) {
+  const name = place.name || toiletLabel;
+  const open = isOpenNow(place.openingHours);
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="w-full text-left flex items-start gap-3 py-3 px-3 rounded-2xl bg-card border border-border hover:border-primary/40 active:scale-[0.99] transition-all"
+    >
+      <span className="text-2xl leading-none mt-0.5 flex-shrink-0">{TYPE_ICON[place.type]}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-foreground leading-tight truncate">{name}</p>
+        <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
+          {distanceLabel(place.distance)}
+          <OpenBadge open={open} openLabel={openLabel} closedLabel={closedLabel} />
+          {place.wheelchair && <AccessibleBadge label={accessibleLabel} />}
+        </p>
+        {hintText && (
+          <p className="text-[11px] text-foreground/70 mt-1 leading-snug line-clamp-2">{hintText}</p>
+        )}
+      </div>
+      <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1.5" />
+    </button>
+  );
+}
+
+export function PublicPlacesView({ center: cityCenter, cityName, onAddFavorite }: PublicPlacesViewProps) {
   const t = useT();
-  const [filter, setFilter] = useState<ActiveFilter>("all");
+  // Filtros de servicios multi-selección. Conjunto vacío = "Todos".
+  const [activeAmenities, setActiveAmenities] = useState<Set<PlaceAmenity>>(() => new Set());
+  const [openNow, setOpenNow] = useState(false);
+
+  const toggleAmenity = (key: ActiveFilter) => {
+    if (key === "all") { setActiveAmenities(new Set()); return; }
+    setActiveAmenities((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [selected, setSelected] = useState<PublicPlace | null>(null);
   const [gpsCenter, setGpsCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState(false);
@@ -126,9 +164,14 @@ export function PublicPlacesView({ center: cityCenter, cityName }: PublicPlacesV
   ];
 
   const filtered = useMemo(() => {
-    if (filter === "all") return places;
-    return places.filter((p) => p.amenities.includes(filter));
-  }, [places, filter]);
+    // AND entre servicios seleccionados: el lugar debe cumplir todos.
+    let list = activeAmenities.size === 0
+      ? places
+      : places.filter((p) => [...activeAmenities].every((a) => p.amenities.includes(a)));
+    // "Abierto ahora": ocultar los que sabemos cerrados; mantener abiertos y desconocidos.
+    if (openNow) list = list.filter((p) => isOpenNow(p.openingHours) !== false);
+    return list;
+  }, [places, activeAmenities, openNow]);
 
   if (!effectiveCenter) {
     return (
@@ -201,39 +244,44 @@ export function PublicPlacesView({ center: cityCenter, cityName }: PublicPlacesV
             </button>
           </div>
         </div>
-
-        {/* Row 2: legend */}
-        <div className="mt-2 pt-2 border-t border-border/50">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
-            {t("places_legend")}
-          </p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-            {(["bathroom", "quiet", "free", "climate"] as PlaceAmenity[]).map((a) => (
-              <span key={a} className="text-[11px] text-muted-foreground">
-                {AMENITY_ICON[a]} {t(`places_amenity_${a}`)}
-              </span>
-            ))}
-          </div>
-        </div>
       </div>
 
-      {/* Filter chips */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-        {filters.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            onClick={() => setFilter(f.key)}
-            className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
-              filter === f.key
-                ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                : "bg-card text-muted-foreground border-border hover:border-primary/40"
-            }`}
-          >
-            <span>{f.icon}</span>
-            <span>{f.label}</span>
-          </button>
-        ))}
+      {/* Filter chips — se ajustan en varias filas (sin barra de scroll) */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setOpenNow((v) => !v)}
+          aria-pressed={openNow}
+          className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
+            openNow
+              ? "bg-green-500 text-white border-green-500 shadow-sm"
+              : "bg-card text-muted-foreground border-border hover:border-green-500/40"
+          }`}
+        >
+          <Clock className="w-3.5 h-3.5" />
+          <span>{t("places_open_now")}</span>
+        </button>
+        {filters.map((f) => {
+          const isActive = f.key === "all"
+            ? activeAmenities.size === 0
+            : activeAmenities.has(f.key as PlaceAmenity);
+          return (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => toggleAmenity(f.key)}
+              aria-pressed={isActive}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
+                isActive
+                  ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                  : "bg-card text-muted-foreground border-border hover:border-primary/40"
+              }`}
+            >
+              <span>{f.icon}</span>
+              <span>{f.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Content */}
@@ -261,7 +309,7 @@ export function PublicPlacesView({ center: cityCenter, cityName }: PublicPlacesV
         </div>
       ) : viewMode === "map" ? (
         <Suspense fallback={
-          <div className="rounded-2xl border border-border bg-muted/40 flex items-center justify-center" style={{ height: 370 }}>
+          <div className="rounded-2xl border border-border bg-muted/40 flex items-center justify-center" style={{ height: MAP_FILL_HEIGHT, minHeight: 360 }}>
             <Loader2 className="w-6 h-6 text-primary animate-spin" />
           </div>
         }>
@@ -271,20 +319,144 @@ export function PublicPlacesView({ center: cityCenter, cityName }: PublicPlacesV
             toiletLabel={t("places_type_toilet")}
             openLabel={t("map_open_google")}
             centerLabel={locationLabel}
+            favLabel={t("places_add_favorite")}
+            favSavedLabel={t("places_added_favorite")}
+            onAddFavorite={onAddFavorite}
+            heightStyle={MAP_FILL_HEIGHT}
           />
         </Suspense>
       ) : (
         <div className="space-y-1.5">
-          {filtered.map((place) => (
-            <PlaceCard
-              key={place.id}
-              place={place}
-              toiletLabel={t("places_type_toilet")}
-              openLabel={t("map_open_google")}
-            />
-          ))}
+          {filtered.map((place) => {
+            const hints = getPlaceHints(place, t);
+            return (
+              <PlaceCard
+                key={place.id}
+                place={place}
+                toiletLabel={t("places_type_toilet")}
+                hintText={hints.map((h) => h.text).join(" · ")}
+                openLabel={t("places_open")}
+                closedLabel={t("places_closed")}
+                accessibleLabel={t("places_accessible_badge")}
+                onSelect={() => setSelected(place)}
+              />
+            );
+          })}
         </div>
       )}
+
+      {/* Detail sheet — info útil al pulsar un resultado */}
+      {selected && (
+        <PlaceDetailSheet
+          place={selected}
+          toiletLabel={t("places_type_toilet")}
+          onClose={() => setSelected(null)}
+          onAddFavorite={onAddFavorite}
+          t={t}
+        />
+      )}
+    </div>
+  );
+}
+
+interface PlaceDetailSheetProps {
+  place: PublicPlace;
+  toiletLabel: string;
+  onClose: () => void;
+  onAddFavorite?: (name: string, location: { lat: number; lng: number }) => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}
+
+function PlaceDetailSheet({ place, toiletLabel, onClose, onAddFavorite, t }: PlaceDetailSheetProps) {
+  const hints = getPlaceHints(place, t);
+  const name = place.name || toiletLabel;
+  const open = isOpenNow(place.openingHours);
+  const [saved, setSaved] = useState(false);
+
+  const handleAddFavorite = () => {
+    if (!onAddFavorite || saved) return;
+    onAddFavorite(name, { lat: place.lat, lng: place.lng });
+    setSaved(true);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative w-full max-w-md mx-auto bg-card rounded-t-3xl shadow-2xl animate-in slide-in-from-bottom duration-300">
+        <button onClick={onClose} className="w-full flex flex-col items-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-border" />
+        </button>
+        <div className="px-5 pb-24 pt-2 space-y-4">
+          {/* Header */}
+          <div className="flex items-start gap-3">
+            <span className="text-3xl leading-none flex-shrink-0">{TYPE_ICON[place.type]}</span>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base font-bold text-foreground leading-tight">{name}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                {distanceLabel(place.distance)}
+                <OpenBadge open={open} openLabel={t("places_open")} closedLabel={t("places_closed")} />
+                {place.wheelchair && <AccessibleBadge label={t("places_accessible_badge")} />}
+              </p>
+              {place.openingHours && (
+                <p className="text-[11px] text-muted-foreground mt-1 flex items-start gap-1.5">
+                  <Clock className="w-3.5 h-3.5 flex-shrink-0 mt-px" />
+                  <span className="leading-snug">{place.openingHours}</span>
+                </p>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Info útil */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              {t("places_detail_info")}
+            </p>
+            {hints.length > 0 ? (
+              <ul className="space-y-1.5">
+                {hints.map((h, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm text-foreground">
+                    <span className="flex-shrink-0 leading-tight">{h.icon}</span>
+                    <span className="leading-snug">{h.text}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t("places_detail_no_info")}</p>
+            )}
+          </div>
+
+          {/* Acciones */}
+          <div className="space-y-2">
+            {onAddFavorite && (
+              <button
+                onClick={handleAddFavorite}
+                disabled={saved}
+                className={`w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold border transition-transform active:scale-[0.98] ${
+                  saved
+                    ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30"
+                    : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                }`}
+              >
+                {saved ? <Check className="w-4 h-4" /> : <Star className="w-4 h-4" />}
+                {saved ? t("places_added_favorite") : t("places_add_favorite")}
+              </button>
+            )}
+            <button
+              onClick={() => openGoogleMaps({ lat: place.lat, lng: place.lng })}
+              className="w-full flex items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-bold text-primary-foreground shadow-sm shadow-primary/25 active:scale-[0.98] transition-transform"
+            >
+              <MapPin className="w-4 h-4" />
+              {t("map_open_google")}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

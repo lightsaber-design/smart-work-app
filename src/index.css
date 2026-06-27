@@ -22,7 +22,7 @@
     --secondary-foreground: 220 20% 20%;
 
     --muted: 210 15% 93%;
-    --muted-foreground: 220 10% 50%;
+    --muted-foreground: 220 14% 40%;
 
     --accent: 160 84% 39%;
     --accent-foreground: 0 0% 100%;
@@ -71,7 +71,7 @@
     --secondary-foreground: 210 20% 90%;
 
     --muted: 222 15% 18%;
-    --muted-foreground: 215 15% 55%;
+    --muted-foreground: 215 18% 68%;
 
     --accent: 160 84% 39%;
     --accent-foreground: 0 0% 100%;
@@ -94,6 +94,11 @@
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Accesibilidad: texto más grande (escala las unidades rem de toda la app). */
+  html.text-large {
+    font-size: 112.5%;
   }
 }
 

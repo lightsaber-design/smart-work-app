@@ -3,6 +3,35 @@ import { LocalNotifications, type Schedule } from '@capacitor/local-notification
 
 const CHANNEL_ID = 'ministrylog-main';
 const NOTIF_ID_KEY = '_ml_notif_ids';
+const INTENT_KEY = '_ml_notif_intent';
+
+// ── Enrutado de notificaciones ────────────────────────────────────────────────
+// Cada notificación lleva en `extra` a qué pantalla debe llevar al usuario
+// cuando la pulsa, en vez de abrir siempre la pantalla principal.
+export type NotifNav =
+  | { route: 'calendar'; eventId?: string }
+  | { route: 'study'; contactId: string; sessionId?: string }
+  | { route: 'estudios' }
+  | { route: 'timer' }
+  | { route: 'stats' };
+
+export interface NotifIntent {
+  /** Id de la acción pulsada: 'tap' (cuerpo) o un id de botón. */
+  actionId: string;
+  nav?: NotifNav;
+}
+
+interface ScheduleOpts {
+  extra?: NotifNav;
+  actionTypeId?: string;
+}
+
+// Tipo de acción con botones Sí/No para los recordatorios de estudio.
+export const STUDY_ACTION_TYPE = 'STUDY_REMINDER';
+export const STUDY_ACTION_DONE = 'STUDY_DONE';
+export const STUDY_ACTION_SKIP = 'STUDY_SKIP';
+/** Evento de ventana que se emite al pulsar una notificación. */
+export const NOTIF_INTENT_EVENT = 'ml-notif-intent';
 
 // Generador persistente para evitar reutilizar ids de notificaciones.
 function loadNextId(): number {
@@ -113,16 +142,98 @@ export async function ensureExactAlarms(): Promise<void> {
   }
 }
 
+// ── Botones Sí/No de los recordatorios de estudio ─────────────────────────────
+// Las etiquetas vienen traducidas desde la app; sólo re-registramos si cambian.
+let _studyActionSig = '';
+export async function registerStudyActionType(
+  yesLabel: string,
+  noLabel: string
+): Promise<void> {
+  if (!isNativeAndroid()) return;
+  const sig = `${yesLabel}|${noLabel}`;
+  if (_studyActionSig === sig) return;
+  try {
+    await LocalNotifications.registerActionTypes({
+      types: [{
+        id: STUDY_ACTION_TYPE,
+        actions: [
+          { id: STUDY_ACTION_DONE, title: yesLabel },
+          { id: STUDY_ACTION_SKIP, title: noLabel, destructive: true },
+        ],
+      }],
+    });
+    _studyActionSig = sig;
+  } catch (e) {
+    console.warn('[Notif] registerActionTypes:', e);
+  }
+}
+
+// ── Intención pendiente al pulsar una notificación ────────────────────────────
+// El listener puede dispararse en frío (app cerrada) antes de que React monte,
+// así que guardamos la intención en memoria + localStorage hasta que la app la
+// consuma.
+let _pendingIntent: NotifIntent | null = null;
+let _listenerReady = false;
+
+function storeIntent(intent: NotifIntent): void {
+  _pendingIntent = intent;
+  try { localStorage.setItem(INTENT_KEY, JSON.stringify(intent)); } catch { /* memoria basta */ }
+}
+
+/** Lee la intención pendiente sin borrarla (para poder reintentar si los datos
+ * aún no han cargado al abrir la app en frío). */
+export function peekNotificationIntent(): NotifIntent | null {
+  if (_pendingIntent) return _pendingIntent;
+  try {
+    const raw = localStorage.getItem(INTENT_KEY);
+    if (raw) { _pendingIntent = JSON.parse(raw) as NotifIntent; return _pendingIntent; }
+  } catch { /* nada */ }
+  return null;
+}
+
+/** Descarta la intención una vez gestionada. */
+export function clearNotificationIntent(): void {
+  _pendingIntent = null;
+  try { localStorage.removeItem(INTENT_KEY); } catch { /* nada */ }
+}
+
+async function initNotificationListeners(): Promise<void> {
+  if (_listenerReady || !Capacitor.isNativePlatform()) return;
+  _listenerReady = true;
+  try {
+    await LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
+      const extra = (event.notification.extra ?? undefined) as NotifNav | undefined;
+      storeIntent({ actionId: event.actionId, nav: extra });
+
+      // Borra la notificación de la bandeja tras actuar sobre ella. El tap del
+      // cuerpo ya la descarta solo, pero los botones de acción no.
+      const id = event.notification.id;
+      if (typeof id === 'number') {
+        void LocalNotifications.removeDeliveredNotifications({
+          notifications: [{ id } as never],
+        }).catch(() => { /* ya no estaba */ });
+      }
+
+      // Avisa a la app (si está en primer plano) para que actúe sin esperar foco.
+      try { window.dispatchEvent(new Event(NOTIF_INTENT_EVENT)); } catch { /* nada */ }
+    });
+  } catch (e) {
+    console.warn('[Notif] addListener:', e);
+  }
+}
+
 export async function initNotifications(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   await ensureChannel();
+  await initNotificationListeners();
 }
 
 export async function scheduleEventNotification(
   eventId: string,
   title: string,
   body: string,
-  fireAt: Date
+  fireAt: Date,
+  opts?: ScheduleOpts
 ): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) return false;
   if (fireAt.getTime() <= Date.now()) return false;
@@ -151,6 +262,8 @@ export async function scheduleEventNotification(
         smallIcon: 'ic_launcher_foreground',
         iconColor: '#34B1AF',
         schedule,
+        ...(opts?.extra ? { extra: opts.extra } : {}),
+        ...(opts?.actionTypeId ? { actionTypeId: opts.actionTypeId } : {}),
       }],
     });
     return true;

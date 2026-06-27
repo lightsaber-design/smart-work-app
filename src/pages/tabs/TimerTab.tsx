@@ -1,5 +1,7 @@
-import { ChevronLeft, Check, Pencil, Trash2, Activity } from "lucide-react";
+import { useState } from "react";
+import { ChevronLeft, Check, Pencil, Trash2, Activity, Plus } from "lucide-react";
 import { ClockButton } from "@/components/ClockButton";
+import { ManualEntrySheet } from "@/components/ManualEntrySheet";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import type { AppTab } from "@/components/BottomNav";
 import type { CalendarEvent } from "@/hooks/useCalendarEvents";
@@ -7,6 +9,7 @@ import type { TimeEntry } from "@/hooks/useTimeTracker";
 import { useTimeTracker } from "@/hooks/useTimeTracker";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { useEstudios } from "@/hooks/useEstudios";
+import { useLongPress } from "@/hooks/useLongPress";
 import type { SetupData } from "@/hooks/useSetup";
 import { getCategoryLabel, getCategoryMeta, getCategoryStyle } from "@/lib/categories";
 import { CurrentWeather, HourlyWeather, formatActivityWeather, formatDayWeatherSummary, weatherCodeToEmoji } from "@/lib/weatherUtils";
@@ -90,6 +93,8 @@ export function TimerTab({
   onUpdateEstudioNotes,
   t,
 }: TimerTabProps) {
+  const [manualSheetOpen, setManualSheetOpen] = useState(false);
+  const eventLongPress = useLongPress();
   const MAX_VISIBLE = 8;
   const allEvents = groupedSummaryEvents.flatMap((g) => g.events);
   const visibleEvents = showAllEvents ? allEvents : allEvents.slice(0, MAX_VISIBLE);
@@ -139,10 +144,10 @@ export function TimerTab({
         onPointerCancel={(e) => endDrag(e.clientY)}
       >
         <div
-          className="h-[62vh] overflow-hidden bg-card shadow-[0_-18px_55px_rgba(15,23,42,0.18)]"
+          className="h-[62vh] overflow-hidden bg-card shadow-[0_-18px_55px_rgba(15,23,42,0.18)] flex flex-col"
           style={{ borderRadius: "34px 34px 0 0" }}
         >
-          <button onClick={toggleSummary} className="w-full flex flex-col items-center pt-2.5 pb-1.5 gap-1">
+          <button onClick={toggleSummary} className="w-full flex flex-col items-center pt-2.5 pb-1.5 gap-1 flex-shrink-0">
             <div className="w-10 h-1 rounded-full bg-border" />
             {!summaryOpen && (
               tracker.isRunning ? (
@@ -160,13 +165,14 @@ export function TimerTab({
           </button>
 
           {summaryOpen && (
-            <div className="px-5 flex items-center justify-between mb-2 cursor-pointer" onClick={toggleSummary}>
+            <div className="px-5 flex items-center justify-between mb-2 cursor-pointer flex-shrink-0" onClick={toggleSummary}>
               <p className="text-sm font-bold text-foreground">
                 {showingUpcomingEvents ? t("home_upcoming_activities") : t("day_today")}
               </p>
             </div>
           )}
 
+          <div className="overflow-y-auto min-h-0">
           {summaryEvents.length === 0 ? (
             <div className="px-5 pb-4 pt-1">
               <p className="text-sm font-semibold text-foreground">{t("home_nothing_today")}</p>
@@ -197,11 +203,17 @@ export function TimerTab({
                     const timeStr = `${String(event.date.getHours()).padStart(2, "0")}:${String(event.date.getMinutes()).padStart(2, "0")}`;
                     const forecast = formatActivityWeather(hourlyWeather, event.date, t);
                     const isOngoing = tracker.isRunning && activeScheduledEvent?.id === event.id;
+                    const isLogged = !!event.endTime;
                     return (
                       <button
                         key={event.id}
                         type="button"
-                        onClick={() => openCalendarEvent(event.id)}
+                        {...eventLongPress.bind(() => setDeleteEventPromptId(event.id))}
+                        onClick={() => {
+                          if (eventLongPress.consumedLongPress()) return;
+                          openCalendarEvent(event.id);
+                        }}
+                        title={t("home_delete_activity")}
                         className={`w-full flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-left active:scale-[0.98] transition-transform ${style.card}`}
                         style={{ borderLeftWidth: 3, borderLeftColor: style.accent }}
                       >
@@ -214,14 +226,14 @@ export function TimerTab({
                             className={`text-[13px] font-semibold truncate ${
                               isOngoing
                                 ? "text-primary"
-                                : event.completed
+                                : (event.completed && !isLogged)
                                   ? "line-through opacity-50 text-foreground"
                                   : "text-foreground"
                             }`}
                           >
                             {getCategoryLabel(event.category, t)}
                             {isOngoing && (
-                              <span className="ml-1.5 text-[10px] font-medium text-primary/70">● en curso</span>
+                              <span className="ml-1.5 text-[10px] font-medium text-primary/70">● {t('timer_ongoing')}</span>
                             )}
                           </p>
                           <p className="text-[10px] text-muted-foreground">
@@ -266,29 +278,51 @@ export function TimerTab({
                   onClick={() => setShowAllEvents(true)}
                   className="w-full py-2 text-xs font-semibold text-primary rounded-xl bg-primary/8 hover:bg-primary/12 transition-colors"
                 >
-                  + {hiddenCount} {hiddenCount === 1 ? "actividad más" : "actividades más"}
+                  + {hiddenCount} {t(hiddenCount === 1 ? "stats_event" : "stats_events")}
                 </button>
               )}
             </div>
           )}
+          </div>
 
-          <div className="px-5 pt-1 pb-6">
+          <div className="flex-shrink-0 px-5 pt-2 pb-4">
             <button
-              onClick={() => navigate("calendar")}
-              className="w-full rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20"
+              onClick={() => setManualSheetOpen(true)}
+              className="w-full rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
             >
+              <Plus className="w-4 h-4" />
               {t("home_add_activity")}
             </button>
           </div>
         </div>
       </div>
 
+      {/* Manual entry sheet */}
+      {manualSheetOpen && (
+        <ManualEntrySheet
+          categoryConfigs={setup.categorySettings}
+          estudiosContacts={estudios.contacts.filter((c) => c.active).map((c) => ({ id: c.id, name: c.name }))}
+          onSavePast={(start, end, cat, desc, loc) => {
+            tracker.addManualEntry(start, end, cat, desc, loc);
+            const endTimeStr = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
+            const eventId = calendar.addCompletedEventNow({ date: start, category: cat });
+            if (eventId) calendar.updateEvent(eventId, { endTime: endTimeStr });
+          }}
+          onSaveFuture={(params) => calendar.addEvent(params)}
+          onClose={() => setManualSheetOpen(false)}
+          t={t}
+        />
+      )}
+
       {/* Timer content */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-start px-4 pt-6">
+      <div className="relative z-10 flex-1 overflow-y-auto flex flex-col items-center justify-start px-4 pt-6 pb-4">
         <div ref={timerContentRef} className="w-full flex flex-col items-center">
           <ClockButton
             isRunning={tracker.isRunning}
+            isPaused={tracker.isPaused}
             elapsed={tracker.elapsed}
+            onPause={tracker.pause}
+            onResume={tracker.resume}
             onClockIn={(cat, customTime) =>
               tracker.clockIn(
                 cat,
@@ -326,6 +360,7 @@ export function TimerTab({
             onEstudioSession={estudios.addSession}
             onUpdateEstudioNotes={onUpdateEstudioNotes}
             categoryConfigs={setup.categorySettings}
+            defaultCategory={setup.defaultCategory}
             activityStartHour={setup.activityStartHour}
             activityEndHour={setup.activityEndHour}
           />

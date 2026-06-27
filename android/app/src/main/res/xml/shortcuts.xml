@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="clock_in"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_start_short"
+        android:shortcutLongLabel="@string/shortcut_start_long">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:targetPackage="com.ministrylog.app"
+            android:targetClass="com.ministrylog.app.MainActivity">
+            <extra android:name="WIDGET_ACTION" android:value="CLOCK_IN" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="open_studies"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_studies_short"
+        android:shortcutLongLabel="@string/shortcut_studies_long">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:targetPackage="com.ministrylog.app"
+            android:targetClass="com.ministrylog.app.MainActivity">
+            <extra android:name="WIDGET_ACTION" android:value="NAV|estudios" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="open_map"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_map_short"
+        android:shortcutLongLabel="@string/shortcut_map_long">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:targetPackage="com.ministrylog.app"
+            android:targetClass="com.ministrylog.app.MainActivity">
+            <extra android:name="WIDGET_ACTION" android:value="NAV|map" />
+        </intent>
+    </shortcut>
+</shortcuts>

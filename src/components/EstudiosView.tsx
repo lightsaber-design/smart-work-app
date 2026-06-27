@@ -17,7 +17,7 @@ import {
 import {
   EstudioContact, EstudioSession, SessionFile,
   ContactFormData, ContactSchedule, ScheduleFrequency,
-  getNextOccurrences, suggestNextLesson,
+  getNextOccurrences, suggestNextLesson, isSessionDone,
 } from "@/hooks/useEstudios";
 import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { saveFile, getFileURL, formatFileSize } from "@/lib/sessionFiles";
@@ -73,7 +73,7 @@ function getSessionsThisMonth(contacts: EstudioContact[]): number {
   let count = 0;
   for (const c of contacts) {
     for (const s of c.sessions ?? []) {
-      if (s.pending) continue;
+      if (!isSessionDone(s)) continue;
       const d = new Date(s.date);
       if (d.getMonth() === month && d.getFullYear() === year) count++;
     }
@@ -525,7 +525,13 @@ function HistorySessionCard({ session, onOpen }: { session: EstudioSession; onOp
           }
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-xs text-muted-foreground">{session.time}</span>
+          {session.skipped ? (
+            <span className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 px-1.5 py-0.5 rounded-full font-semibold">
+              {t("studies_skipped")}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">{session.time}</span>
+          )}
           {session.notes && <StickyNote className="w-3.5 h-3.5 text-muted-foreground" />}
           {hasVoiceNote && (
             <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium flex items-center gap-0.5">
@@ -566,17 +572,17 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
   const t = useT();
   const lang = useLang();
   const locale = localeForLang(lang);
-  const [newSessionOpen, setNewSessionOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState<EstudioSession | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [exportToast, setExportToast] = useState(false);
 
   const handleExportContact = async () => {
     setMenuOpen(false);
     const doneSessions = [...contact.sessions]
-      .filter((s) => s.pending === false)
+      .filter(isSessionDone)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const fmt = new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", year: "numeric" });
     const lines: string[] = [
@@ -611,12 +617,16 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
   };
 
   const doneSessions = (contact.sessions ?? [])
-    .filter((s) => !s.pending)
+    .filter(isSessionDone)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const upcomingSessions = (contact.sessions ?? [])
     .filter((s) => s.pending)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  const skippedSessions = (contact.sessions ?? [])
+    .filter((s) => s.skipped)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const nextLesson = suggestNextLesson(contact);
   const hasSessions = contact.sessions.length > 0;
@@ -625,8 +635,6 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
     : null;
   const locationLabel = savedPlace?.name ?? contact.address ?? null;
   const googleMapsTarget = savedPlace?.location ?? contact.address ?? null;
-  const sessionToday = doneSessions.some((s) => new Date(s.date).toDateString() === new Date().toDateString());
-
   useEffect(() => {
     if (!focusedSessionId) return;
     const session = contact.sessions.find((s) => s.id === focusedSessionId);
@@ -763,7 +771,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
             </div>
           ) : (
             <div className="space-y-2">
-              {upcomingSessions.slice(0, 4).map((s, idx) => {
+              {(showAllUpcoming ? upcomingSessions : upcomingSessions.slice(0, 1)).map((s, idx) => {
                 const isPast = new Date(s.date) < new Date() && new Date(s.date).toDateString() !== new Date().toDateString();
                 const isNext = idx === 0;
                 return (
@@ -839,6 +847,14 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                   </div>
                 );
               })}
+              {!showAllUpcoming && upcomingSessions.length > 1 && (
+                <button
+                  onClick={() => setShowAllUpcoming(true)}
+                  className="w-full text-center text-xs font-medium text-muted-foreground py-2"
+                >
+                  {t("studies_see_more", { count: upcomingSessions.length - 1 })}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -855,7 +871,7 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
               </span>
             )}
           </div>
-          {doneSessions.length === 0 ? (
+          {doneSessions.length === 0 && skippedSessions.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border p-6 text-center">
               <p className="text-xs text-muted-foreground">{t("studies_no_registered_sessions")}</p>
             </div>
@@ -876,22 +892,17 @@ function ContactDetail({ contact, favoritePlaces, onBack, onUpdate, onDelete, on
                   {t("studies_see_more", { count: doneSessions.length - 1 })}
                 </button>
               )}
+              {skippedSessions.map((s) => (
+                <HistorySessionCard
+                  key={s.id}
+                  session={s}
+                  onOpen={() => setSelectedSession(s)}
+                />
+              ))}
             </div>
           )}
         </div>
       </div>
-
-      {/* Hoja para nueva sesion */}
-      {newSessionOpen && (
-        <SessionEditSheet
-          session={null}
-          contact={contact}
-          defaultLesson={nextLesson}
-          onSave={(data) => onAddSession(contact.id, { time: data.time, lesson: data.lesson, notes: data.notes, files: data.files })}
-          onDelete={() => {}}
-          onClose={() => setNewSessionOpen(false)}
-        />
-      )}
 
       {/* Hoja para editar sesion existente */}
       {selectedSession && (
@@ -919,7 +930,7 @@ function ContactCard({ contact, favoritePlaces, onClick }: {
   onClick: () => void;
 }) {
   const t = useT();
-  const doneSessions = (contact.sessions ?? []).filter((s) => !s.pending)
+  const doneSessions = (contact.sessions ?? []).filter(isSessionDone)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const lastSession = doneSessions[0] ?? null;
   const now = new Date();
@@ -1128,10 +1139,18 @@ export function EstudiosView({
 
       <div className="px-4 space-y-3">
         {contacts.length === 0 && (
-          <div className="text-center py-16 space-y-2">
-            <BookOpen className="w-10 h-10 text-muted-foreground mx-auto" />
-            <p className="text-sm font-medium text-foreground">{t("studies_none")}</p>
-            <p className="text-xs text-muted-foreground">{t("studies_empty_hint")}</p>
+          <div className="text-center py-16 space-y-3">
+            <div className="w-16 h-16 rounded-2xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center mx-auto">
+              <BookOpen className="w-8 h-8 text-pink-500" />
+            </div>
+            <p className="text-base font-semibold text-foreground">{t("studies_none")}</p>
+            <p className="text-xs text-muted-foreground max-w-[240px] mx-auto">{t("studies_empty_hint")}</p>
+            <button
+              onClick={() => setAddOpen(true)}
+              className="inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-md shadow-primary/25 active:scale-95 transition-transform"
+            >
+              <Plus className="w-4 h-4" /> {t("cal_add")}
+            </button>
           </div>
         )}
         {filteredActive.map((c) => (

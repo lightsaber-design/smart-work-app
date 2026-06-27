@@ -1,11 +1,13 @@
 import { lazy, Suspense, useCallback, useMemo, useState, useEffect, useRef } from "react";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
+import { TimeEntry } from "@/hooks/useTimeTracker";
 import { EstudioContact, EstudioSession, ScheduledSessionData, SessionFile, hasActiveStudyWork } from "@/hooks/useEstudios";
 import { generateId } from "@/lib/uuid";
 import {
   Plus, Trash2, BellOff, Repeat, CheckCircle2,
-  Circle, ChevronLeft, ChevronRight, Paperclip, X, Star,
+  Circle, ChevronLeft, ChevronRight, Paperclip, X, Star, Pencil,
+  StickyNote, MapPin, RotateCcw, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CategoryIcon } from "@/components/CategoryIcon";
@@ -85,6 +87,10 @@ interface CalendarViewProps {
   activityStartHour?: number;
   activityEndHour?: number;
   categoryConfigs: CategoryConfig[];
+  /** Total del mes desde TimeEntries (fuente de verdad). Sobreescribe el cálculo interno desde CalendarEvents. */
+  timeEntryMonthTotalMs?: number;
+  /** Todas las entradas del timer para calcular totales por día. */
+  timeEntries?: TimeEntry[];
 }
 
 const HOUR_HEIGHT = 64;
@@ -112,6 +118,19 @@ function dayTotalFromEvents(dayEvents: CalendarEvent[]): { ms: number; hrs: numb
     return acc + Math.max(0, end.getTime() - e.date.getTime());
   }, 0);
   return { ms, hrs: Math.floor(ms / 3600000), mins: Math.floor((ms % 3600000) / 60000) };
+}
+
+function calAddDurToTime(timeStr: string, durStr: string): string {
+  const [th, tm] = timeStr.split(":").map(Number);
+  const [dh, dm] = (durStr || "00:00").split(":").map(Number);
+  const total = (th || 0) * 60 + (tm || 0) + (dh || 0) * 60 + (dm || 0);
+  return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+function calDiffToStr(startStr: string, endStr: string): string {
+  const [sh, sm] = startStr.split(":").map(Number);
+  const [eh, em] = endStr.split(":").map(Number);
+  const mins = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+  return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
 }
 
 function formatDurationLabel(ms: number): string {
@@ -266,6 +285,8 @@ function EventMonthGrid({
   specialCampaignGoals,
   onSetSpecialCampaign,
   categoryConfigs,
+  timeEntryMonthTotalMs,
+  timeEntries = [],
 }: {
   monthBase: Date;
   monthLabel: string;
@@ -290,6 +311,8 @@ function EventMonthGrid({
   specialCampaignGoals?: Record<string, CampaignGoal>;
   onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
   categoryConfigs: CategoryConfig[];
+  timeEntryMonthTotalMs?: number;
+  timeEntries?: TimeEntry[];
 }) {
   const t = useT();
   const lang = useLang();
@@ -315,7 +338,11 @@ function EventMonthGrid({
   const monthEvents = events.filter(
     (event) => event.completed && event.date.getMonth() === month && event.date.getFullYear() === year
   );
-  const { ms: monthTotalMs } = dayTotalFromEvents(monthEvents);
+  const { ms: calMonthTotalMs } = dayTotalFromEvents(monthEvents);
+  const entryMonthMs = (timeEntries ?? [])
+    .filter((e) => e.endTime && e.startTime.getMonth() === month && e.startTime.getFullYear() === year)
+    .reduce((acc, e) => acc + (e.endTime!.getTime() - e.startTime.getTime()), 0);
+  const monthTotalMs = Math.max(calMonthTotalMs, entryMonthMs);
   const campaignGoal = specialCampaignGoals?.[currentMonthKey] ?? null;
   const monthGoal = precursorHours != null ? precursorHours : campaignGoal;
   const monthGoalPct = monthGoal ? Math.min(100, Math.round((monthTotalMs / (monthGoal * 3_600_000)) * 100)) : 0;
@@ -411,8 +438,13 @@ function EventMonthGrid({
               const dayMidnight = new Date(day); dayMidnight.setHours(0, 0, 0, 0);
               const isSelected = day.toDateString() === selectedDate.toDateString();
               const isToday = day.toDateString() === today.toDateString();
-              const dayEvents = events.filter((e) => e.date.toDateString() === day.toDateString());
-              const dayTotal = dayTotalFromEvents(dayEvents);
+              const dayStr = day.toDateString();
+              const dayEvents = events.filter((e) => e.date.toDateString() === dayStr);
+              const calDayTotal = dayTotalFromEvents(dayEvents);
+              const entryDayMs = (timeEntries ?? [])
+                .filter((e) => e.endTime && e.startTime.toDateString() === dayStr)
+                .reduce((acc, e) => acc + (e.endTime!.getTime() - e.startTime.getTime()), 0);
+              const dayTotal = { ...calDayTotal, ms: Math.max(calDayTotal.ms, entryDayMs) };
               const hasNotes = dayEvents.some((e) => e.notes);
               const hasCompleted = dayEvents.some((e) => e.completed);
               const dayStudySessions = (estudiosContacts ?? []).flatMap((c) =>
@@ -534,6 +566,8 @@ export function CalendarView({
   activityStartHour = DEFAULT_ACTIVITY_START_HOUR,
   activityEndHour = DEFAULT_ACTIVITY_END_HOUR,
   categoryConfigs,
+  timeEntryMonthTotalMs,
+  timeEntries = [],
 }: CalendarViewProps) {
   const t = useT();
   const lang = useLang();
@@ -563,6 +597,8 @@ export function CalendarView({
 
   const [time, setTime] = useState("09:00");
   const [endTime, setEndTime] = useState("");
+  const [addDuration, setAddDuration] = useState("");
+  const [editingAddDate, setEditingAddDate] = useState(false);
   const [category, setCategory] = useState<EventCategory>("Predi");
   const [selectedEstudioContactId, setSelectedEstudioContactId] = useState<string>("");
   const [studyLesson, setStudyLesson] = useState("");
@@ -579,6 +615,7 @@ export function CalendarView({
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
   const [editTime, setEditTime] = useState("09:00");
   const [editEndTime, setEditEndTime] = useState("");
+  const [editDuration, setEditDuration] = useState("");
   const [editCategory, setEditCategory] = useState<EventCategory>("Predi");
   const [editEstudioContactId, setEditEstudioContactId] = useState<string>("");
   const [editReminder, setEditReminder] = useState("15");
@@ -591,6 +628,21 @@ export function CalendarView({
   const [studySessionPendingFiles, setStudySessionPendingFiles] = useState<{ file: File; id: string }[]>([]);
   const [savingStudySession, setSavingStudySession] = useState(false);
   const [deleteEventPromptId, setDeleteEventPromptId] = useState<string | null>(null);
+
+  // ── add form chips state ─────────────────────────────────────────────────────
+  const [addNotes, setAddNotes] = useState("");
+  const [showAddNotes, setShowAddNotes] = useState(false);
+  const [showAddRepeat, setShowAddRepeat] = useState(false);
+  const [showAddLocation, setShowAddLocation] = useState(false);
+  const [addGpsLoading, setAddGpsLoading] = useState(false);
+
+  // ── edit form chips state ────────────────────────────────────────────────────
+  const [editNotes, setEditNotes] = useState("");
+  const [showEditNotes, setShowEditNotes] = useState(false);
+  const [showEditLocation, setShowEditLocation] = useState(false);
+  const [editLocationData, setEditLocationData] = useState<{ lat: number; lng: number } | undefined>();
+  const [editSelectedFavoriteId, setEditSelectedFavoriteId] = useState("");
+  const [editGpsLoading, setEditGpsLoading] = useState(false);
 
   const deleteEventIsRecurring = useMemo(() => {
     if (!deleteEventPromptId) return false;
@@ -618,7 +670,7 @@ export function CalendarView({
     () => getActiveCategoryConfigs(categoryConfigs).map((item) => item.name).filter(
       (cat) => cat !== "Estudio" || activeContacts.length > 0
     ),
-    [activeContacts.length, categoryConfigs]
+    [activeContacts, categoryConfigs]
   );
 
   useEffect(() => {
@@ -649,8 +701,22 @@ export function CalendarView({
       .sort((a, b) => a.time.localeCompare(b.time)),
     [estudiosContacts, selectedDateKey]
   );
-  const hasSelectedItems = selectedEvents.length > 0 || selectedStudySessions.length > 0;
-  const { hrs: dayTotalHrs, mins: dayTotalMins, ms: dayTotalMs } = dayTotalFromEvents(selectedEvents);
+  const timeEntryDayOrphans = useMemo(
+    () => (timeEntries ?? []).filter((e) => {
+      if (!e.endTime) return false;
+      if (e.startTime.toDateString() !== selectedDateKey) return false;
+      return true;
+    }),
+    [timeEntries, selectedDateKey]
+  );
+  const hasSelectedItems = selectedEvents.length > 0 || selectedStudySessions.length > 0 || timeEntryDayOrphans.length > 0;
+  const { ms: calDayTotalMs } = dayTotalFromEvents(selectedEvents);
+  const timeEntryDayMs = (timeEntries ?? [])
+    .filter((e) => e.endTime && e.startTime.toDateString() === selectedDateKey)
+    .reduce((acc, e) => acc + (e.endTime!.getTime() - e.startTime.getTime()), 0);
+  const dayTotalMs = Math.max(calDayTotalMs, timeEntryDayMs);
+  const dayTotalHrs = Math.floor(dayTotalMs / 3600000);
+  const dayTotalMins = Math.floor((dayTotalMs % 3600000) / 60000);
   const isSelectedToday = selectedDate.toDateString() === new Date().toDateString();
   const nowMinutes = isSelectedToday ? minutesFromTimelineStart(new Date(), activityStartHour) : null;
   const nowTop = nowMinutes == null ? null : timelineTopFromMinutes(Math.max(0, Math.min(timelineDurationMinutes, nowMinutes)));
@@ -679,10 +745,17 @@ export function CalendarView({
     setEditEvent(event);
     const hh = String(event.date.getHours()).padStart(2, "0");
     const mm = String(event.date.getMinutes()).padStart(2, "0");
-    setEditTime(`${hh}:${mm}`);
+    const startStr = `${hh}:${mm}`;
+    setEditTime(startStr);
     setEditEndTime(event.endTime || "");
+    setEditDuration(event.endTime ? calDiffToStr(startStr, event.endTime) : "");
     setEditCategory(event.category);
-    setEditReminder(String(event.reminderMinutesBefore));
+    setEditNotes(event.notes || "");
+    setShowEditNotes(!!event.notes);
+    setEditLocationData(event.location);
+    setEditSelectedFavoriteId("");
+    setShowEditLocation(!!event.location);
+    setEditReminder(String(event.reminderMinutesBefore ?? 0));
     if (event.category === "Estudio" && singleActiveContactId) {
       setEditEstudioContactId(singleActiveContactId);
     } else {
@@ -766,21 +839,27 @@ export function CalendarView({
       : travelReminder.enabled
       ? getTravelReminderMinutes(newDate, eventsForEditReminder, travelReminder)
       : parseInt(editReminder) || 15;
+    const editLoc = editSelectedFavoriteId
+      ? favoritePlaces.find((p) => p.id === editSelectedFavoriteId)?.location
+      : editLocationData;
     onUpdateEvent(editEvent.id, {
       date: newDate,
       endTime: safeEditEndTime || undefined,
       category: editCategory,
       reminderMinutesBefore,
       notified: isPastEvent ? true : undefined,
+      notes: editNotes.trim() || undefined,
+      location: editLoc,
     });
     setEditEvent(null);
   };
 
   const resetAddForm = () => {
-    setTime("09:00"); setEndTime(""); setCategory(availableCategories[0] ?? "Predi"); setReminder("15");
+    setTime("09:00"); setEndTime(""); setAddDuration(""); setCategory(availableCategories[0] ?? "Predi"); setReminder("15");
     setSelectedEstudioContactId("");
     setStudyLesson(""); setStudyNotes(""); setStudyFiles([]);
     setLocation(undefined); setLocationMode("none"); setSelectedFavoriteId(""); setRecurrence("none");
+    setAddNotes(""); setShowAddNotes(false); setShowAddRepeat(false); setShowAddLocation(false);
     setDialogOpen(false);
     setPendingAddConflict(null);
     setPendingEstudioConflict(null);
@@ -828,7 +907,7 @@ export function CalendarView({
         } else {
           onAddEstudioSession?.(contact.id, {
             ...sessionData,
-            forceNew: studyTarget?.session === null,
+            forceNew: true,
           });
         }
       }
@@ -883,7 +962,7 @@ export function CalendarView({
       : travelReminder.enabled
       ? getTravelReminderMinutes(date, events, travelReminder)
       : manualReminder;
-    const params: AddEventParams = { date, endTime: safeEndTime || undefined, category, reminderMinutesBefore, location: eventLocation, recurrence };
+    const params: AddEventParams = { date, endTime: safeEndTime || undefined, category, reminderMinutesBefore, location: eventLocation, recurrence, notes: addNotes.trim() || undefined };
 
     const studyContact = category === "Estudio"
       ? activeContacts.find((c) => c.id === selectedEstudioContactId) ?? (activeContacts.length === 1 ? activeContacts[0] : null)
@@ -1169,7 +1248,8 @@ export function CalendarView({
                   const height = Math.max(44, (durationMins / 60) * HOUR_HEIGHT);
                   const style = getCategoryStyle(categoryConfigs, event.category);
                   const meta = getCategoryMeta(categoryConfigs, event.category);
-                  const opacity = event.completed ? 0.45 : 1;
+                  const isLogged = !!event.endTime;
+                  const opacity = (event.completed && !isLogged) ? 0.45 : 1;
                   const cannotMarkCompleted = !event.completed && event.date.getTime() > Date.now();
                   return (
                     <div
@@ -1189,7 +1269,7 @@ export function CalendarView({
                         <div>
                           <div className="flex items-center gap-1">
                             <CategoryIcon icon={meta.icon} className="text-sm leading-none" />
-                            <p className={`text-[11px] font-bold text-foreground leading-tight truncate ${event.completed ? "line-through" : ""}`}>
+                            <p className={`text-[11px] font-bold text-foreground leading-tight truncate ${event.completed && !isLogged ? "line-through" : ""}`}>
                               {getCategoryLabel(event.category, t)}
                             </p>
                             {event.recurrence !== "none" && <Repeat className="w-2.5 h-2.5 opacity-50 flex-shrink-0" />}
@@ -1226,6 +1306,54 @@ export function CalendarView({
                     </div>
                   );
                 })}
+
+                {/* Timer entries without a matching CalendarEvent */}
+                {timeEntryDayOrphans
+                  .filter((entry) =>
+                    !(entry.linkedEventId && selectedEvents.some((e) => e.id === entry.linkedEventId))
+                  )
+                  .map((entry) => {
+                    const startMins = minutesFromTimelineStart(entry.startTime, activityStartHour);
+                    if (startMins >= timelineDurationMinutes) return null;
+                    const clampedStart = Math.max(0, startMins);
+                    const durationMins = Math.max(30, (entry.endTime!.getTime() - entry.startTime.getTime()) / 60000);
+                    const top = timelineTopFromMinutes(clampedStart);
+                    const height = Math.max(44, (durationMins / 60) * HOUR_HEIGHT);
+                    const meta = getCategoryMeta(categoryConfigs, entry.category);
+                    const startStr = formatTime(entry.startTime, locale);
+                    const endStr = formatTime(entry.endTime!, locale);
+                    return (
+                      <div
+                        key={entry.id}
+                        className="absolute left-2 right-2 rounded-xl overflow-hidden"
+                        style={{
+                          top,
+                          height,
+                          background: `linear-gradient(135deg, ${meta.gradient[0]}, ${meta.gradient[1]})`,
+                          borderLeftWidth: 3,
+                          borderLeftColor: meta.gradient[0],
+                          opacity: 0.88,
+                        }}
+                      >
+                        <div className="px-2.5 py-2 h-full flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center gap-1">
+                              <CategoryIcon icon={meta.icon} className="text-sm leading-none" />
+                              <p className="text-[11px] font-bold text-foreground leading-tight truncate">
+                                {getCategoryLabel(entry.category, t)}
+                              </p>
+                            </div>
+                            {height > 54 && (
+                              <p className="text-[9px] text-foreground/60 mt-0.5 leading-none">
+                                {startStr} – {endStr}
+                              </p>
+                            )}
+                          </div>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                        </div>
+                      </div>
+                    );
+                  })}
 
                 {/* Study sessions */}
                 {selectedStudySessions.map((s) => {
@@ -1305,6 +1433,8 @@ export function CalendarView({
             specialCampaignGoals={specialCampaignGoals}
             onSetSpecialCampaign={onSetSpecialCampaign}
             categoryConfigs={categoryConfigs}
+            timeEntryMonthTotalMs={timeEntryMonthTotalMs}
+            timeEntries={timeEntries}
           />
         </div>
       )}
@@ -1327,39 +1457,47 @@ export function CalendarView({
           </button>
           <div className="px-5 space-y-4 overflow-y-auto flex-1 pb-2">
             <h2 className="text-base font-bold text-foreground">{t("cal_new_event")}</h2>
-            <p className="text-sm text-muted-foreground -mt-2">
-              {formatDateLong(selectedDate, locale)}
-            </p>
+            {/* Date: text + pencil */}
+            {editingAddDate ? (
+              <div className="flex gap-2 items-center -mt-1">
+                <input
+                  type="date"
+                  defaultValue={`${selectedDate.getFullYear()}-${String(selectedDate.getMonth()+1).padStart(2,"0")}-${String(selectedDate.getDate()).padStart(2,"0")}`}
+                  onChange={(e) => { if (e.target.value) { const [y,mo,d] = e.target.value.split("-").map(Number); setSelectedDate(new Date(y,mo-1,d)); } }}
+                  className="flex-1 rounded-2xl border border-border bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  autoFocus
+                />
+                <button onClick={() => setEditingAddDate(false)} className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setEditingAddDate(true)} className="flex items-center gap-2 -mt-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <span className="capitalize">{formatDateLong(selectedDate, locale)}</span>
+                <Pencil className="w-3 h-3" />
+              </button>
+            )}
+            {/* Category pills */}
             <div className="space-y-2">
-              <Label>{t("cal_category")}</Label>
-              <Select
-                value={category}
-                onValueChange={(v) => {
-                  setCategory(v as EventCategory);
-                  if (v === "Estudio" && activeContacts.length === 1) {
-                    setSelectedEstudioContactId(activeContacts[0].id);
-                  } else if (v !== "Estudio") {
-                    setSelectedEstudioContactId("");
-                  }
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue>
-                    {category === "Estudio" && activeContacts.length === 1
-                      ? `${getCategoryLabel("Estudio", t)} - ${activeContacts[0].name}`
-                      : getCategoryLabel(category, t)}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {availableCategories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat === "Estudio" && activeContacts.length === 1
-                        ? `${getCategoryLabel("Estudio", t)} - ${activeContacts[0].name}`
-                        : getCategoryLabel(cat, t)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t("cal_category")}</Label>
+              <div className="flex flex-wrap gap-2">
+                {availableCategories.map((cat) => {
+                  const cfg = categoryConfigs.find((c) => c.name === cat);
+                  const meta = getCategoryMeta(categoryConfigs, cat);
+                  const selected = category === cat;
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => { setCategory(cat as EventCategory); if (cat === "Estudio" && activeContacts.length === 1) setSelectedEstudioContactId(activeContacts[0].id); else if (cat !== "Estudio") setSelectedEstudioContactId(""); }}
+                      className={`flex items-center gap-1.5 rounded-2xl px-3 py-2 text-sm font-semibold border transition-all active:scale-95 ${selected ? "border-transparent text-white shadow-sm" : "border-border bg-muted/40 text-foreground"}`}
+                      style={selected && cfg ? { backgroundColor: cfg.color } : {}}
+                    >
+                      <CategoryIcon icon={meta.icon} className="text-base leading-none" />
+                      {getCategoryLabel(cat, t)}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             {category === "Estudio" && activeContacts.length > 1 && (
               <div className="space-y-2">
@@ -1398,39 +1536,132 @@ export function CalendarView({
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>{t("cal_start_time")}</Label>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t("cal_start_time")}</Label>
                 <Input
                   type="time"
                   {...activityTimeInputProps(activityStartHour, activityEndHour)}
                   value={time}
-                  onChange={(e) => setTime(e.target.value)}
+                  onChange={(e) => { setTime(e.target.value); if (addDuration) setEndTime(calAddDurToTime(e.target.value, addDuration)); }}
                   onBlur={() => setTime((value) => clampTimeToActivityRange(value, activityStartHour, activityEndHour))}
+                  className="text-center"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>{t("cal_end_time")} <span className="text-muted-foreground text-xs">({t("cal_optional")})</span></Label>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t("manual_entry_duration")}</Label>
+                <Input
+                  type="time"
+                  value={addDuration}
+                  onChange={(e) => { setAddDuration(e.target.value); if (/^\d{1,2}:\d{2}$/.test(e.target.value)) setEndTime(calAddDurToTime(time, e.target.value)); }}
+                  className="text-center font-semibold border-primary/50 bg-primary/5"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t("cal_end_time")}</Label>
                 <Input
                   type="time"
                   {...activityTimeInputProps(activityStartHour, activityEndHour)}
                   value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
+                  onChange={(e) => { setEndTime(e.target.value); if (e.target.value) setAddDuration(calDiffToStr(time, e.target.value)); }}
                   onBlur={() => setEndTime((value) => value ? clampTimeToActivityRange(value, activityStartHour, activityEndHour) : value)}
+                  className="text-center"
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>{t("cal_repeat")}</Label>
-              <Select value={recurrence} onValueChange={(v) => setRecurrence(v as RecurrenceType)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{t("cal_no_repeat")}</SelectItem>
-                  <SelectItem value="weekly">{t("cal_weekly")}</SelectItem>
-                  <SelectItem value="monthly">{t("cal_monthly")}</SelectItem>
-                </SelectContent>
-              </Select>
+            {/* ── Extra chips ── */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddNotes((v) => !v)}
+                className={`flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-semibold border transition-colors ${showAddNotes ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/40 border-border text-muted-foreground"}`}
+              >
+                <StickyNote className="w-3.5 h-3.5" />
+                {t("timer_notes")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddRepeat((v) => !v)}
+                className={`flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-semibold border transition-colors ${showAddRepeat ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/40 border-border text-muted-foreground"}`}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                {t("manual_entry_repeat")}
+                {recurrence !== "none" && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-primary" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddLocation((v) => !v)}
+                className={`flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-semibold border transition-colors ${(showAddLocation || selectedFavoriteId || locationMode === "custom") ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/40 border-border text-muted-foreground"}`}
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                {(selectedFavoriteId || location) ? t("manual_entry_location_set") : t("manual_entry_location")}
+              </button>
             </div>
+
+            {showAddNotes && (
+              <textarea
+                value={addNotes}
+                onChange={(e) => setAddNotes(e.target.value)}
+                placeholder={t("timer_notes_placeholder")}
+                rows={3}
+                className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 placeholder:text-muted-foreground/50"
+              />
+            )}
+
+            {showAddRepeat && (
+              <div className="flex gap-2">
+                {(["none", "weekly", "monthly"] as RecurrenceType[]).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setRecurrence(r)}
+                    className={`flex-1 rounded-2xl py-2.5 text-xs font-semibold border transition-colors ${recurrence === r ? "bg-primary text-primary-foreground border-transparent" : "bg-muted/40 border-border text-foreground"}`}
+                  >
+                    {t(`manual_entry_recur_${r}`)}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {showAddLocation && (
+              <div className="space-y-2">
+                {favoritePlaces.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {favoritePlaces.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => { setSelectedFavoriteId(selectedFavoriteId === p.id ? "" : p.id); setLocationMode("none"); setLocation(undefined); }}
+                        className={`flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-semibold border transition-colors ${selectedFavoriteId === p.id ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/40 border-border text-foreground"}`}
+                      >
+                        <Star className="w-3 h-3" /> {p.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddGpsLoading(true);
+                    navigator.geolocation.getCurrentPosition(
+                      (pos) => { setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setLocationMode("custom"); setSelectedFavoriteId(""); setAddGpsLoading(false); },
+                      () => setAddGpsLoading(false)
+                    );
+                  }}
+                  disabled={addGpsLoading}
+                  className="flex items-center gap-2 rounded-2xl border border-border bg-muted/40 px-4 py-2.5 text-sm font-semibold text-foreground active:scale-[0.98] transition-transform disabled:opacity-60"
+                >
+                  {addGpsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4 text-primary" />}
+                  {location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : t("manual_entry_location")}
+                </button>
+                {locationMode === "custom" && location && (
+                  <Suspense fallback={<div className="h-[180px] rounded-lg border border-border bg-muted/40" />}>
+                    <LocationPicker value={location} onChange={setLocation} defaultCenter={defaultCenter} />
+                  </Suspense>
+                )}
+              </div>
+            )}
+
             {!isAddingPastEvent && (
               <div className="space-y-2">
                 <Label>{t("cal_reminder")}</Label>
@@ -1456,28 +1687,6 @@ export function CalendarView({
                   </Select>
                 )}
               </div>
-            )}
-            <div className="space-y-2">
-              <Label>{t("cal_location")}</Label>
-              <Select
-                value={selectedFavoriteId || locationMode}
-                onValueChange={(v) => {
-                  if (v === "none" || v === "custom") { setLocationMode(v as "none" | "custom"); setSelectedFavoriteId(""); }
-                  else { setLocationMode("none"); setSelectedFavoriteId(v); }
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder={t("cal_no_location")} /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{t("cal_no_location")}</SelectItem>
-                  {favoritePlaces.map((p) => <SelectItem key={p.id} value={p.id}>⭐ {p.name}</SelectItem>)}
-                  <SelectItem value="custom">{t("cal_choose_map")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {locationMode === "custom" && (
-              <Suspense fallback={<div className="h-[200px] rounded-lg border border-border bg-muted/40" />}>
-                <LocationPicker value={location} onChange={setLocation} defaultCenter={defaultCenter} />
-              </Suspense>
             )}
           </div>
           <div className="flex-shrink-0 px-5 pt-3 pb-8 border-t border-border bg-card">
@@ -1643,39 +1852,28 @@ export function CalendarView({
             <>
               <div className="px-5 space-y-4 overflow-y-auto flex-1 pb-2">
                 <h2 className="text-base font-bold text-foreground">{t("cal_edit_event")}</h2>
-                <p className="text-sm text-muted-foreground -mt-2">
-                  {formatDateLong(editEvent.date, locale)}
-                </p>
+                <p className="text-sm text-muted-foreground -mt-2 capitalize">{formatDateLong(editEvent.date, locale)}</p>
+                {/* Category pills */}
                 <div className="space-y-2">
-                  <Label>{t("cal_category")}</Label>
-                  <Select
-                    value={editCategory}
-                    onValueChange={(v) => {
-                      setEditCategory(v as EventCategory);
-                      if (v === "Estudio" && activeContacts.length === 1) {
-                        setEditEstudioContactId(activeContacts[0].id);
-                      } else if (v !== "Estudio") {
-                        setEditEstudioContactId("");
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue>
-                          {editCategory === "Estudio" && activeContacts.length === 1
-                          ? `${getCategoryLabel("Estudio", t)} - ${activeContacts[0].name}`
-                          : getCategoryLabel(editCategory, t)}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableCategories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat === "Estudio" && activeContacts.length === 1
-                            ? `${getCategoryLabel("Estudio", t)} - ${activeContacts[0].name}`
-                            : getCategoryLabel(cat, t)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t("cal_category")}</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {availableCategories.map((cat) => {
+                      const cfg = categoryConfigs.find((c) => c.name === cat);
+                      const meta = getCategoryMeta(categoryConfigs, cat);
+                      const selected = editCategory === cat;
+                      return (
+                        <button
+                          key={cat}
+                          onClick={() => { setEditCategory(cat as EventCategory); if (cat === "Estudio" && activeContacts.length === 1) setEditEstudioContactId(activeContacts[0].id); else if (cat !== "Estudio") setEditEstudioContactId(""); }}
+                          className={`flex items-center gap-1.5 rounded-2xl px-3 py-2 text-sm font-semibold border transition-all active:scale-95 ${selected ? "border-transparent text-white shadow-sm" : "border-border bg-muted/40 text-foreground"}`}
+                          style={selected && cfg ? { backgroundColor: cfg.color } : {}}
+                        >
+                          <CategoryIcon icon={meta.icon} className="text-base leading-none" />
+                          {getCategoryLabel(cat, t)}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 {editCategory === "Estudio" && activeContacts.length > 1 && (
                   <div className="space-y-2">
@@ -1690,28 +1888,106 @@ export function CalendarView({
                     </Select>
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>{t("cal_start_time")}</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t("cal_start_time")}</Label>
                     <Input
                       type="time"
                       {...activityTimeInputProps(activityStartHour, activityEndHour)}
                       value={editTime}
-                      onChange={(e) => setEditTime(e.target.value)}
+                      onChange={(e) => { setEditTime(e.target.value); if (editDuration) setEditEndTime(calAddDurToTime(e.target.value, editDuration)); }}
                       onBlur={() => setEditTime((value) => clampTimeToActivityRange(value, activityStartHour, activityEndHour))}
+                      className="text-center"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>{t("cal_end_time")} <span className="text-muted-foreground text-xs">({t("cal_optional")})</span></Label>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t("manual_entry_duration")}</Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="hh:mm"
+                      value={editDuration}
+                      onChange={(e) => { setEditDuration(e.target.value); if (/^\d{1,2}:\d{2}$/.test(e.target.value)) setEditEndTime(calAddDurToTime(editTime, e.target.value)); }}
+                      className="text-center font-semibold border-primary/50 bg-primary/5"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t("cal_end_time")}</Label>
                     <Input
                       type="time"
                       {...activityTimeInputProps(activityStartHour, activityEndHour)}
                       value={editEndTime}
-                      onChange={(e) => setEditEndTime(e.target.value)}
+                      onChange={(e) => { setEditEndTime(e.target.value); if (e.target.value) setEditDuration(calDiffToStr(editTime, e.target.value)); }}
                       onBlur={() => setEditEndTime((value) => value ? clampTimeToActivityRange(value, activityStartHour, activityEndHour) : value)}
+                      className="text-center"
                     />
                   </div>
                 </div>
+                {/* ── Edit chips ── */}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditNotes((v) => !v)}
+                    className={`flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-semibold border transition-colors ${showEditNotes ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/40 border-border text-muted-foreground"}`}
+                  >
+                    <StickyNote className="w-3.5 h-3.5" />
+                    {t("timer_notes")}
+                    {editNotes && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-primary" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowEditLocation((v) => !v)}
+                    className={`flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-semibold border transition-colors ${(showEditLocation || editLocationData) ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/40 border-border text-muted-foreground"}`}
+                  >
+                    <MapPin className="w-3.5 h-3.5" />
+                    {editLocationData ? t("manual_entry_location_set") : t("manual_entry_location")}
+                  </button>
+                </div>
+
+                {showEditNotes && (
+                  <textarea
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    placeholder={t("timer_notes_placeholder")}
+                    rows={3}
+                    className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 placeholder:text-muted-foreground/50"
+                  />
+                )}
+
+                {showEditLocation && (
+                  <div className="space-y-2">
+                    {favoritePlaces.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {favoritePlaces.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => { setEditSelectedFavoriteId(editSelectedFavoriteId === p.id ? "" : p.id); if (editSelectedFavoriteId !== p.id) setEditLocationData(undefined); }}
+                            className={`flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-semibold border transition-colors ${editSelectedFavoriteId === p.id ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/40 border-border text-foreground"}`}
+                          >
+                            <Star className="w-3 h-3" /> {p.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditGpsLoading(true);
+                        navigator.geolocation.getCurrentPosition(
+                          (pos) => { setEditLocationData({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setEditSelectedFavoriteId(""); setEditGpsLoading(false); },
+                          () => setEditGpsLoading(false)
+                        );
+                      }}
+                      disabled={editGpsLoading}
+                      className="flex items-center gap-2 rounded-2xl border border-border bg-muted/40 px-4 py-2.5 text-sm font-semibold text-foreground active:scale-[0.98] transition-transform disabled:opacity-60"
+                    >
+                      {editGpsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4 text-primary" />}
+                      {editLocationData ? `${editLocationData.lat.toFixed(4)}, ${editLocationData.lng.toFixed(4)}` : t("manual_entry_location")}
+                    </button>
+                  </div>
+                )}
+
                 {!isEditingPastEvent && (
                   <div className="space-y-2">
                     <Label>{t("cal_reminder")}</Label>

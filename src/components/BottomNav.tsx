@@ -1,4 +1,4 @@
-import { Home, BarChart3, Clock, CalendarDays, User } from "lucide-react";
+import { Home, BookOpen, Clock, CalendarDays, User } from "lucide-react";
 import { CategoryConfig, getCategoryMeta } from "@/lib/categories";
 import { EventCategory } from "@/hooks/useCalendarEvents";
 import { useT } from "@/lib/LanguageContext";
@@ -15,7 +15,7 @@ interface BottomNavProps {
 
 const LEFT_TABS = [
   { id: "home" as AppTab, icon: Home, labelKey: "nav_home" },
-  { id: "summary" as AppTab, icon: BarChart3, labelKey: "nav_stats" },
+  { id: "estudios" as AppTab, icon: BookOpen, labelKey: "nav_studies" },
 ] as const;
 
 const RIGHT_TABS = [
@@ -25,7 +25,7 @@ const RIGHT_TABS = [
 
 export function BottomNav({ activeTab, onTabChange, isRunning, activeCategory = "Predi", categoryConfigs }: BottomNavProps) {
   const t = useT();
-  const profileActive = activeTab === "profile" || activeTab === "estudios" || activeTab === "map";
+  const profileActive = activeTab === "profile" || activeTab === "map";
   const categoryMeta = getCategoryMeta(categoryConfigs, activeCategory);
   const timerButtonStyle = isRunning ? {
     background: `linear-gradient(135deg, ${categoryMeta.gradient[0]} 0%, ${categoryMeta.gradient[1]} 100%)`,

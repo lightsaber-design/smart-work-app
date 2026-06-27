@@ -1,6 +1,7 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { MinistryMark, MinistryWordmark } from "@/components/MinistryMark";
-import { Trash2, MapPin, User, Moon, Sunrise, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil, Upload, Download, Bell } from "lucide-react";
+import { Trash2, MapPin, User, Moon, Sunrise, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil, Upload, Download, Bell, Cloud, LogIn, LogOut, RefreshCw, RotateCcw, Type } from "lucide-react";
+import { useGoogleDriveSync } from "@/hooks/useGoogleDriveSync";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -80,6 +81,21 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
     ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", year: "numeric" }).format(firstEntryDate)
     : null;
   const storage = useJsonStorageStatus();
+  const gdrive = useGoogleDriveSync();
+
+  // Antigüedad de la última copia en la nube, para mostrar un aviso si lleva
+  // demasiado tiempo sin respaldarse.
+  const backupAgeMs = gdrive.lastSync ? Date.now() - gdrive.lastSync.getTime() : null;
+  const backupStale = backupAgeMs != null && backupAgeMs > 7 * 24 * 3_600_000;
+  const backupAgeLabel = (() => {
+    if (backupAgeMs == null) return null;
+    const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+    const mins = Math.round(backupAgeMs / 60_000);
+    if (mins < 60) return rtf.format(-mins, "minute");
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return rtf.format(-hrs, "hour");
+    return rtf.format(-Math.round(hrs / 24), "day");
+  })();
   const [editingCity, setEditingCity] = useState(false);
   const [cityDraft, setCityDraft] = useState(setup.city ?? undefined);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -90,7 +106,7 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
   const [languageOpen, setLanguageOpen] = useState(false);
   const [displayOpen, setDisplayOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [dataOpen, setDataOpen] = useState(false);
+  const [dataOpen, setDataOpen] = useState(true);
   const [notifPermission, setNotifPermission] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -268,7 +284,33 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
 
         {categoriesOpen && (
           <div className="space-y-4 border-t border-border px-5 pb-5 pt-4">
+            {/* Categoría preseleccionada al abrir el cronómetro */}
             <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground">{t("settings_default_category")}</Label>
+              <div className="flex flex-wrap gap-2">
+                {visibleCategories.filter((category) => category.active).map((category) => {
+                  const selected = setup.defaultCategory === category.name;
+                  return (
+                    <button
+                      key={category.name}
+                      type="button"
+                      onClick={() => onSaveSetup({ defaultCategory: category.name })}
+                      aria-pressed={selected}
+                      className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all active:scale-95 ${
+                        selected
+                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                          : "bg-card text-muted-foreground border-border hover:border-primary/40"
+                      }`}
+                    >
+                      <span className="h-2.5 w-2.5 rounded-full border border-border/50" style={{ backgroundColor: category.color }} />
+                      {getCategoryLabel(category.name, t)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-2 border-t border-border pt-4">
               {visibleCategories.map((category) => (
                 <div key={category.name} className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
                   <div className="flex items-center justify-between gap-3">
@@ -445,6 +487,18 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
             </Label>
             <Switch id="dark-mode-toggle" checked={!!isDark} onCheckedChange={onToggleDark} disabled={!!autoDarkMode} />
           </div>
+
+          <div className="flex items-center justify-between border-t border-border pt-3">
+            <Label className="flex items-center gap-2 text-sm text-foreground cursor-pointer" htmlFor="large-text-toggle">
+              <Type className="w-4 h-4 text-primary" />
+              {t("settings_large_text")}
+            </Label>
+            <Switch
+              id="large-text-toggle"
+              checked={!!setup.largeText}
+              onCheckedChange={(v) => onSaveSetup({ largeText: v })}
+            />
+          </div>
           {setup.city && onToggleAutoDark !== undefined && (
             <div className="mt-3 pt-3 border-t border-border">
               <div className="flex items-center justify-between">
@@ -537,6 +591,18 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
           </div>
           <p className="text-xs text-muted-foreground">{t("settings_notif_monthly_goal_hint")}</p>
         </div>
+
+        {/* Toggle: actividad sin fichar */}
+        <div className="space-y-0.5 pt-1">
+          <div className="flex items-center justify-between gap-3">
+            <Label className="text-sm text-foreground">{t("settings_notif_unlogged")}</Label>
+            <Switch
+              checked={setup.notifUnlogged}
+              onCheckedChange={(v) => onSaveSetup({ notifUnlogged: v })}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">{t("settings_notif_unlogged_hint")}</p>
+        </div>
       </SettingsSection>
 
       <SettingsSection
@@ -558,6 +624,26 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
         open={dataOpen}
         onToggle={() => setDataOpen((open) => !open)}
       >
+        {/* Estado de copia de seguridad — visible de un vistazo */}
+        <div
+          className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold ${
+            gdrive.isSignedIn
+              ? backupStale
+                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                : "bg-green-500/10 text-green-600 dark:text-green-400"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          <Cloud className="h-4 w-4 flex-shrink-0" />
+          <span className="truncate">
+            {gdrive.isSignedIn
+              ? gdrive.lastSync
+                ? t("backup_saved_at", { date: backupAgeLabel ?? "" })
+                : t("backup_never")
+              : t("backup_local_auto")}
+          </span>
+        </div>
+
         <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-3">
           <div className="flex items-center gap-2">
             <FileJson className="h-4 w-4 text-primary" />
@@ -612,6 +698,151 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
               }}
             />
           </label>
+        </div>
+
+        {/* Backup */}
+        <div className="border-t border-border pt-4 space-y-3">
+          <p className="text-sm font-semibold text-foreground">{t("backup_section")}</p>
+
+          {/* Local auto-save (always on) */}
+          <div className="rounded-xl bg-muted/40 border border-border px-4 py-3 space-y-1">
+            <p className="text-sm font-medium text-foreground">{t("backup_local_auto")}</p>
+            <p className="text-xs text-muted-foreground">{t("backup_local_hint")}</p>
+          </div>
+
+          {/* Auto Drive backup toggle */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">{t("backup_auto_drive")}</p>
+                {!gdrive.isSignedIn && (
+                  <p className="text-xs text-muted-foreground">{t("backup_need_signin")}</p>
+                )}
+                {gdrive.isSignedIn && (
+                  <p className="text-xs text-muted-foreground">{t("backup_auto_drive_hint")}</p>
+                )}
+              </div>
+              <Switch
+                checked={setup.autoBackupEnabled && gdrive.isSignedIn}
+                onCheckedChange={(v) => {
+                  if (!gdrive.isSignedIn) return;
+                  onSaveSetup({ autoBackupEnabled: v });
+                }}
+                disabled={!gdrive.isSignedIn}
+              />
+            </div>
+
+            {setup.autoBackupEnabled && gdrive.isSignedIn && (
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-muted-foreground shrink-0">{t("backup_freq")}</p>
+                <div className="flex gap-2">
+                  {(["daily", "weekly", "monthly"] as const).map((freq) => (
+                    <button
+                      key={freq}
+                      type="button"
+                      onClick={() => onSaveSetup({ autoBackupFreq: freq })}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${setup.autoBackupFreq === freq ? "bg-primary text-primary-foreground" : "bg-muted/60 text-muted-foreground hover:bg-muted"}`}
+                    >
+                      {t(`backup_freq_${freq}` as const)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Last Drive backup timestamp */}
+            {gdrive.isSignedIn && (
+              <p className="text-xs text-muted-foreground">
+                {gdrive.lastSync
+                  ? t("backup_saved_at", { date: new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(gdrive.lastSync) })
+                  : t("backup_never")}
+              </p>
+            )}
+
+            {/* Manual save to Drive button */}
+            {gdrive.isSignedIn && (
+              <button
+                onClick={() => gdrive.backup().catch(() => null)}
+                disabled={gdrive.status === "syncing"}
+                className="flex items-center gap-2 text-sm font-medium text-primary hover:underline disabled:opacity-60"
+              >
+                {gdrive.status === "syncing" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {t("backup_save_now")}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Google Drive */}
+        <div className="border-t border-border pt-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Cloud className="w-4 h-4 text-primary" />
+            <p className="text-sm font-semibold text-foreground">{t("gdrive_section_title")}</p>
+            {gdrive.isSignedIn && (
+              <span className="ml-auto text-xs font-semibold text-green-500 truncate max-w-[140px]">{gdrive.user?.email}</span>
+            )}
+          </div>
+
+          {gdrive.errorMsg && (
+            <p className="text-xs text-destructive rounded-lg bg-destructive/10 px-3 py-2">
+              {t("gdrive_error", { msg: gdrive.errorMsg })}
+            </p>
+          )}
+
+          {!gdrive.isSignedIn ? (
+            <button
+              onClick={() => gdrive.signIn().catch(() => null)}
+              disabled={gdrive.status === "syncing"}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-sm active:scale-[0.98] transition-transform disabled:opacity-60"
+            >
+              {gdrive.status === "syncing" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+              {gdrive.status === "syncing" ? t("gdrive_syncing") : t("gdrive_sign_in")}
+            </button>
+          ) : (
+            <div className="space-y-3">
+              {gdrive.lastSync ? (
+                <p className="text-xs text-muted-foreground">
+                  {t("gdrive_last_sync", {
+                    date: new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(gdrive.lastSync),
+                  })}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">{t("gdrive_no_backup")}</p>
+              )}
+              {gdrive.remoteFile && (
+                <p className="text-xs text-muted-foreground">
+                  {t("gdrive_remote_file", {
+                    date: new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" }).format(new Date(gdrive.remoteFile.modifiedTime)),
+                  })}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => gdrive.backup().catch(() => null)}
+                  disabled={gdrive.status === "syncing"}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-primary bg-primary/10 px-3 py-2.5 text-sm font-semibold text-primary active:scale-[0.98] transition-transform disabled:opacity-60"
+                >
+                  {gdrive.status === "syncing" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  {t("gdrive_backup")}
+                </button>
+                <button
+                  onClick={() => { if (confirm(t("gdrive_restore_confirm"))) gdrive.restore().catch(() => null); }}
+                  disabled={gdrive.status === "syncing" || !gdrive.remoteFile}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm font-semibold text-foreground active:scale-[0.98] transition-transform disabled:opacity-40"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  {t("gdrive_restore")}
+                </button>
+              </div>
+              <button
+                onClick={() => gdrive.signOut()}
+                className="flex items-center gap-2 text-sm font-medium text-destructive hover:underline"
+              >
+                <LogOut className="w-4 h-4" />
+                {t("gdrive_sign_out")}
+              </button>
+            </div>
+          )}
         </div>
 
         <button

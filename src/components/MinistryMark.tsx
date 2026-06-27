@@ -9,9 +9,13 @@ interface MinistryMarkProps {
 
 export function MinistryMark({
   size = 120,
-  pinColor = "hsl(220 20% 10%)",
+  // Por defecto hereda el color de texto (currentColor): oscuro en modo claro y
+  // claro en modo nocturno, para que el icono siempre tenga contraste.
+  pinColor = "currentColor",
   accentColor = "hsl(199 89% 48%)",
-  dialColor = "#ffffff",
+  // La esfera sigue el tema (clara en modo claro, oscura en modo nocturno) para que
+  // sea la inversa real del icono y los números/agujas (currentColor) siempre contrasten.
+  dialColor = "hsl(var(--card))",
   romanColor,
   className,
 }: MinistryMarkProps) {
@@ -76,7 +80,7 @@ interface MinistryWordmarkProps {
 
 export function MinistryWordmark({
   size = 32,
-  baseColor = "hsl(220 20% 10%)",
+  baseColor = "currentColor",
   accentColor = "hsl(199 89% 48%)",
   showUnderline = false,
   className,

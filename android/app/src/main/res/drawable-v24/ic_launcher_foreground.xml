@@ -4,42 +4,32 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Pin bail (ring at top) — stroke circle -->
+    <!-- Dark clock dial: smaller circle, so more light border shows -->
     <path
-        android:pathData="M54,16.2 m-3.78,0 a3.78,3.78 0 1,0 7.56,0 a3.78,3.78 0 1,0 -7.56,0"
-        android:fillColor="#00000000"
-        android:strokeColor="#ffffff"
-        android:strokeWidth="2.7"/>
-
-    <!-- Pin body -->
-    <path
-        android:pathData="M54,23.76 C33.48,23.76 25.92,41.04 25.92,51.84 C25.92,70.2 49.68,91.8 54,99.36 C58.32,91.8 82.08,70.2 82.08,51.84 C82.08,41.04 74.52,23.76 54,23.76 Z"
-        android:fillColor="#ffffff"/>
-
-    <!-- Clock face (navy circle inside pin) -->
-    <path
-        android:pathData="M54,49.68 m-17.28,0 a17.28,17.28 0 1,0 34.56,0 a17.28,17.28 0 1,0 -34.56,0"
+        android:pathData="M54,28 a26,26 0 1,0 0,52 a26,26 0 1,0 0,-52 Z"
         android:fillColor="#181D26"/>
 
-    <!-- Hour hand (~10 o'clock, upper-left) -->
+    <!-- Subtle inner ring (light) -->
     <path
-        android:pathData="M54,49.68 L47.52,45.36"
+        android:pathData="M54,31 a23,23 0 1,0 0,46 a23,23 0 1,0 0,-46 Z"
         android:fillColor="#00000000"
-        android:strokeColor="#ffffff"
-        android:strokeWidth="1.5"
-        android:strokeLineCap="round"/>
+        android:strokeColor="#E6E9EF"
+        android:strokeWidth="1"
+        android:strokeAlpha="0.3"/>
 
-    <!-- Minute hand (~2 o'clock, upper-right) -->
-    <path
-        android:pathData="M54,49.68 L60.48,45.36"
-        android:fillColor="#00000000"
-        android:strokeColor="#ffffff"
-        android:strokeWidth="1.5"
-        android:strokeLineCap="round"/>
+    <!-- Hour ticks (12 / 3 / 6 / 9), light on dark dial -->
+    <path android:pathData="M54,30 L54,33" android:strokeColor="#E6E9EF" android:strokeWidth="2" android:strokeLineCap="round"/>
+    <path android:pathData="M78,54 L75,54" android:strokeColor="#E6E9EF" android:strokeWidth="2" android:strokeLineCap="round"/>
+    <path android:pathData="M54,78 L54,75" android:strokeColor="#E6E9EF" android:strokeWidth="2" android:strokeLineCap="round"/>
+    <path android:pathData="M30,54 L33,54" android:strokeColor="#E6E9EF" android:strokeWidth="2" android:strokeLineCap="round"/>
+
+    <!-- Hands (10:10), light -->
+    <path android:pathData="M54,54 L44,48" android:strokeColor="#E6E9EF" android:strokeWidth="2.5" android:strokeLineCap="round"/>
+    <path android:pathData="M54,54 L64,48" android:strokeColor="#E6E9EF" android:strokeWidth="2.5" android:strokeLineCap="round"/>
 
     <!-- Center dot (teal) -->
     <path
-        android:pathData="M54,49.68 m-1.35,0 a1.35,1.35 0 1,0 2.7,0 a1.35,1.35 0 1,0 -2.7,0"
+        android:pathData="M54,54 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 Z"
         android:fillColor="#34B1AF"/>
 
 </vector>

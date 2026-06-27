@@ -3,6 +3,7 @@ import { generateId } from "@/lib/uuid";
 import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 import { useDebouncedJsonWriter } from "@/hooks/useDebouncedJsonWriter";
 import { isRecord } from "@/lib/utils";
+import { dateKey } from "@/lib/time";
 
 export interface SessionFile {
   id: string;
@@ -19,6 +20,15 @@ export interface EstudioSession {
   notes?: string;
   files: SessionFile[];
   pending?: boolean;
+  /** Marcada como NO realizada (respuesta "No" en la notificación). Resuelve el
+   * periodo para no volver a avisar, pero no cuenta como estudio hecho. */
+  skipped?: boolean;
+}
+
+/** Sesión realizada de verdad: ni pendiente ni saltada. Usar esto (no
+ * `!s.pending`) allá donde "hecho" signifique "se estudió". */
+export function isSessionDone(session: EstudioSession): boolean {
+  return !session.pending && !session.skipped;
 }
 
 export type ScheduleFrequency = "weekly" | "fortnightly" | "monthly";
@@ -104,6 +114,7 @@ function parseStoredSession(value: unknown): EstudioSession | null {
       ? value.files.map(parseStoredFile).filter((file): file is SessionFile => file !== null)
       : [],
     pending: typeof value.pending === "boolean" ? value.pending : undefined,
+    skipped: typeof value.skipped === "boolean" ? value.skipped : undefined,
   };
 }
 
@@ -125,8 +136,10 @@ function parseStoredContact(value: unknown): EstudioContact | null {
   };
 }
 
-function targetPendingCount(freq: ScheduleFrequency): number {
-  return freq === "weekly" ? 4 : 2;
+function targetPendingCount(_freq: ScheduleFrequency): number {
+  // Mantener solo UNA sesión pendiente por delante: al completarla se genera la
+  // siguiente. Tener varias programadas a la vez resultaba confuso.
+  return 1;
 }
 
 /* Retorna el timestamp al final del domingo (23:59:59.999) de la semana
@@ -190,9 +203,11 @@ function fillPendingSessions(contact: EstudioContact): EstudioContact {
   const toGenerate = target - existing.length;
   if (toGenerate <= 0) return contact;
 
-  const existingDates = new Set(existing.map((s) => new Date(s.date).toDateString()));
+  // Excluir TODAS las fechas ya ocupadas (pendientes, hechas o canceladas) para
+  // no regenerar un hueco que el usuario completó o borró/canceló.
+  const occupiedDates = new Set(contact.sessions.map((s) => new Date(s.date).toDateString()));
   const occurrences = getNextOccurrences(schedule, target * 2);
-  const toAdd = occurrences.filter((d) => !existingDates.has(d.toDateString())).slice(0, toGenerate);
+  const toAdd = occurrences.filter((d) => !occupiedDates.has(d.toDateString())).slice(0, toGenerate);
   if (!toAdd.length) return contact;
 
   const [h, m] = schedule.time.split(":").map(Number);
@@ -251,7 +266,7 @@ export function getNextOccurrences(schedule: ContactSchedule, count: number): Da
    un número lo incrementa (p. ej. "Lección 5" → "Lección 6"). Puro, no muta. */
 export function suggestNextLesson(contact: EstudioContact): string | undefined {
   const lastDone = (contact.sessions ?? [])
-    .filter((s) => !s.pending && s.lesson?.trim())
+    .filter((s) => isSessionDone(s) && s.lesson?.trim())
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
   const base = lastDone?.lesson?.trim() || contact.schedule?.lesson?.trim();
   if (!base) return undefined;
@@ -264,10 +279,6 @@ export function suggestNextLesson(contact: EstudioContact): string | undefined {
 function now(): string {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function dateKey(date: Date): string {
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
 function sessionSlotKey(session: Pick<EstudioSession, "date" | "time">): string {
@@ -310,7 +321,7 @@ export function useEstudios() {
         }
       })
       .catch((error) => console.error("Error loading studies:", error));
-  }, [persist]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addContact = useCallback((data: ContactFormData) => {
     setContacts((prev) => {
@@ -417,6 +428,7 @@ export function useEstudios() {
             lesson: data?.lesson?.trim() || undefined,
             notes: data?.notes?.trim() || undefined,
             files: data?.files ?? [],
+            pending: false,
           },
         ];
       }
@@ -431,11 +443,24 @@ export function useEstudios() {
 
   const deleteSession = useCallback((contactId: string, sessionId: string) => {
     setContacts((prev) => {
-      const updated = prev.map((c) =>
-        c.id === contactId
-          ? { ...c, sessions: c.sessions.filter((s) => s.id !== sessionId) }
-          : c
-      );
+      const updated = prev.map((c) => {
+        if (c.id !== contactId) return c;
+        const target = c.sessions.find((s) => s.id === sessionId);
+        // Si el contacto tiene programación y borramos una sesión PENDIENTE, la
+        // dejamos como "cancelada" (skipped) en vez de eliminarla. Así desaparece
+        // del calendario y no cuenta, pero su fecha sigue ocupada y
+        // fillPendingSessions NO la vuelve a generar (antes reaparecía al
+        // recargar). El resto de casos se borran del todo.
+        if (c.schedule && target?.pending) {
+          return {
+            ...c,
+            sessions: c.sessions.map((s) =>
+              s.id === sessionId ? { ...s, pending: false, skipped: true } : s
+            ),
+          };
+        }
+        return { ...c, sessions: c.sessions.filter((s) => s.id !== sessionId) };
+      });
       persist(updated);
       return updated;
     });
@@ -568,6 +593,25 @@ export function useEstudios() {
   }, [persist]);
 
 
+  /* Marca una sesión como NO realizada ("No" en la notificación): deja de estar
+     pendiente para no volver a insistir, pero no cuenta como estudio hecho. */
+  const skipSession = useCallback((contactId: string, sessionId: string) => {
+    setContacts((prev) => {
+      const updated = prev.map((c) => {
+        if (c.id !== contactId) return c;
+        const withSkipped = {
+          ...c,
+          sessions: c.sessions.map((s) =>
+            s.id === sessionId ? { ...s, pending: false, skipped: true } : s
+          ),
+        };
+        return fillPendingSessions(withSkipped);
+      });
+      persist(updated);
+      return updated;
+    });
+  }, [persist]);
+
   return {
     contacts,
     addContact,
@@ -581,5 +625,6 @@ export function useEstudios() {
     updateSession,
     completeSession,
     completeSessionNow,
+    skipSession,
   };
 }

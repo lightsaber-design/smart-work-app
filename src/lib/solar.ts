@@ -10,7 +10,7 @@ export function getSunHours(
 ): { sunriseH: number; sunsetH: number } {
   // Day of year (1-based)
   const janFirst = new Date(date.getFullYear(), 0, 0);
-  const doy = Math.round((date.getTime() - janFirst.getTime()) / 86_400_000);
+  const doy = Math.floor((date.getTime() - janFirst.getTime()) / 86_400_000);
 
   // Solar declination (degrees)
   const decl = -23.45 * Math.cos((2 * Math.PI / 365) * (doy + 10));

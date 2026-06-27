@@ -1,5 +1,5 @@
 import { X, BookOpen, Clock, StickyNote, ChevronRight, Calendar } from "lucide-react";
-import type { EstudioContact, EstudioSession } from "@/hooks/useEstudios";
+import { isSessionDone, type EstudioContact, type EstudioSession } from "@/hooks/useEstudios";
 
 type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -18,7 +18,7 @@ function fmtDate(dateStr: string, locale: string) {
 
 function studyDuration(contact: EstudioContact, t: TranslateFn) {
   const allDates = contact.sessions
-    .filter((s) => s.pending === false)
+    .filter(isSessionDone)
     .map((s) => new Date(s.date).getTime())
     .filter((ms) => !isNaN(ms));
   const firstMs = allDates.length > 0 ? Math.min(...allDates) : new Date(contact.createdAt).getTime();
@@ -36,7 +36,7 @@ function studyDuration(contact: EstudioContact, t: TranslateFn) {
 
 export function PrepMode({ contact, session, locale, t, onClose, onOpenFull }: PrepModeProps) {
   const lastDone = [...contact.sessions]
-    .filter((s) => s.pending === false)
+    .filter(isSessionDone)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] ?? null;
 
   const daysSinceLast = lastDone

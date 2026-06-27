@@ -200,10 +200,13 @@ export function getJsonDataFileName() {
 
 export async function createJsonDataFile() {
   if (!window.showSaveFilePicker) throw new Error("JSON file storage is not supported in this browser.");
-  const handle = await window.showSaveFilePicker({
-    suggestedName: "smart-work-data.json",
-    types: JSON_TYPES,
-  });
+  let handle: FileSystemFileHandle;
+  try {
+    handle = await window.showSaveFilePicker({ suggestedName: "smart-work-data.json", types: JSON_TYPES });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") return;
+    throw e;
+  }
   handleCache = handle;
   await storeHandle(handle);
   dataCache = { ...readLegacyBrowserData(), ...dataCache };
@@ -214,7 +217,14 @@ export async function createJsonDataFile() {
 
 export async function openJsonDataFile() {
   if (!window.showOpenFilePicker) throw new Error("JSON file storage is not supported in this browser.");
-  const [handle] = await window.showOpenFilePicker({ multiple: false, types: JSON_TYPES });
+  let handles: FileSystemFileHandle[];
+  try {
+    handles = await window.showOpenFilePicker({ multiple: false, types: JSON_TYPES });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") return;
+    throw e;
+  }
+  const [handle] = handles;
   if (!handle) return;
   handleCache = handle;
   await storeHandle(handle);

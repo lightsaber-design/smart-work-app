@@ -70,7 +70,7 @@ export function LocationMap({ favoritePlaces, onAddFavorite, onDeleteFavorite, d
       </div>
 
       {/* Public places */}
-      {view === "public" && <PublicPlacesView center={defaultCenter} cityName={cityName} />}
+      {view === "public" && <PublicPlacesView center={defaultCenter} cityName={cityName} onAddFavorite={onAddFavorite} />}
 
       {/* Favorites */}
       {view === "favorites" && (

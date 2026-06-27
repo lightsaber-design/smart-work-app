@@ -30,6 +30,7 @@ export interface AddEventParams {
   reminderMinutesBefore: number;
   location?: { lat: number; lng: number };
   recurrence: RecurrenceType;
+  notes?: string;
 }
 
 interface PersistedCalendarEvent extends Omit<CalendarEvent, "date"> {
@@ -142,6 +143,9 @@ export function useCalendarEvents() {
   const eventsRef = useRef<CalendarEvent[]>([]);
   const writeCalendarEvents = useDebouncedJsonWriter("calendar-events");
 
+  const writeCalendarEventsRef = useRef(writeCalendarEvents);
+  writeCalendarEventsRef.current = writeCalendarEvents;
+
   useEffect(() => {
     readJsonValue<unknown[]>("calendar-events", [])
       .then((value) => {
@@ -152,13 +156,14 @@ export function useCalendarEvents() {
         const cleaned = parsed.filter((e) => !(e.completed && e.date.getTime() < cutoff));
         if (cleaned.length < parsed.length) {
           // Persiste el cleanup silenciosamente
-          writeCalendarEvents(cleaned.map((e) => ({ ...e, date: e.date.toISOString() })));
+          writeCalendarEventsRef.current(cleaned.map((e) => ({ ...e, date: e.date.toISOString() })));
         }
         eventsRef.current = cleaned;
         setEvents(cleaned);
       })
       .catch((error) => console.error("Error loading events:", error));
-  }, [writeCalendarEvents]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const persistEvents = useCallback((updated: CalendarEvent[]) => {
     const persisted: PersistedCalendarEvent[] = updated.map((event) => ({
@@ -197,6 +202,7 @@ export function useCalendarEvents() {
         location: params.location,
         recurrence: "none",
         completed: params.date.getTime() < Date.now(),
+        notes: params.notes || undefined,
       };
       setEvents((prev) => {
         const updated = [...prev, event].sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -341,18 +347,5 @@ export function useCalendarEvents() {
     [persistEvents]
   );
 
-  const calMonthMs = useMemo(() => {
-    const now = new Date();
-    return events
-      .filter((e) => e.completed && e.endTime && e.date.getMonth() === now.getMonth() && e.date.getFullYear() === now.getFullYear())
-      .reduce((acc, e) => {
-        if (!e.endTime) return acc;
-        const [h, m] = e.endTime.split(":").map(Number);
-        const end = new Date(e.date);
-        end.setHours(h, m, 0, 0);
-        return acc + Math.max(0, end.getTime() - e.date.getTime());
-      }, 0);
-  }, [events]);
-
-  return { events, calMonthMs, addEvent, addCompletedEventNow, deleteEvent, getEventsForDate, toggleEventCompleted, updateEvent, markNotified };
+  return { events, addEvent, addCompletedEventNow, deleteEvent, getEventsForDate, toggleEventCompleted, updateEvent, markNotified };
 }

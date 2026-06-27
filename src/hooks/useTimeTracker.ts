@@ -20,6 +20,8 @@ export interface TimeEntry {
   startLocation: GeoLocation | null;
   endLocation: GeoLocation | null;
   linkedEventId?: string;
+  /** Si está en pausa, momento en que se pausó; null si corre o ya terminó. */
+  pausedAt?: Date | null;
 }
 
 function isWorkCategory(value: unknown): value is WorkCategory {
@@ -45,6 +47,12 @@ function parseStoredEntry(value: unknown): TimeEntry | null {
     endTime = parsedEndTime;
   }
 
+  let pausedAt: Date | null = null;
+  if (value.pausedAt !== null && value.pausedAt !== undefined && value.pausedAt !== "") {
+    const parsedPausedAt = new Date(String(value.pausedAt));
+    if (!Number.isNaN(parsedPausedAt.getTime())) pausedAt = parsedPausedAt;
+  }
+
   return {
     id: value.id,
     startTime,
@@ -54,6 +62,7 @@ function parseStoredEntry(value: unknown): TimeEntry | null {
     startLocation: parseGeoLocation(value.startLocation),
     endLocation: parseGeoLocation(value.endLocation),
     linkedEventId: typeof value.linkedEventId === "string" ? value.linkedEventId : undefined,
+    pausedAt,
   };
 }
 
@@ -63,7 +72,16 @@ export function useTimeTracker() {
 
   const activeEntry = useMemo(() => entries.find((e) => e.endTime === null), [entries]);
   const isRunning = activeEntry !== undefined;
+  const isPaused = activeEntry?.pausedAt != null;
   const [elapsed, setElapsed] = useState(0);
+
+  // Segundos trabajados de una entrada: si está en pausa, congela en el momento
+  // de la pausa; si corre, cuenta hasta ahora. El tiempo en pausa nunca cuenta
+  // porque al reanudar se desplaza startTime hacia delante.
+  const entryElapsedSeconds = (entry: TimeEntry) => {
+    const ref = entry.pausedAt ? entry.pausedAt.getTime() : Date.now();
+    return Math.max(0, Math.floor((ref - entry.startTime.getTime()) / 1000));
+  };
 
   useEffect(() => {
     readJsonValue<unknown[]>("time-entries", [])
@@ -72,13 +90,18 @@ export function useTimeTracker() {
         const parsed = value.map(parseStoredEntry).filter((entry): entry is TimeEntry => entry !== null);
         setEntries(parsed);
         const active = parsed.find((e) => e.endTime === null);
-        setElapsed(active ? Math.floor((Date.now() - active.startTime.getTime()) / 1000) : 0);
+        setElapsed(active ? entryElapsedSeconds(active) : 0);
       })
       .catch((error) => console.error("Error loading entries:", error));
   }, []);
 
   useEffect(() => {
     if (!activeEntry) return;
+    // En pausa: congela el valor y no sigue contando.
+    if (activeEntry.pausedAt) {
+      setElapsed(entryElapsedSeconds(activeEntry));
+      return;
+    }
     const interval = setInterval(() => {
       setElapsed(Math.floor((Date.now() - activeEntry.startTime.getTime()) / 1000));
     }, 1000);
@@ -105,6 +128,7 @@ export function useTimeTracker() {
         startLocation: null,
         endLocation: null,
         linkedEventId,
+        pausedAt: null,
       };
       setEntries((prev) => {
         const updated = [entry, ...prev];
@@ -118,15 +142,17 @@ export function useTimeTracker() {
 
   const clockOut = useCallback(
     async (onUpdateEvent?: (id: string, endTime: string) => void, customTime?: Date) => {
-      const end = customTime ?? new Date();
-      const endTimeStr = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
       setEntries((prev) => {
         const updated = prev.map((e) => {
           if (e.endTime !== null) return e;
+          // Si se para estando en pausa, el fin del trabajo fue el momento de
+          // la pausa (así la duración no incluye el hueco pausado).
+          const end = customTime ?? e.pausedAt ?? new Date();
+          const endTimeStr = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
           if (e.linkedEventId) {
             onUpdateEvent?.(e.linkedEventId, endTimeStr);
           }
-          return { ...e, endTime: end };
+          return { ...e, endTime: end, pausedAt: null };
         });
         persistEntries(updated);
         return updated;
@@ -135,6 +161,31 @@ export function useTimeTracker() {
     },
     [persistEntries]
   );
+
+  // Pausa el cronómetro activo: marca el instante de la pausa.
+  const pause = useCallback(() => {
+    setEntries((prev) => {
+      const updated = prev.map((e) =>
+        e.endTime === null && e.pausedAt == null ? { ...e, pausedAt: new Date() } : e
+      );
+      persistEntries(updated);
+      return updated;
+    });
+  }, [persistEntries]);
+
+  // Reanuda: desplaza startTime hacia delante el tiempo que estuvo en pausa,
+  // de modo que (endTime - startTime) siga siendo el tiempo realmente trabajado.
+  const resume = useCallback(() => {
+    setEntries((prev) => {
+      const updated = prev.map((e) => {
+        if (e.endTime !== null || e.pausedAt == null) return e;
+        const pausedMs = Date.now() - e.pausedAt.getTime();
+        return { ...e, startTime: new Date(e.startTime.getTime() + pausedMs), pausedAt: null };
+      });
+      persistEntries(updated);
+      return updated;
+    });
+  }, [persistEntries]);
 
   const updateStartTime = useCallback((id: string, startTime: Date) => {
     setEntries((prev) => {
@@ -156,6 +207,29 @@ export function useTimeTracker() {
   const updateCategory = useCallback((id: string, category: WorkCategory) => {
     setEntries((prev) => {
       const updated = prev.map((e) => (e.id === id ? { ...e, category } : e));
+      persistEntries(updated);
+      return updated;
+    });
+  }, [persistEntries]);
+
+  const addManualEntry = useCallback((
+    startTime: Date,
+    endTime: Date,
+    category: WorkCategory,
+    description = "",
+    location?: GeoLocation
+  ) => {
+    const entry: TimeEntry = {
+      id: generateId(),
+      startTime,
+      endTime,
+      description,
+      category,
+      startLocation: location ?? null,
+      endLocation: null,
+    };
+    setEntries((prev) => {
+      const updated = [...prev, entry].sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
       persistEntries(updated);
       return updated;
     });
@@ -203,12 +277,16 @@ export function useTimeTracker() {
     todayEntries,
     monthEntries,
     isRunning,
+    isPaused,
     elapsed,
     clockIn,
     clockOut,
+    pause,
+    resume,
     updateStartTime,
     updateDescription,
     updateCategory,
+    addManualEntry,
     deleteEntry,
     todayTotal,
     monthTotal,
@@ -221,8 +299,4 @@ export function formatDuration(ms: number): string {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
   return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
-}
-
-export function formatTime(date: Date): string {
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }

@@ -16,7 +16,7 @@ import { DEFAULT_CATEGORY_CONFIGS } from "@/lib/categories";
 import { formatPlaceName } from "@/lib/placeNames";
 
 interface SetupScreenProps {
-  onComplete: (data: Omit<SetupData, "completed">) => void;
+  onComplete: (data: Partial<Omit<SetupData, "completed">>) => void;
   onLangChange: (lang: Lang) => void;
 }
 
@@ -53,6 +53,7 @@ export function SetupScreen({ onComplete, onLangChange }: SetupScreenProps) {
       activityEndHour: DEFAULT_ACTIVITY_END_HOUR,
       hasBibleStudies: false,
       categorySettings: DEFAULT_CATEGORY_CONFIGS,
+      defaultCategory: "Predi",
       language: selectedLang,
     });
   };

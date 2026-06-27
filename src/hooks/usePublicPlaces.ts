@@ -11,6 +11,11 @@ export interface PublicPlace {
   lng: number;
   distance: number;
   amenities: PlaceAmenity[];
+  /** Datos OSM útiles para mostrar pistas al usuario (todos opcionales). */
+  fee?: boolean;          // baño/servicio de pago (tags.fee === "yes")
+  customersOnly?: boolean; // acceso solo para clientes (tags.access)
+  wheelchair?: boolean;   // accesible (tags.wheelchair === "yes")
+  openingHours?: string;  // tags.opening_hours en crudo
 }
 
 // Amenities inferred from OSM type
@@ -175,6 +180,10 @@ out center tags;`;
             lng: lon,
             distance: Math.round(haversineM(center.lat, center.lng, lat, lon)),
             amenities: AMENITIES_BY_TYPE[type],
+            fee: tags.fee === "yes" || undefined,
+            customersOnly: tags.access === "customers" || tags.access === "permissive" || undefined,
+            wheelchair: tags.wheelchair === "yes" || undefined,
+            openingHours: tags.opening_hours || undefined,
           });
         }
 

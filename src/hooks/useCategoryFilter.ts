@@ -8,10 +8,10 @@ export function useCategoryFilter(validCategories: EventCategory[]) {
   useEffect(() => {
     readJsonValue<unknown[]>("excludedCategories", [])
       .then((parsed) => {
-        setExcluded(new Set(parsed.filter((v): v is EventCategory => typeof v === "string" && validCategories.includes(v))));
+        setExcluded(new Set(parsed.filter((v): v is EventCategory => typeof v === "string")));
       })
       .catch((error) => console.error("Error loading category filters:", error));
-  }, [validCategories]);
+  }, []);
 
   const toggle = useCallback((cat: EventCategory) => {
     setExcluded((prev) => {

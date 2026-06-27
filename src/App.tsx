@@ -8,12 +8,19 @@ import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { initNotifications } from "@/lib/notifications";
+import { GoogleAuth } from "@codetrix-studio/capacitor-google-auth";
 
 const queryClient = new QueryClient();
 
 const App = () => {
-  // Inicializa el canal nativo sin pedir permisos al abrir la app.
-  useEffect(() => { void initNotifications(); }, []);
+  useEffect(() => {
+    void initNotifications();
+    GoogleAuth.initialize({
+      clientId: "398912678802-dsfkg3tfkjbkg3d9jpspg1hmv97a5rhu.apps.googleusercontent.com",
+      scopes: ["profile", "email", "https://www.googleapis.com/auth/drive.appdata"],
+      grantOfflineAccess: true,
+    });
+  }, []);
 
   return (
     <BrowserRouter>

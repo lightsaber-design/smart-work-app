@@ -4,6 +4,7 @@ interface TimerNotificationPlugin {
   start(options: { startTimeMs: number; title: string; body: string; category?: string }): Promise<void>;
   stop(): Promise<void>;
   consumeWidgetAction(): Promise<{ action: string }>;
+  setCategories(options: { categories: { name: string; color: string }[] }): Promise<void>;
 }
 
 const TimerNotification = registerPlugin<TimerNotificationPlugin>('TimerNotification');
@@ -23,6 +24,15 @@ export async function stopTimerNotification(): Promise<void> {
     await TimerNotification.stop();
   } catch (e) {
     console.warn('[TimerNotif] stop:', e);
+  }
+}
+
+export async function setWidgetCategories(categories: { name: string; color: string }[]): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    await TimerNotification.setCategories({ categories });
+  } catch (e) {
+    console.warn('[TimerNotif] setCategories:', e);
   }
 }
 

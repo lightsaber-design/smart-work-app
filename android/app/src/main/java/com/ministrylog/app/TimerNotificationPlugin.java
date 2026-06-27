@@ -85,6 +85,19 @@ public class TimerNotificationPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void setCategories(PluginCall call) {
+        Context ctx = getContext();
+        com.getcapacitor.JSArray categories = call.getArray("categories");
+        String json = categories != null ? categories.toString() : "[]";
+        ctx.getSharedPreferences(TimerWidget.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(TimerWidget.KEY_CATEGORIES, json)
+            .apply();
+        TimerWidget.refreshAll(ctx);
+        call.resolve();
+    }
+
+    @PluginMethod
     public void consumeWidgetAction(PluginCall call) {
         Context ctx = getContext();
         android.content.SharedPreferences prefs =

@@ -1,4 +1,4 @@
-import type { EstudioContact } from "@/hooks/useEstudios";
+import { isSessionDone, type EstudioContact } from "@/hooks/useEstudios";
 
 // ── Regla 1: Timer activo más de N horas ──────────────────────────────────────
 export const TIMER_LONG_RUN_MS = 3 * 60 * 60 * 1000; // 3 horas
@@ -8,7 +8,7 @@ export function timerLongRunFireAt(startTime: Date): Date {
 }
 
 // ── Regla 3: Meta mensual ─────────────────────────────────────────────────────
-export function daysLeftInMonth(now = new Date()): number {
+function daysLeftInMonth(now = new Date()): number {
   const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   return last.getDate() - now.getDate();
 }
@@ -53,7 +53,7 @@ export function getForgottenContacts(
       (s) => s.pending && new Date(s.date).getTime() > nowMs
     );
     if (hasUpcoming) return false;
-    const done = (c.sessions ?? []).filter((s) => !s.pending);
+    const done = (c.sessions ?? []).filter(isSessionDone);
     if (done.length === 0) {
       // Nunca tuvo sesión; avisa si fue creado hace >14 días
       return nowMs - new Date(c.createdAt).getTime() > FORGOTTEN_DAYS * 86_400_000;

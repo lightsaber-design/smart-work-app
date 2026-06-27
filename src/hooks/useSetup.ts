@@ -15,12 +15,20 @@ export interface SetupData {
   activityEndHour: number;
   hasBibleStudies: boolean;
   categorySettings: CategoryConfig[];
+  /** Categoría preseleccionada al abrir el cronómetro. */
+  defaultCategory: string;
   completed: boolean;
   language?: Lang;
   notifTimerOverrun: boolean;
   notifTimer3h: boolean;
   notifMonthlyGoal: boolean;
+  /** Aviso cuando pasa una actividad del calendario sin haberla fichado. */
+  notifUnlogged: boolean;
+  /** Aumenta el tamaño de texto base para mejor legibilidad. */
+  largeText: boolean;
   autoDarkMode: boolean;
+  autoBackupEnabled: boolean;
+  autoBackupFreq: 'daily' | 'weekly' | 'monthly';
 }
 
 const DEFAULT: SetupData = {
@@ -32,12 +40,17 @@ const DEFAULT: SetupData = {
   activityEndHour: DEFAULT_ACTIVITY_END_HOUR,
   hasBibleStudies: false,
   categorySettings: DEFAULT_CATEGORY_CONFIGS,
+  defaultCategory: "Predi",
   completed: false,
   language: detectLanguage(),
   notifTimerOverrun: true,
   notifTimer3h: true,
   notifMonthlyGoal: true,
+  notifUnlogged: true,
+  largeText: false,
   autoDarkMode: false,
+  autoBackupEnabled: false,
+  autoBackupFreq: 'daily',
 };
 
 function isLanguage(value: unknown): value is Lang {
@@ -70,12 +83,17 @@ function parseStoredSetup(value: unknown): SetupData {
     activityEndHour: activityHours.endHour,
     hasBibleStudies: typeof value.hasBibleStudies === "boolean" ? value.hasBibleStudies : DEFAULT.hasBibleStudies,
     categorySettings: normalizeCategoryConfigs(value.categorySettings),
+    defaultCategory: typeof value.defaultCategory === "string" ? value.defaultCategory : DEFAULT.defaultCategory,
     completed: typeof value.completed === "boolean" ? value.completed : DEFAULT.completed,
     language: isLanguage(value.language) ? value.language : DEFAULT.language,
     notifTimerOverrun: typeof value.notifTimerOverrun === "boolean" ? value.notifTimerOverrun : DEFAULT.notifTimerOverrun,
     notifTimer3h: typeof value.notifTimer3h === "boolean" ? value.notifTimer3h : DEFAULT.notifTimer3h,
     notifMonthlyGoal: typeof value.notifMonthlyGoal === "boolean" ? value.notifMonthlyGoal : DEFAULT.notifMonthlyGoal,
+    notifUnlogged: typeof value.notifUnlogged === "boolean" ? value.notifUnlogged : DEFAULT.notifUnlogged,
+    largeText: typeof value.largeText === "boolean" ? value.largeText : DEFAULT.largeText,
     autoDarkMode: typeof value.autoDarkMode === "boolean" ? value.autoDarkMode : DEFAULT.autoDarkMode,
+    autoBackupEnabled: typeof value.autoBackupEnabled === "boolean" ? value.autoBackupEnabled : DEFAULT.autoBackupEnabled,
+    autoBackupFreq: (value.autoBackupFreq === 'daily' || value.autoBackupFreq === 'weekly' || value.autoBackupFreq === 'monthly') ? value.autoBackupFreq : DEFAULT.autoBackupFreq,
   };
 }
 
@@ -98,8 +116,10 @@ export function useSetup() {
     });
   }, []);
 
-  const completeSetup = useCallback((data: Omit<SetupData, "completed">) => {
-    const updated = { ...data, completed: true };
+  const completeSetup = useCallback((data: Partial<Omit<SetupData, "completed">>) => {
+    // Fusiona con los valores por defecto para que el objeto quede completo
+    // aunque la pantalla de configuración sólo aporte un subconjunto de campos.
+    const updated: SetupData = { ...DEFAULT, ...data, completed: true };
     setSetup(updated);
     void writeJsonValue("setup", updated).catch((error) => console.error("Failed to persist setup data:", error, updated));
   }, []);

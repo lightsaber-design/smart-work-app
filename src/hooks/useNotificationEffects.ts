@@ -3,10 +3,10 @@ import { Capacitor } from "@capacitor/core";
 import type { CalendarEvent } from "@/hooks/useCalendarEvents";
 import type { TimeEntry } from "@/hooks/useTimeTracker";
 import type { EstudioContact } from "@/hooks/useEstudios";
-import { isStalePendingSession } from "@/hooks/useEstudios";
-import { scheduleEventNotification, cancelEventNotification } from "@/lib/notifications";
+import { isStalePendingSession, isSessionDone } from "@/hooks/useEstudios";
+import { scheduleEventNotification, cancelEventNotification, registerStudyActionType, STUDY_ACTION_TYPE } from "@/lib/notifications";
 import { getEventEndDate } from "@/lib/timerOverrun";
-import { timerLongRunFireAt, getGoalStatus, currentMonthKey } from "@/lib/notificationRules";
+import { timerLongRunFireAt, getGoalStatus, currentMonthKey, getForgottenContacts } from "@/lib/notificationRules";
 import { getCategoryLabel } from "@/lib/categories";
 import { startTimerNotification, stopTimerNotification } from "@/lib/timerNotification";
 
@@ -26,6 +26,7 @@ interface UseNotificationEffectsParams {
   notifTimerOverrun: boolean;
   notifTimer3h: boolean;
   notifMonthlyGoal: boolean;
+  notifUnlogged: boolean;
   // Travel time for overrun threshold
   travelTimeEnabled: boolean;
   travelTimeMinutes: number;
@@ -44,6 +45,7 @@ export function useNotificationEffects({
   notifTimerOverrun,
   notifTimer3h,
   notifMonthlyGoal,
+  notifUnlogged,
   travelTimeEnabled,
   travelTimeMinutes,
 }: UseNotificationEffectsParams) {
@@ -53,6 +55,11 @@ export function useNotificationEffects({
   // Rastrea el estado pending anterior de cada sesión para detectar
   // cuándo pasa de pendiente → completada y cancelar su notificación.
   const sessionPendingRef = useRef<Map<string, boolean>>(new Map());
+
+  // ── Registrar botones Sí/No para los recordatorios de estudio ──────────────
+  useEffect(() => {
+    void registerStudyActionType(t("notif_action_yes"), t("notif_action_no"));
+  }, [t]);
 
   // ── Schedule / cancel native event reminders ────────────────────────────────
   // Nota: scheduledEventFireTimes es in-memory y se vacía al reiniciar la app.
@@ -87,6 +94,7 @@ export function useNotificationEffects({
         t("notif_activity_upcoming"),
         t("notif_activity_upcoming_body", { category: getCategoryLabel(event.category, t) }),
         fireAt,
+        { extra: { route: "calendar", eventId: event.id } },
       ).then((scheduled) => {
         if (scheduled) scheduledEventFireTimes.current.set(event.id, fireAtMs);
         else if (scheduledEventFireTimes.current.get(event.id) === fireAtMs)
@@ -129,6 +137,7 @@ export function useNotificationEffects({
       t("timer_overrun_title"),
       t("timer_overrun_notification_body", { category: getCategoryLabel(activeScheduledEvent.category, t) }),
       fireAt.getTime() > Date.now() ? fireAt : new Date(Date.now() + 1_000),
+      { extra: { route: "timer" } },
     );
   }, [activeEntry, activeScheduledEvent, notifTimerOverrun, t, travelTimeEnabled, travelTimeMinutes]);
 
@@ -151,6 +160,7 @@ export function useNotificationEffects({
       t("notif_timer_3h_title"),
       t("notif_timer_3h_body"),
       timerLongRunFireAt(activeEntry.startTime),
+      { extra: { route: "timer" } },
     );
   }, [activeEntry, notifTimer3h, t]);
 
@@ -203,6 +213,10 @@ export function useNotificationEffects({
           t("notif_study_missed_title"),
           t(isToday ? "notif_study_missed_today" : "notif_study_missed_week", { name: contact.name }),
           new Date(Date.now() + 2_000),
+          {
+            actionTypeId: STUDY_ACTION_TYPE,
+            extra: { route: "study", contactId: contact.id, sessionId: session.id },
+          },
         );
       }
     }
@@ -244,7 +258,7 @@ export function useNotificationEffects({
 
       const { schedule } = contact;
       const lastDone = contact.sessions
-        .filter((s) => s.pending === false)
+        .filter(isSessionDone)
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] ?? null;
       const lessonSuffix = lastDone?.lesson
         ? t("notif_study_ctx_lesson").replace("{lesson}", lastDone.lesson)
@@ -268,6 +282,10 @@ export function useNotificationEffects({
           t("notif_study_missed_title"),
           t("notif_study_missed_today", { name: contact.name }) + lessonSuffix,
           new Date(Date.now() + 1_000),
+          {
+            actionTypeId: STUDY_ACTION_TYPE,
+            extra: { route: "study", contactId: contact.id },
+          },
         );
       } else {
         void cancelEventNotification(fixedId);
@@ -283,10 +301,63 @@ export function useNotificationEffects({
           t("notif_study_missed_title"),
           t("notif_study_missed_week", { name: contact.name }) + lessonSuffix,
           nextSundayEvening(),
+          {
+            actionTypeId: STUDY_ACTION_TYPE,
+            extra: { route: "study", contactId: contact.id },
+          },
         );
       }
     });
   }, [estudiosContacts, isTimerRunning, t]);
+
+  // ── Contactos olvidados (sin cita en >14 días) ─────────────────────────────
+  useEffect(() => {
+    const forgotten = getForgottenContacts(estudiosContacts);
+    if (forgotten.length === 0) return;
+
+    const storageKey = `_ml_forgotten_${new Date().toDateString()}`;
+    try { if (localStorage.getItem(storageKey)) return; } catch { return; }
+    try { localStorage.setItem(storageKey, "1"); } catch { /* nada */ }
+
+    const body =
+      forgotten.length === 1
+        ? t("notif_study_reminder_body", { name: forgotten[0].name })
+        : t("notif_study_reminder_body_multi", { count: forgotten.length });
+
+    void scheduleEventNotification(
+      "forgotten-contacts",
+      t("notif_study_reminder_title"),
+      body,
+      new Date(Date.now() + 2_000),
+      { extra: { route: "estudios" } },
+    );
+  }, [estudiosContacts, t]);
+
+  // ── Actividad del calendario que pasó sin fichar ───────────────────────────
+  // Avisa una vez por evento cuando su hora pasó (margen 30 min) y sigue sin
+  // completarse, dentro de las últimas 24 h para no arrastrar pendientes viejos.
+  useEffect(() => {
+    if (!notifUnlogged) return;
+    const now = Date.now();
+    for (const event of calendarEvents) {
+      if (event.completed) continue;
+      if (activeScheduledEvent?.id === event.id) continue;
+      const sincePassed = now - event.date.getTime();
+      if (sincePassed <= 30 * 60_000) continue;
+      if (sincePassed >= 24 * 3_600_000) continue;
+      const key = `_ml_unlogged_${event.id}`;
+      try { if (localStorage.getItem(key)) continue; } catch { continue; }
+      try { localStorage.setItem(key, "1"); } catch { /* nada */ }
+      const time = `${String(event.date.getHours()).padStart(2, "0")}:${String(event.date.getMinutes()).padStart(2, "0")}`;
+      void scheduleEventNotification(
+        `unlogged-${event.id}`,
+        t("notif_unlogged_title"),
+        t("notif_unlogged_body", { category: getCategoryLabel(event.category, t), time }),
+        new Date(Date.now() + 1_000),
+        { extra: { route: "calendar", eventId: event.id } },
+      );
+    }
+  }, [calendarEvents, activeScheduledEvent, notifUnlogged, t]);
 
   // ── Meta mensual ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -305,6 +376,7 @@ export function useNotificationEffects({
         t("notif_goal_reached_title"),
         t("notif_goal_reached_body"),
         new Date(Date.now() + 1_000),
+        { extra: { route: "stats" } },
       );
     } else if (status.kind === "reminder") {
       const key = `_ml_goal_reminder_${monthKey}`;
@@ -318,6 +390,7 @@ export function useNotificationEffects({
           days: String(status.daysLeft),
         }),
         new Date(Date.now() + 1_000),
+        { extra: { route: "stats" } },
       );
     }
   }, [calMonthMs, notifMonthlyGoal, precursorHours, t]);

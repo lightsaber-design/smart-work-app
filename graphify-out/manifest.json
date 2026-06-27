@@ -1,0 +1,550 @@
+{
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\App.tsx": {
+    "mtime": 1780077186.850177,
+    "hash": "7c0b66aba5cfe054e16608cf83b52580"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\main.tsx": {
+    "mtime": 1777841061.9806287,
+    "hash": "a13834a852d3cec713be3cbea56f6016"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\vite-env.d.ts": {
+    "mtime": 1776687451.8631387,
+    "hash": "8f68c27c3fc38817b2726b20e2d4f1ee"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ActivityHoursConfig.tsx": {
+    "mtime": 1779463082.7235713,
+    "hash": "74d8984e65f3bccc3b418dbe5ff1664c"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\BottomNav.tsx": {
+    "mtime": 1779867879.8301451,
+    "hash": "7a208d7c723bb85a086a9c2f21ed7953"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\CalendarView.tsx": {
+    "mtime": 1780081142.5173597,
+    "hash": "e5fe4b7df45a2c17e31af9ac12812972"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\CategoryIcon.tsx": {
+    "mtime": 1779481352.3276737,
+    "hash": "eab1dd29a6972afceabeac7f412ec653"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\CitySearch.tsx": {
+    "mtime": 1779478647.3807442,
+    "hash": "426ae2da5734512ca23aada8ddfd4401"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ClockButton.tsx": {
+    "mtime": 1780731891.448361,
+    "hash": "2f75dd0bf72beadf96059a258a4c7df2"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\DaySummary.tsx": {
+    "mtime": 1776701564.783096,
+    "hash": "6549d3bf7ca6b191994178955ef5138b"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ErrorBoundary.tsx": {
+    "mtime": 1779707901.5499399,
+    "hash": "ebfe5f89a09d9331992b1c6e5c58e208"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\EstudiosView.tsx": {
+    "mtime": 1780605484.3137205,
+    "hash": "9595a193a173dc8bf8e1e20b7130245c"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\LanguageFlag.tsx": {
+    "mtime": 1779522576.9163554,
+    "hash": "2576aa76320fcdef8fd22bd8c60b18a7"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\LocationMap.tsx": {
+    "mtime": 1779184896.097049,
+    "hash": "77dbc7362e6f721f6c6080dc38bfff58"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\LocationPicker.tsx": {
+    "mtime": 1779478659.5592897,
+    "hash": "7f76895ab3d9edb21da7487cbceca220"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\MinistryMark.tsx": {
+    "mtime": 1779610392.9758701,
+    "hash": "9c7112ef5a99f0ebca90526c0cf090bc"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\MissedStudyBanner.tsx": {
+    "mtime": 1780731913.8148894,
+    "hash": "2450aa4b78558fce18497bc2d01374d5"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\NavLink.tsx": {
+    "mtime": 1776687451.8111682,
+    "hash": "889a81fd2eb948eb406c9ccabe175918"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\PrecursorHoursConfig.tsx": {
+    "mtime": 1779464802.6931715,
+    "hash": "e6bcb0bf80495f201c856a8b8e142e53"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\SettingsView.tsx": {
+    "mtime": 1780216635.3729467,
+    "hash": "8430831acaccaa44970ab5277c97fc2f"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\SetupScreen.tsx": {
+    "mtime": 1780216635.3739467,
+    "hash": "6c2a8a28affef10ce27611d13bf08ad4"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\StatsView.tsx": {
+    "mtime": 1780473427.269731,
+    "hash": "0535a4998e0ece3ca507d7cf36e34984"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\TimeEntryList.tsx": {
+    "mtime": 1780078750.6433904,
+    "hash": "71984ad4166f499d41b698c43f369098"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\TimeSelect.tsx": {
+    "mtime": 1779101212.7982647,
+    "hash": "afb93b1c2bcdd357f3782686ae22142e"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\TravelTimeConfig.tsx": {
+    "mtime": 1779463094.2807994,
+    "hash": "838255cc0cfe0ba3579cb0c83af2a674"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\accordion.tsx": {
+    "mtime": 1776687451.8131676,
+    "hash": "ff8f54b79a7a2bc4fed8c092dd7a1f4b"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\alert-dialog.tsx": {
+    "mtime": 1776687451.814167,
+    "hash": "9e4e4984ede953adcc023d60c017a968"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\alert.tsx": {
+    "mtime": 1776687451.814167,
+    "hash": "eba34d3096d7c23bcdf5dfb1e725ecff"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\aspect-ratio.tsx": {
+    "mtime": 1776687451.815166,
+    "hash": "14c12661aad8c80328c86a18b506c088"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\avatar.tsx": {
+    "mtime": 1776687451.815166,
+    "hash": "7b447f617f7d654c70050259fbf6dbc0"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\badge.tsx": {
+    "mtime": 1776687451.815166,
+    "hash": "09261d891c581ebf021af2989fe75d60"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\breadcrumb.tsx": {
+    "mtime": 1776687451.816166,
+    "hash": "c277fb2bb0886444a6c8a00296ad924e"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\button.tsx": {
+    "mtime": 1776687451.8171654,
+    "hash": "854ce263491269d5b7db6d0828a63f9a"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\calendar.tsx": {
+    "mtime": 1779911393.5501256,
+    "hash": "322749976980eb1e188dcf847e66dcdd"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\card.tsx": {
+    "mtime": 1776687451.8191676,
+    "hash": "0e2d94c650cf4fae76b4c5e0f14dd858"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\carousel.tsx": {
+    "mtime": 1776687451.8201659,
+    "hash": "7d3e5a6ed21d4690d498e8a60b52868a"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\chart.tsx": {
+    "mtime": 1776687451.821163,
+    "hash": "4360d46060e32c8aafbc140a482a03fa"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\checkbox.tsx": {
+    "mtime": 1776687451.821163,
+    "hash": "76ca6b8de39bdac0ff7620b301077963"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\collapsible.tsx": {
+    "mtime": 1776687451.8221643,
+    "hash": "72fafa9d8b58f83ec9b7c8f141bfdd42"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\command.tsx": {
+    "mtime": 1777840206.0506983,
+    "hash": "999fd6fcdd60cefb112e6ad522d67996"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\context-menu.tsx": {
+    "mtime": 1776687451.8231623,
+    "hash": "bf02a92d910af3af76b1e417a76cbd6a"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\dialog.tsx": {
+    "mtime": 1776687451.8231623,
+    "hash": "8c4a577dcf79d0ba30c2749f909fa932"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\drawer.tsx": {
+    "mtime": 1776687451.824162,
+    "hash": "a73521d8fbccde731eae7f2f81f5875b"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\dropdown-menu.tsx": {
+    "mtime": 1776687451.825163,
+    "hash": "deab6e248bcccb2e52ad13736bf5952e"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\form.tsx": {
+    "mtime": 1776687451.8261614,
+    "hash": "4d27bc8211e0505103bbd930275570c6"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\hover-card.tsx": {
+    "mtime": 1776687451.8291588,
+    "hash": "a7927cc49ef796b0c725ecd0869c9f95"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\input-otp.tsx": {
+    "mtime": 1776687451.8291588,
+    "hash": "7217a7c6bceca8030298e2252204ae40"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\input.tsx": {
+    "mtime": 1776687451.8301592,
+    "hash": "c9e808ff72f69a97513b516a31d5705a"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\label.tsx": {
+    "mtime": 1776687451.8311577,
+    "hash": "a8c075269b5971c2ab072603b5166cc2"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\menubar.tsx": {
+    "mtime": 1776687451.8311577,
+    "hash": "8d6dd42e35e9410e97a725c64c02f0a6"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\navigation-menu.tsx": {
+    "mtime": 1776687451.8321567,
+    "hash": "2d91ffeee8627f37b4733949b3373a23"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\pagination.tsx": {
+    "mtime": 1776687451.8321567,
+    "hash": "4d09c500f83dd4b754b74d03b79527ba"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\popover.tsx": {
+    "mtime": 1776687451.8351552,
+    "hash": "63380a8f575f8a1a5277caeb4971919f"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\progress.tsx": {
+    "mtime": 1776687451.836155,
+    "hash": "b0d4b1791f1da120f5eed107f235edce"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\radio-group.tsx": {
+    "mtime": 1776687451.836155,
+    "hash": "6c2a4c39fb3f889fe94b854b7198b5ed"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\resizable.tsx": {
+    "mtime": 1776687451.837154,
+    "hash": "ed49053e380e461e2ca75f7a3fe67236"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\scroll-area.tsx": {
+    "mtime": 1776687451.8381543,
+    "hash": "f86e3f716ed7c692309c1a48d85ce2c9"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\select.tsx": {
+    "mtime": 1777064350.205787,
+    "hash": "5d7fb5c1722d2c4c800445379f33a482"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\separator.tsx": {
+    "mtime": 1776687451.839154,
+    "hash": "1810b24a008c00cd43c0b5ad9f3e4c6b"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\sheet.tsx": {
+    "mtime": 1776687451.8411534,
+    "hash": "d01d85069ebcb54849277fce060ebfea"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\sidebar.tsx": {
+    "mtime": 1776687451.8421514,
+    "hash": "47158040377f0ab1d4610e976529ef9c"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\skeleton.tsx": {
+    "mtime": 1776687451.8421514,
+    "hash": "6433d7c535e132083b2c1bcb57373fff"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\slider.tsx": {
+    "mtime": 1776687451.843151,
+    "hash": "977286428ad957ed73e428525450f9cb"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\sonner.tsx": {
+    "mtime": 1776687451.843151,
+    "hash": "f375774f847d020348cd21d524d28c75"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\switch.tsx": {
+    "mtime": 1776687451.8441503,
+    "hash": "57fa755b8dcfe75538bc523ac3e0bb0e"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\table.tsx": {
+    "mtime": 1776687451.8451507,
+    "hash": "d73905fa73678181cb9f8baa91b3f222"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\tabs.tsx": {
+    "mtime": 1776687451.8461492,
+    "hash": "33c494eaa3811114e89a89fbbb0a1a02"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\textarea.tsx": {
+    "mtime": 1777840206.0547006,
+    "hash": "b172b24c6273b5ea1c9450c4c3bd35e4"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\toast.tsx": {
+    "mtime": 1776687451.8471487,
+    "hash": "0e2ba363f7d8b176dea467284711fea5"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\toaster.tsx": {
+    "mtime": 1776687451.8481474,
+    "hash": "0f5d0fdbcc2d4611e59994af4393e27e"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\toggle-group.tsx": {
+    "mtime": 1776687451.8481474,
+    "hash": "fc5bff5bf4bb6714e6eaf85dcdeb65b9"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\toggle.tsx": {
+    "mtime": 1776687451.8491468,
+    "hash": "2342cfa40b5b31148997f87d1642359e"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\tooltip.tsx": {
+    "mtime": 1776687451.8511467,
+    "hash": "c050f1e97cf8e200ecf88681073c90cb"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\components\\ui\\use-toast.ts": {
+    "mtime": 1776687451.8531463,
+    "hash": "5bff9ea3904b15a9e1908b128c88e75f"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\use-mobile.tsx": {
+    "mtime": 1776687451.8561447,
+    "hash": "1bb3ebac7752b497a78d34e341975bbd"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\use-toast.ts": {
+    "mtime": 1776687451.857143,
+    "hash": "895be3e18021c7c5cd4fac68ea522dd4"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useCalendarEvents.test.tsx": {
+    "mtime": 1780083334.9567962,
+    "hash": "636b3297dcfce5e219dcabb0fad9c00e"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useCalendarEvents.ts": {
+    "mtime": 1780080898.7859192,
+    "hash": "cdf5e1675c30c61a644b631bc60357da"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useCategoryFilter.ts": {
+    "mtime": 1779432802.2865007,
+    "hash": "800ccf406c17efada23d5c8df4ffc324"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useDarkMode.ts": {
+    "mtime": 1778265978.3364792,
+    "hash": "c65fe1ed5917de318b24dd1fa437c6d7"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useDebouncedJsonWriter.ts": {
+    "mtime": 1780079250.2158186,
+    "hash": "8dde7886f97e07fad84b55ed613a8fa9"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useEstudios.test.tsx": {
+    "mtime": 1780083534.7435024,
+    "hash": "1931ab35f2152943c7241d3c755433b5"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useEstudios.ts": {
+    "mtime": 1780731872.6519227,
+    "hash": "d3b6759b69ed96eaa4db5aece327643e"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useFavoritePlaces.test.tsx": {
+    "mtime": 1780083534.738505,
+    "hash": "b8cffb8bf6a8597c56093ee5a4c67372"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useFavoritePlaces.ts": {
+    "mtime": 1778265579.1934495,
+    "hash": "e0fffef43df5e73aa77062c6e55891df"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useJsonStorage.ts": {
+    "mtime": 1780038837.7669756,
+    "hash": "6a7087a0b9f17e33d06d81d29ffb2f8c"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useMonthlyReportCarryover.ts": {
+    "mtime": 1778400097.31906,
+    "hash": "9001c5f08938a816656080fd25fab017"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useNotificationEffects.ts": {
+    "mtime": 1780646053.4688435,
+    "hash": "da571114eadef52863560f048bf3eb42"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useScrollLock.ts": {
+    "mtime": 1778263718.9742696,
+    "hash": "7ad8d64d0e76f224c8c1af4432431aa0"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useSetup.ts": {
+    "mtime": 1780216635.3759465,
+    "hash": "68a97d6ef1c3a7d2d95ad6fa33666fbd"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useSpecialCampaign.ts": {
+    "mtime": 1778265699.7587843,
+    "hash": "c1fbe7be76dada7ef2911b0c93258182"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useTimeTracker.test.tsx": {
+    "mtime": 1780083215.4999864,
+    "hash": "5adb8e29c05c9a0f88fd94a6fdc27899"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useTimeTracker.ts": {
+    "mtime": 1780080958.092605,
+    "hash": "36c1532d2bf72c82ca9493744b3682c9"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\hooks\\useWeather.ts": {
+    "mtime": 1780084506.287591,
+    "hash": "6a583597ed984967ab94c724693e0186"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\activityHours.test.ts": {
+    "mtime": 1780083534.731504,
+    "hash": "8583c5290e0703805055a0953aa6d95b"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\activityHours.ts": {
+    "mtime": 1779101462.248114,
+    "hash": "1696424e02b02623f168434d1bce15c0"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\categories.test.ts": {
+    "mtime": 1780083534.7335038,
+    "hash": "556e017ff74cc95303daafe8f8e9c7de"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\categories.ts": {
+    "mtime": 1779481397.3725877,
+    "hash": "dbf3d8076ffcb0931d37338c2d730c83"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\dateFormat.ts": {
+    "mtime": 1779522947.4125385,
+    "hash": "e7c4f397e4e48729fc8543c4c25cb007"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\eventReminders.test.ts": {
+    "mtime": 1778401479.0538611,
+    "hash": "dcc5e43f2597bd3eb8a3242aaced6991"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\eventReminders.ts": {
+    "mtime": 1780073459.636282,
+    "hash": "49d1c062e7774f2dbde149a937d31b58"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\i18n.test.ts": {
+    "mtime": 1780083187.6868796,
+    "hash": "eccc7e94644a9773f573bb3f5ce39157"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\i18n.ts": {
+    "mtime": 1780395736.942881,
+    "hash": "65e118ebfd62409a7ef5ddfe2482950a"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\jsonFileStorage.test.ts": {
+    "mtime": 1780083197.4194221,
+    "hash": "d814cad093c5cab7ce91fc6846d25bce"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\jsonFileStorage.ts": {
+    "mtime": 1780078598.5359411,
+    "hash": "98e3ff6ae00ece3bb7298e018ad2f5de"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\LanguageContext.tsx": {
+    "mtime": 1780473706.5244656,
+    "hash": "890aab948ebc27af917b894dfe49623c"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\ldcCap.test.ts": {
+    "mtime": 1778491922.51163,
+    "hash": "693ec0acf61c1c8bb7fff15b88c38d30"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\ldcCap.ts": {
+    "mtime": 1779433276.277058,
+    "hash": "1325c7761e15d594722bc1391631f017"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\maps.test.ts": {
+    "mtime": 1779184884.665141,
+    "hash": "f7b10527266f114a6853659617346e79"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\maps.ts": {
+    "mtime": 1779184884.663142,
+    "hash": "ca942c5465d377d8a26fbec08a315cad"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\monthlyReport.test.ts": {
+    "mtime": 1778400097.3220599,
+    "hash": "aa3327eafaacdabdc50243f9fc7522bb"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\monthlyReport.ts": {
+    "mtime": 1778400097.3150685,
+    "hash": "dc9158a06bee975327b92ddb194a279f"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\notificationRules.test.ts": {
+    "mtime": 1780083005.9333963,
+    "hash": "2c851f76d41d73af4ed78c0da992c433"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\notificationRules.ts": {
+    "mtime": 1780075821.8508961,
+    "hash": "16c7ff69aeb14f7ff63b4971eb499818"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\notifications.ts": {
+    "mtime": 1780646031.573084,
+    "hash": "d3f66416b3f1757083d9fff386b19687"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\placeNames.test.ts": {
+    "mtime": 1780083534.7345052,
+    "hash": "b7691831d8ce2f1e9c1221075d736aa2"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\placeNames.ts": {
+    "mtime": 1779478638.7749126,
+    "hash": "16640d639e95d18962db110cac0bd26d"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\sessionFiles.ts": {
+    "mtime": 1777794114.0460997,
+    "hash": "ead30978af0a73d83b2adb3f8119a2a2"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\time.ts": {
+    "mtime": 1778157862.19282,
+    "hash": "72e93072599e20ed4883d3dacd7175f7"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\timerOverrun.test.ts": {
+    "mtime": 1778873640.9993947,
+    "hash": "ba793bdd4b99d5a3d0d24765c6e001e7"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\timerOverrun.ts": {
+    "mtime": 1778873627.6032577,
+    "hash": "62f22121a3ff1e82ac77172eb3f0e506"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\utils.ts": {
+    "mtime": 1776687451.8601415,
+    "hash": "e3f848f1b39f863e6164cf58b5a8e752"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\uuid.test.ts": {
+    "mtime": 1780083534.736504,
+    "hash": "249dcd20170f2cb129f172460ffe57a0"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\uuid.ts": {
+    "mtime": 1778263718.96627,
+    "hash": "9f144ce608bb89dd2c722a28d5e01b00"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\weatherUtils.ts": {
+    "mtime": 1780084506.2895908,
+    "hash": "1b5d353641452575b4119388d8bea63d"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\i18n\\de.ts": {
+    "mtime": 1780395768.1124382,
+    "hash": "a8db3dfd31691ab161bc09f9c5daec90"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\i18n\\en.ts": {
+    "mtime": 1780395766.8371983,
+    "hash": "0e14273ce522c823dd495d67479eb2b0"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\i18n\\fr.ts": {
+    "mtime": 1780473783.8075094,
+    "hash": "a2a2c3a4e2b91265e527843cd5a2e085"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\i18n\\it.ts": {
+    "mtime": 1780473784.2438095,
+    "hash": "1d91ed90d167123602490efa19935075"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\lib\\i18n\\pt.ts": {
+    "mtime": 1780395772.6685774,
+    "hash": "4198fe54072118c7162e92a52128609a"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\pages\\Index.tsx": {
+    "mtime": 1780676050.5423212,
+    "hash": "8c8944892395b0448def8b9332086447"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\pages\\NotFound.tsx": {
+    "mtime": 1779707978.0045483,
+    "hash": "6da10ee3766f135d9adfe59a0d5b694f"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\pages\\tabs\\HomeTab.tsx": {
+    "mtime": 1780605579.031028,
+    "hash": "9a14b0d16c94cd0f4d242bdde88a712a"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\pages\\tabs\\TimerOverrunPrompt.tsx": {
+    "mtime": 1780084506.2945893,
+    "hash": "9b966b8311a980e3ebf5ef508fa0d473"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\pages\\tabs\\TimerTab.tsx": {
+    "mtime": 1780084506.29559,
+    "hash": "25dd56e54701176d2f6a671512d403a1"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\test\\example.test.ts": {
+    "mtime": 1777841473.1532135,
+    "hash": "bf4eb04af366d230427a5334088cae73"
+  },
+  "C:\\Users\\marco\\Documents\\smart-work-app\\src\\test\\setup.ts": {
+    "mtime": 1776687451.8631387,
+    "hash": "e70c804c294f3f04e80e7a8351de899e"
+  }
+}

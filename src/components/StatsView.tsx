@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CalendarEvent, EventCategory } from "@/hooks/useCalendarEvents";
+import { EventCategory } from "@/hooks/useCalendarEvents";
 import { TimeEntry } from "@/hooks/useTimeTracker";
 import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { useCategoryFilter } from "@/hooks/useCategoryFilter";
@@ -16,8 +16,6 @@ import { formatMonthYear, formatShortMonth } from "@/lib/dateFormat";
 interface StatsViewProps {
   entries: TimeEntry[];
   allEntries: TimeEntry[];
-  monthTotal: number;
-  calendarEvents: CalendarEvent[];
   precursorHours?: number | null;
   specialCampaignGoals?: Record<string, CampaignGoal>;
   onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
@@ -29,8 +27,6 @@ interface StatsViewProps {
 export function StatsView({
   entries,
   allEntries,
-  monthTotal,
-  calendarEvents,
   precursorHours,
   specialCampaignGoals,
   onSetSpecialCampaign,
@@ -51,30 +47,20 @@ export function StatsView({
   const now = useMemo(() => new Date(todayKey), [todayKey]);
 
   // ── MENSUAL ──────────────────────────────────────────────────────────────
-  const monthCompletedEvents = useMemo(
-    () => calendarEvents.filter(
-      (e) => e.completed && e.date.getMonth() === now.getMonth() && e.date.getFullYear() === now.getFullYear()
-    ),
-    [calendarEvents, now]
-  );
-
+  // Fuente de verdad: TimeEntries (el timer siempre ha escrito ahí)
   const { completedMsByCategory, completedCountByCategory } =
     useMemo(
-      () => monthCompletedEvents.reduce(
+      () => entries.reduce(
         (acc, e) => {
           if (!e.endTime) return acc;
-          const [h, m] = e.endTime.split(":").map(Number);
-          const end = new Date(e.date);
-          end.setHours(h, m, 0, 0);
-          const ms = Math.max(0, end.getTime() - e.date.getTime());
-          acc.completedMs += ms;
+          const ms = Math.max(0, e.endTime.getTime() - e.startTime.getTime());
           acc.completedMsByCategory[e.category] = (acc.completedMsByCategory[e.category] ?? 0) + ms;
           acc.completedCountByCategory[e.category] = (acc.completedCountByCategory[e.category] ?? 0) + 1;
           return acc;
         },
-        { completedMs: 0, completedMsByCategory: {} as Record<string, number>, completedCountByCategory: {} as Record<string, number> }
+        { completedMsByCategory: {} as Record<string, number>, completedCountByCategory: {} as Record<string, number> }
       ),
-      [monthCompletedEvents]
+      [entries]
     );
 
   const maxCompletedMs = Math.max(...Object.values(completedMsByCategory), 1);
@@ -117,20 +103,18 @@ export function StatsView({
     return { month: calMonth, year: calYear, isCurrentMonth: calMonth === now.getMonth() && calYear === now.getFullYear() };
   }), [now, serviceYearStart]);
 
-  const yearCompletedEvents = useMemo(
-    () => calendarEvents.filter((e) => e.completed && e.date >= serviceYearFrom && e.date < serviceYearTo),
-    [calendarEvents, serviceYearFrom, serviceYearTo]
+  const serviceYearEntries = useMemo(
+    () => allEntries.filter((e) => e.endTime && e.startTime >= serviceYearFrom && e.startTime < serviceYearTo),
+    [allEntries, serviceYearFrom, serviceYearTo]
   );
 
   const { monthBars, yearlyCategoryTotals, maxMonthMs, yearMsByCategory, maxYearCatMs, yearFilteredMs } = useMemo(() => {
     const catTotals = includedCategories.map((cat) => ({ cat, ms: 0 }));
     const bars = serviceYearMonths.map(({ month, year, isCurrentMonth }) => {
-      const monthMsByCategory = yearCompletedEvents.reduce<Record<string, number>>((acc, event) => {
-        if (event.date.getMonth() !== month || event.date.getFullYear() !== year || !event.endTime) return acc;
-        const [h, m] = event.endTime.split(":").map(Number);
-        const end = new Date(event.date);
-        end.setHours(h, m, 0, 0);
-        acc[event.category] = (acc[event.category] ?? 0) + Math.max(0, end.getTime() - event.date.getTime());
+      const monthMsByCategory = serviceYearEntries.reduce<Record<string, number>>((acc, e) => {
+        if (e.startTime.getMonth() !== month || e.startTime.getFullYear() !== year) return acc;
+        const ms = Math.max(0, e.endTime!.getTime() - e.startTime.getTime());
+        acc[e.category] = (acc[e.category] ?? 0) + ms;
         return acc;
       }, {});
       const monthTotals = includedCategories.map((cat) => ({ cat, ms: monthMsByCategory[cat] ?? 0 }));
@@ -150,7 +134,7 @@ export function StatsView({
       maxYearCatMs: Math.max(...activeCategoryNames.map((c) => catMap[c] ?? 0), 1),
       yearFilteredMs: catTotals.reduce((s, i) => s + i.ms, 0),
     };
-  }, [yearCompletedEvents, serviceYearMonths, includedCategories, activeCategoryConfigs, activeCategoryNames]);
+  }, [serviceYearEntries, serviceYearMonths, includedCategories, activeCategoryConfigs, activeCategoryNames]);
 
   return (
     <div className="px-5 pt-4 space-y-4 pb-24">
@@ -251,14 +235,14 @@ export function StatsView({
             const goalRemaining = goalMs > 0 ? Math.max(0, goalMs - monthlyFilteredMs) : 0;
             const goalDone = goalMs > 0 && monthlyFilteredMs >= goalMs;
             return (
-              <div className="rounded-2xl bg-card border border-border shadow-sm px-5 py-4">
+              <div className="rounded-3xl bg-card border border-border shadow-xl px-5 py-5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-muted-foreground mb-0.5">
                       {formatMonthYear(now, locale)}
                       {hasExclusions && <span className="ml-1 text-primary/70">· {t("stats_filtered")}</span>}
                     </p>
-                    <p className="text-2xl font-bold text-foreground tabular-nums">
+                    <p className="text-3xl font-black text-foreground tabular-nums leading-none">
                       {monthlyFilteredMs > 0 ? msToLabel(monthlyFilteredMs) : "–"}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">{t("stats_registered_hours")}</p>

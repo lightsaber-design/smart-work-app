@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Search, X, BookOpen, Calendar, User } from "lucide-react";
-import { EstudioContact, EstudioSession } from "@/hooks/useEstudios";
+import { Search, X, BookOpen, Calendar, User, Mic } from "lucide-react";
+import { EstudioContact, EstudioSession, isSessionDone } from "@/hooks/useEstudios";
 import { CalendarEvent } from "@/hooks/useCalendarEvents";
 
 type ContactResult = { kind: "contact"; contact: EstudioContact };
@@ -30,7 +30,18 @@ export function GlobalSearch({
   locale,
 }: GlobalSearchProps) {
   const [query, setQuery] = useState("");
+  const [listening, setListening] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<unknown>(null);
+
+  // Web Speech API: solo disponible en algunos navegadores (no en el WebView de
+  // Android por defecto). Si no existe, no mostramos el botón de voz.
+  const SpeechRecognitionCtor =
+    typeof window !== "undefined"
+      ? ((window as unknown as Record<string, unknown>).SpeechRecognition ||
+        (window as unknown as Record<string, unknown>).webkitSpeechRecognition)
+      : undefined;
+  const voiceSupported = Boolean(SpeechRecognitionCtor);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -38,6 +49,46 @@ export function GlobalSearch({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Limpia el reconocimiento al desmontar.
+  useEffect(() => () => {
+    try { (recognitionRef.current as { stop?: () => void } | null)?.stop?.(); } catch { /* nada */ }
+  }, []);
+
+  const startVoiceSearch = () => {
+    if (!voiceSupported) return;
+    if (listening) {
+      try { (recognitionRef.current as { stop?: () => void } | null)?.stop?.(); } catch { /* nada */ }
+      return;
+    }
+    try {
+      const Ctor = SpeechRecognitionCtor as new () => {
+        lang: string;
+        interimResults: boolean;
+        maxAlternatives: number;
+        onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void;
+        onend: () => void;
+        onerror: () => void;
+        start: () => void;
+        stop: () => void;
+      };
+      const rec = new Ctor();
+      recognitionRef.current = rec;
+      rec.lang = locale || "es-ES";
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      rec.onresult = (e) => {
+        const transcript = e.results?.[0]?.[0]?.transcript ?? "";
+        if (transcript) setQuery(transcript);
+      };
+      rec.onend = () => setListening(false);
+      rec.onerror = () => setListening(false);
+      setListening(true);
+      rec.start();
+    } catch {
+      setListening(false);
+    }
+  };
 
   const q = query.trim().toLowerCase();
 
@@ -53,7 +104,7 @@ export function GlobalSearch({
         out.push({ kind: "contact", contact });
       }
       for (const session of contact.sessions) {
-        if (session.pending === false) continue;
+        if (!isSessionDone(session)) continue;
         if (
           session.lesson?.toLowerCase().includes(q) ||
           session.notes?.toLowerCase().includes(q)
@@ -66,7 +117,7 @@ export function GlobalSearch({
     for (const event of events) {
       if (
         event.notes?.toLowerCase().includes(q) ||
-        event.category.toLowerCase().includes(q)
+        event.category?.toLowerCase().includes(q)
       ) {
         out.push({ kind: "event", event });
       }
@@ -96,6 +147,18 @@ export function GlobalSearch({
           placeholder={t("search_placeholder")}
           className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground text-base outline-none"
         />
+        {voiceSupported && (
+          <button
+            onClick={startVoiceSearch}
+            className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+              listening ? "bg-primary text-primary-foreground animate-pulse" : "bg-muted text-muted-foreground"
+            }`}
+            aria-label={t("search_voice")}
+            title={t("search_voice")}
+          >
+            <Mic className="w-4 h-4" />
+          </button>
+        )}
         <button
           onClick={onClose}
           className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0"

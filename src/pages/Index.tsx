@@ -6,16 +6,24 @@ import { useFavoritePlaces } from "@/hooks/useFavoritePlaces";
 import { useSetup, SetupData } from "@/hooks/useSetup";
 import { BottomNav, AppTab } from "@/components/BottomNav";
 import { LanguageProvider, localeForLang, useLang, useT } from "@/lib/LanguageContext";
-import { detectLanguage, Lang, translate } from "@/lib/i18n";
+import { detectLanguage, Lang } from "@/lib/i18n";
 import { ChevronLeft, BookOpen, MapPin, Plus, Search } from "lucide-react";
-import { hasActiveStudyWork, useEstudios } from "@/hooks/useEstudios";
+import { hasActiveStudyWork, nearestPendingSession, useEstudios } from "@/hooks/useEstudios";
+import {
+  peekNotificationIntent,
+  clearNotificationIntent,
+  NOTIF_INTENT_EVENT,
+  STUDY_ACTION_DONE,
+  STUDY_ACTION_SKIP,
+  type NotifIntent,
+} from "@/lib/notifications";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { useSpecialCampaign } from "@/hooks/useSpecialCampaign";
-import { getCategoryMeta } from "@/lib/categories";
+import { getCategoryMeta, getActiveCategoryConfigs } from "@/lib/categories";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 import { removeJsonValue } from "@/lib/jsonFileStorage";
 import { findActiveScheduledEvent } from "@/lib/timerOverrun";
-import { consumeWidgetAction } from "@/lib/timerNotification";
+import { consumeWidgetAction, setWidgetCategories } from "@/lib/timerNotification";
 import { formatPlaceName } from "@/lib/placeNames";
 import { formatDateLong } from "@/lib/dateFormat";
 import { hexToRgba, getWeatherHeroTheme } from "@/lib/weatherUtils";
@@ -26,6 +34,7 @@ import { AppDialogs } from "@/components/AppDialogs";
 import { HomeTab } from "@/pages/tabs/HomeTab";
 import { TimerTab } from "@/pages/tabs/TimerTab";
 import { GlobalSearch } from "@/components/GlobalSearch";
+import { ManualEntrySheet } from "@/components/ManualEntrySheet";
 import { useAutoBackup } from "@/hooks/useAutoBackup";
 
 const StatsView = lazy(() => import("@/components/StatsView").then((m) => ({ default: m.StatsView })));
@@ -74,11 +83,17 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     city: setup.city,
   });
 
+  // Accesibilidad: aplica/retira el modo de texto grande en la raíz del documento.
+  useEffect(() => {
+    document.documentElement.classList.toggle("text-large", !!setup.largeText);
+  }, [setup.largeText]);
+
   // ── Navigation ───────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<Tab>("timer");
-  const [timerDisplayCategory, setTimerDisplayCategory] = useState<Category>("Predi");
+  const [timerDisplayCategory, setTimerDisplayCategory] = useState<Category>((setup.defaultCategory as Category) || "Predi");
   const [selectedStudySession, setSelectedStudySession] = useState<{ contactId: string; sessionId: string } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [manualEntryOpen, setManualEntryOpen] = useState(false);
   const [calendarFocusEventId, setCalendarFocusEventId] = useState<string | null>(null);
   const [calendarFocusMonthDate, setCalendarFocusMonthDate] = useState<Date | null>(null);
 
@@ -96,7 +111,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const activeStudyCount = estudios.contacts.filter((c) => c.active).length;
   const campaign = useSpecialCampaign();
   const { events: calendarEvents, markNotified, getEventsForDate } = calendar;
-  const { justBacked } = useAutoBackup();
+  const { justBacked } = useAutoBackup({ setup });
 
   const handleClearAll = () => {
     void removeJsonValue("time-entries").finally(() => window.location.reload());
@@ -142,8 +157,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
   const todayKey = new Date().toDateString();
   const now = useMemo(() => new Date(todayKey), [todayKey]);
-  const { calMonthMs } = calendar;
-
   // ── Notification effects ──────────────────────────────────────────────────────
   useNotificationEffects({
     calendarEvents,
@@ -152,30 +165,60 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     t,
     activeScheduledEvent: activeScheduledEvent ?? null,
     activeEntry: activeEntry ?? null,
-    calMonthMs,
+    calMonthMs: tracker.monthTotal,
     precursorHours: setup.precursorHours,
     estudiosContacts: estudios.contacts,
     notifTimerOverrun: setup.notifTimerOverrun,
     notifTimer3h: setup.notifTimer3h,
     notifMonthlyGoal: setup.notifMonthlyGoal,
+    notifUnlogged: setup.notifUnlogged,
     travelTimeEnabled: setup.travelTimeEnabled,
     travelTimeMinutes: setup.travelTimeMinutes,
   });
 
-  // ── Widget action: detener timer desde el widget de escritorio ───────────────
+  // ── Widget: enviar categorías activas (botones ▶ del widget de escritorio) ────
   useEffect(() => {
-    const check = () => {
-      if (document.visibilityState === 'visible') {
-        consumeWidgetAction().then((action) => {
-          if (action === 'CLOCK_OUT') requestClockOut();
-        });
+    const active = getActiveCategoryConfigs(setup.categorySettings).map((c) => ({
+      name: c.name,
+      color: c.color,
+    }));
+    void setWidgetCategories(active);
+  }, [setup.categorySettings]);
+
+  // ── Widget action: arrancar/detener el timer desde el widget de escritorio ────
+  // Mantenemos el handler en un ref para que el listener (montado una vez) use
+  // siempre el estado fresco del tracker.
+  const widgetActionRef = useRef<() => void>(() => {});
+  widgetActionRef.current = () => {
+    if (document.visibilityState !== 'visible') return;
+    void consumeWidgetAction().then((raw) => {
+      if (!raw) return;
+      const [action, msStr, category] = raw.split('|');
+      const ms = msStr ? Number(msStr) : NaN;
+      const time = Number.isFinite(ms) ? new Date(ms) : undefined;
+      if (action === 'CLOCK_IN') {
+        if (!tracker.isRunning) {
+          void tracker.clockIn(
+            category || 'Predi',
+            ({ date, category: cat, location }) =>
+              calendar.addCompletedEventNow({ date, category: cat, location }),
+            time,
+          );
+        }
+      } else if (action === 'CLOCK_OUT') {
+        if (tracker.isRunning) requestClockOut(time);
+      } else if (action === 'NAV' && msStr) {
+        // Atajos del icono de Android: abrir una pestaña concreta.
+        navigate(msStr as Tab);
       }
-    };
+    });
+  };
+  useEffect(() => {
+    const check = () => widgetActionRef.current();
     document.addEventListener('visibilitychange', check);
     // Comprobar también al montar (app abierta directamente por el widget)
     check();
     return () => document.removeEventListener('visibilitychange', check);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Summary sheet: event lists ────────────────────────────────────────────────
@@ -253,6 +296,67 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     setActiveTab("calendar");
   };
 
+  // ── Notificaciones: actuar al pulsarlas ───────────────────────────────────────
+  // En vez de abrir siempre la pantalla principal, una notificación abre la
+  // pantalla que le corresponde (calendario, estudio, timer…). Los recordatorios
+  // de estudio traen botones Sí/No: "Sí" marca la sesión como hecha sin abrir
+  // nada; "No" sólo descarta el aviso; el tap del cuerpo abre el estudio.
+  // Devuelve true si la intención quedó gestionada; false si hay que reintentar
+  // (p. ej. los estudios aún no han cargado al abrir la app en frío).
+  const handleNotifIntent = (intent: NotifIntent): boolean => {
+    const { actionId, nav } = intent;
+    if (!nav) return true;
+    switch (nav.route) {
+      case "study": {
+        if (actionId === STUDY_ACTION_DONE || actionId === STUDY_ACTION_SKIP) {
+          const contact = estudios.contacts.find((c) => c.id === nav.contactId);
+          if (!contact) return false; // contactos aún sin cargar → reintentar
+          const sessionId = nav.sessionId ?? nearestPendingSession(contact.sessions, Date.now())?.id;
+          if (sessionId) {
+            if (actionId === STUDY_ACTION_DONE) estudios.completeSession(nav.contactId, sessionId);
+            else estudios.skipSession(nav.contactId, sessionId);
+          }
+          return true;
+        }
+        navigateToStudySession(nav.contactId, nav.sessionId ?? "");
+        return true;
+      }
+      case "calendar":
+        if (nav.eventId) openCalendarEvent(nav.eventId);
+        else openMonthlyCalendar();
+        return true;
+      case "estudios":
+        navigate("estudios");
+        return true;
+      case "timer":
+        navigate("timer");
+        return true;
+      case "stats":
+        navigate("home");
+        return true;
+    }
+  };
+  // El listener nativo puede dispararse en frío; mantenemos el handler en un ref
+  // para usar siempre el estado fresco al consumir la intención pendiente.
+  const notifIntentRef = useRef<() => void>(() => {});
+  notifIntentRef.current = () => {
+    const intent = peekNotificationIntent();
+    if (intent && handleNotifIntent(intent)) clearNotificationIntent();
+  };
+  useEffect(() => {
+    const check = () => notifIntentRef.current();
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener(NOTIF_INTENT_EVENT, check);
+    check(); // app abierta directamente por la notificación
+    return () => {
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener(NOTIF_INTENT_EVENT, check);
+    };
+  }, []);
+  // Reintenta cuando cambian los estudios: cubre el caso de abrir la app en frío
+  // pulsando "Sí" antes de que los contactos terminen de cargar.
+  useEffect(() => { notifIntentRef.current(); }, [estudios.contacts]);
+
   // ── Display helpers ───────────────────────────────────────────────────────────
   const displayCityName = setup.city ? formatPlaceName(setup.city.name, t) : "";
   const userName = setup.name || displayCityName || t("friend_name");
@@ -315,9 +419,38 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         </div>
       )}
 
+      {/* Manual entry sheet — añadir horas pasadas o actividades futuras */}
+      {manualEntryOpen && (
+        <ManualEntrySheet
+          categoryConfigs={setup.categorySettings}
+          estudiosContacts={estudios.contacts.filter((c) => c.active).map((c) => ({ id: c.id, name: c.name }))}
+          onSavePast={(start, end, category, description, location) =>
+            tracker.addManualEntry(start, end, category, description, location)
+          }
+          onSaveFuture={(params) => calendar.addEvent(params)}
+          onClose={() => setManualEntryOpen(false)}
+          t={t}
+        />
+      )}
+
+      {/* Quick-add FAB — registrar horas con un toque desde Inicio/Estadísticas */}
+      {(activeTab === "home" || activeTab === "summary") && (
+        <div className="fixed bottom-24 left-0 right-0 max-w-md mx-auto z-[90] pointer-events-none">
+          <div className="flex justify-end pr-4">
+            <button
+              onClick={() => setManualEntryOpen(true)}
+              aria-label={t("manual_entry_title")}
+              className="pointer-events-auto w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-xl shadow-primary/30 flex items-center justify-center active:scale-90 transition-transform"
+            >
+              <Plus className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <main className={`${!isOnline ? "pt-7" : ""} ${activeTab === "timer" ? "" : "pb-24"}`}>
 
-        {/* ── HOME ── */}
+        {/* ── HOME (Inicio: timer + Mis horas unificados) ── */}
         {activeTab === "home" && (
           <HomeTab
             greeting={greeting}
@@ -326,21 +459,24 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             weather={weather}
             hourlyWeather={hourlyWeather}
             heroTheme={heroTheme}
-            calendarEvents={calendarEvents}
-            estudiosContacts={estudios.contacts}
             setup={setup}
-            calMonthMs={tracker.monthTotal}
-            navigate={navigate}
-            navigateToStudySession={navigateToStudySession}
-            onCompleteStudyNow={estudios.completeSessionNow}
-            openMonthlyCalendar={openMonthlyCalendar}
             timerIsRunning={tracker.isRunning}
             timerElapsed={tracker.elapsed}
             timerCategory={activeEntry?.category}
             onNavigateToTimer={() => navigate("timer")}
             t={t}
-            locale={locale}
-            todayKey={todayKey}
+            statsSlot={
+              <Suspense fallback={<TabLoading />}>
+                <StatsView
+                  entries={tracker.monthEntries}
+                  allEntries={tracker.entries}
+                  precursorHours={setup.precursorHours}
+                  specialCampaignGoals={campaign.goals}
+                  onSetSpecialCampaign={campaign.setGoal}
+                  categoryConfigs={setup.categorySettings}
+                />
+              </Suspense>
+            }
           />
         )}
 
@@ -357,8 +493,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
               <StatsView
                 entries={tracker.monthEntries}
                 allEntries={tracker.entries}
-                monthTotal={tracker.monthTotal}
-                calendarEvents={calendar.events}
                 precursorHours={setup.precursorHours}
                 specialCampaignGoals={campaign.goals}
                 onSetSpecialCampaign={campaign.setGoal}
@@ -456,6 +590,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 activityStartHour={setup.activityStartHour}
                 activityEndHour={setup.activityEndHour}
                 categoryConfigs={setup.categorySettings}
+                timeEntryMonthTotalMs={tracker.monthTotal}
+                timeEntries={tracker.entries}
               />
             </Suspense>
           </>
@@ -470,28 +606,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 <h1 className="text-xl font-bold text-foreground">{t("nav_settings")}</h1>
               </div>
             </header>
-            <div className="px-5 pt-5 mb-4 grid grid-cols-2 gap-3">
-              <button
-                onClick={() => navigate("estudios")}
-                className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-sm active:scale-[0.98] text-left"
-              >
-                <div className="w-9 h-9 rounded-xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0">
-                  <BookOpen className="w-4 h-4 text-pink-500" />
-                </div>
-                <span className="text-sm font-semibold text-foreground">{t("nav_studies")}</span>
-                {activeStudyCount > 0 ? (
-                  <span className="ml-auto min-w-6 h-6 px-1.5 rounded-full bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-300 text-xs font-bold flex items-center justify-center tabular-nums flex-shrink-0">
-                    {activeStudyCount}
-                  </span>
-                ) : (
-                  <span className="ml-auto w-6 h-6 rounded-full bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-300 flex items-center justify-center flex-shrink-0">
-                    <Plus className="w-3.5 h-3.5" />
-                  </span>
-                )}
-              </button>
+            <div className="px-5 pt-5 mb-4">
               <button
                 onClick={() => navigate("map")}
-                className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-sm active:scale-[0.98] text-left"
+                className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-sm active:scale-[0.98] text-left"
               >
                 <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
                   <MapPin className="w-4 h-4 text-blue-500" />
@@ -523,16 +641,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         {activeTab === "estudios" && (
           <>
             <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => navigate("profile")}
-                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
-                  aria-label={t("common_back")}
-                >
-                  <ChevronLeft className="w-4 h-4 text-muted-foreground" />
-                </button>
+              <div className="flex items-center justify-between">
                 <h1 className="text-xl font-bold text-foreground">{t("nav_studies")}</h1>
-                <MinistryMark size={32} className="ml-auto" />
+                <MinistryMark size={32} />
               </div>
             </header>
             <Suspense fallback={<TabLoading />}>
@@ -620,10 +731,16 @@ const Index = () => {
   const [setupLang, setSetupLang] = useState<Lang>(detectLanguage);
   const lang = setup.completed ? (setup.language ?? detectLanguage()) : setupLang;
 
+  // Mientras se cargan los datos, mostramos una pantalla idéntica al splash
+  // (logo sobre el mismo fondo, sin texto) para que la transición sea invisible
+  // y la app sólo aparezca una vez lista.
   if (!storage.ready || setupLoading) {
     return (
-      <div className="min-h-screen bg-background text-foreground max-w-md mx-auto flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">{translate(lang, "common_loading_data")}</p>
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: "#f5f7fa" }}
+      >
+        <img src="/favicon.svg" alt="" className="w-24 h-24" draggable={false} />
       </div>
     );
   }

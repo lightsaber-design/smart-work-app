@@ -4,4 +4,13 @@
     <string name="title_activity_main">MinistryLog</string>
     <string name="package_name">com.ministrylog.app</string>
     <string name="custom_url_scheme">com.ministrylog.app</string>
+    <string name="server_client_id">398912678802-dsfkg3tfkjbkg3d9jpspg1hmv97a5rhu.apps.googleusercontent.com</string>
+
+    <!-- Atajos del icono (mantener pulsado el icono de la app) -->
+    <string name="shortcut_start_short">Empezar</string>
+    <string name="shortcut_start_long">Empezar a marcar horas</string>
+    <string name="shortcut_studies_short">Estudios</string>
+    <string name="shortcut_studies_long">Abrir estudios</string>
+    <string name="shortcut_map_short">Mapa</string>
+    <string name="shortcut_map_long">Abrir mapa de lugares</string>
 </resources>

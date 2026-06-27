@@ -44,11 +44,11 @@ export function useDarkMode(options: DarkModeOptions = {}) {
     const root = document.documentElement;
     if (isDark) root.classList.add("dark");
     else root.classList.remove("dark");
-    if (!loaded || autoDark) return; // don't persist in auto mode
-    void writeJsonValue("darkMode", isDark).catch((error) =>
+    if (!loaded) return;
+    void writeJsonValue("darkMode", manualDark).catch((error) =>
       console.error("Error saving dark mode:", error),
     );
-  }, [isDark, loaded, autoDark]);
+  }, [manualDark, loaded]);
 
   const toggle = () => setManualDark((v) => !v);
 

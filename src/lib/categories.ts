@@ -38,7 +38,6 @@ const DEFAULT_ICONS: Record<string, string> = {
 
 const FALLBACK_COLORS = ["#34B1AF", "#7CC67E", "#9668A2", "#F4CFA4", "#D07D7D", "#5B8DEF", "#E17A47", "#607D8B"];
 
-export const CATEGORY_LIST: EventCategory[] = DEFAULT_CATEGORY_CONFIGS.map((category) => category.name);
 
 function isHexColor(value: unknown): value is string {
   return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
@@ -108,10 +107,3 @@ export function getCategoryStyle(configs: CategoryConfig[], name: EventCategory)
   };
 }
 
-export const CATEGORY_META = Object.fromEntries(
-  DEFAULT_CATEGORY_CONFIGS.map((category) => [category.name, getCategoryMeta(DEFAULT_CATEGORY_CONFIGS, category.name)])
-) as Record<EventCategory, { icon: string; gradient: [string, string]; ring: string }>;
-
-export const CATEGORY_STYLE = Object.fromEntries(
-  DEFAULT_CATEGORY_CONFIGS.map((category) => [category.name, getCategoryStyle(DEFAULT_CATEGORY_CONFIGS, category.name)])
-) as Record<EventCategory, { card: string; border: string; dot: string; dotColor: string; accent: string }>;
