@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EstudioContact } from "@/hooks/useEstudios";
-import { currentMonthKey, getForgottenContacts, getGoalStatus, timerLongRunFireAt, nextReportPrepareAt, nextReportDeliverAt, isReportDeliverWindow } from "./notificationRules";
+import { currentMonthKey, getForgottenContacts, getGoalStatus, timerLongRunFireAt, nextReportPrepareAt, nextReportDeliverAt, isReportDeliverWindow, missedStudyFireAt, unloggedFireAt, goalReminderFireAt, forgottenFireAt, hasUpcomingSession, lastStudyActivityDate, nextWeekdayAt } from "./notificationRules";
 
 function contact(overrides: Partial<EstudioContact>): EstudioContact {
   return {
@@ -75,5 +75,47 @@ describe("notification rules", () => {
     expect(isReportDeliverWindow(new Date(2026, 5, 1, 9))).toBe(true);  // día 1 a las 9
     expect(isReportDeliverWindow(new Date(2026, 5, 3, 0))).toBe(true);  // día 3 a cualquier hora
     expect(isReportDeliverWindow(new Date(2026, 5, 4, 12))).toBe(false); // día 4 ya fuera
+  });
+
+  it("schedules missed-study and unlogged alarms with their grace margins", () => {
+    const base = new Date(2026, 4, 10, 10, 0, 0, 0);
+    expect(missedStudyFireAt(base)).toEqual(new Date(2026, 4, 10, 10, 5, 0, 0));
+    expect(unloggedFireAt(base)).toEqual(new Date(2026, 4, 10, 10, 30, 0, 0));
+  });
+
+  it("schedules the monthly-goal reminder five days before month end at 9:00", () => {
+    // Mayo tiene 31 días → recordatorio el día 26 a las 9:00.
+    expect(goalReminderFireAt(new Date(2026, 4, 3, 12))).toEqual(new Date(2026, 4, 26, 9, 0, 0, 0));
+    // Febrero 2026 tiene 28 días → día 23.
+    expect(goalReminderFireAt(new Date(2026, 1, 10))).toEqual(new Date(2026, 1, 23, 9, 0, 0, 0));
+  });
+
+  it("schedules the forgotten-contact alarm 14 days after last activity at 9:00", () => {
+    expect(forgottenFireAt(new Date(2026, 4, 1, 15, 30))).toEqual(new Date(2026, 4, 15, 9, 0, 0, 0));
+  });
+
+  it("finds the next future weekday occurrence at a given time", () => {
+    // 2026-05-11 es lunes (getDay 1). Próximo martes (2) a las 10:00 → 2026-05-12 10:00.
+    expect(nextWeekdayAt(2, "10:00", new Date(2026, 4, 11, 12))).toEqual(new Date(2026, 4, 12, 10, 0, 0, 0));
+    // Si hoy es el día pero la hora ya pasó, salta a la semana siguiente.
+    expect(nextWeekdayAt(1, "10:00", new Date(2026, 4, 11, 12))).toEqual(new Date(2026, 4, 18, 10, 0, 0, 0));
+  });
+
+  it("derives last study activity and upcoming-session state per contact", () => {
+    const now = new Date(2026, 4, 20, 12);
+    const withDone = contact({
+      createdAt: new Date(2026, 3, 1).toISOString(),
+      sessions: [{ id: "d", date: new Date(2026, 4, 5).toISOString(), time: "10:00", files: [], pending: false }],
+    });
+    expect(lastStudyActivityDate(withDone)).toEqual(new Date(new Date(2026, 4, 5).toISOString()));
+
+    const neverStudied = contact({ createdAt: new Date(2026, 3, 1).toISOString(), sessions: [] });
+    expect(lastStudyActivityDate(neverStudied)).toEqual(new Date(new Date(2026, 3, 1).toISOString()));
+
+    const upcoming = contact({
+      sessions: [{ id: "p", date: new Date(2026, 4, 25).toISOString(), time: "10:00", files: [], pending: true }],
+    });
+    expect(hasUpcomingSession(upcoming, now)).toBe(true);
+    expect(hasUpcomingSession(neverStudied, now)).toBe(false);
   });
 });

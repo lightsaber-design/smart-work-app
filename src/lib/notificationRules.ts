@@ -102,3 +102,60 @@ export function getForgottenContacts(
     return (nowMs - new Date(last.date).getTime()) / 86_400_000 > FORGOTTEN_DAYS;
   });
 }
+
+// ── Regla 6: horas de disparo para avisos nativos programados a futuro ─────────
+// Convertimos avisos que antes se disparaban "en caliente" (solo con la app
+// abierta) en alarmas con hora futura calculada desde los datos, para que Android
+// las dispare aunque la app esté cerrada.
+
+/** Estudio pendiente vencido: su fecha/hora + un pequeño margen. */
+export function missedStudyFireAt(sessionDate: Date, graceMin = 5): Date {
+  return new Date(sessionDate.getTime() + graceMin * 60_000);
+}
+
+/** Actividad del calendario sin fichar: su hora + un margen. */
+export function unloggedFireAt(eventDate: Date, graceMin = 30): Date {
+  return new Date(eventDate.getTime() + graceMin * 60_000);
+}
+
+/** Recordatorio de meta mensual: 5 días antes de fin de mes, a las `hour`. */
+export function goalReminderFireAt(now = new Date(), hour = 9): Date {
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return new Date(now.getFullYear(), now.getMonth(), lastDay - 5, hour, 0, 0, 0);
+}
+
+/** Contacto olvidado: última actividad + N días, a las `hour`. */
+export function forgottenFireAt(lastActivity: Date, days = FORGOTTEN_DAYS, hour = 9): Date {
+  const d = new Date(lastActivity.getTime() + days * 86_400_000);
+  d.setHours(hour, 0, 0, 0);
+  return d;
+}
+
+/** ¿El contacto tiene una sesión pendiente en el futuro? (aún no "olvidado"). */
+export function hasUpcomingSession(contact: EstudioContact, now = new Date()): boolean {
+  const nowMs = now.getTime();
+  return (contact.sessions ?? []).some(
+    (s) => s.pending && new Date(s.date).getTime() > nowMs
+  );
+}
+
+/** Fecha de la última actividad de estudio (sesión hecha) o, si no hay, su creación. */
+export function lastStudyActivityDate(contact: EstudioContact): Date {
+  const done = (contact.sessions ?? []).filter(isSessionDone);
+  if (done.length === 0) return new Date(contact.createdAt);
+  const last = done.sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  )[0];
+  return new Date(last.date);
+}
+
+/** Próxima ocurrencia futura de un día de la semana (0=dom) a una hora "HH:MM". */
+export function nextWeekdayAt(dayOfWeek: number, timeHHMM: string, now = new Date()): Date {
+  const [h, m] = timeHHMM.split(":").map(Number);
+  const d = new Date(now);
+  d.setHours(h || 0, m || 0, 0, 0);
+  const diff = (dayOfWeek - d.getDay() + 7) % 7;
+  d.setDate(d.getDate() + diff);
+  if (d.getTime() <= now.getTime()) d.setDate(d.getDate() + 7);
+  return d;
+}

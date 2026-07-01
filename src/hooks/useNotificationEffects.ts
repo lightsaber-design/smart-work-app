@@ -6,7 +6,7 @@ import type { EstudioContact } from "@/hooks/useEstudios";
 import { isStalePendingSession, isSessionDone } from "@/hooks/useEstudios";
 import { scheduleEventNotification, cancelEventNotification, registerStudyActionType, STUDY_ACTION_TYPE } from "@/lib/notifications";
 import { getEventEndDate } from "@/lib/timerOverrun";
-import { timerLongRunFireAt, getGoalStatus, currentMonthKey, getForgottenContacts, nextReportPrepareAt, nextReportDeliverAt, isReportDeliverWindow } from "@/lib/notificationRules";
+import { timerLongRunFireAt, currentMonthKey, nextReportPrepareAt, nextReportDeliverAt, isReportDeliverWindow, missedStudyFireAt, unloggedFireAt, goalReminderFireAt, forgottenFireAt, hasUpcomingSession, lastStudyActivityDate, nextWeekdayAt } from "@/lib/notificationRules";
 import type { MonthlyReportCarryoverState } from "@/lib/monthlyReport";
 import { getCategoryLabel } from "@/lib/categories";
 import { startTimerNotification, stopTimerNotification } from "@/lib/timerNotification";
@@ -60,6 +60,12 @@ export function useNotificationEffects({
   const overrunScheduledKey = useRef<string | null>(null);
   const reportPrepareRef = useRef<number | null>(null);
   const reportDeliverRef = useRef<number | null>(null);
+  // Horas de disparo ya programadas, para no reprogramar si no cambian.
+  const missedStudyFireRef = useRef<Map<string, number>>(new Map());
+  const unloggedFireRef = useRef<Map<string, number>>(new Map());
+  const forgottenFireRef = useRef<Map<string, number>>(new Map());
+  const studyFixedFireRef = useRef<Map<string, number>>(new Map());
+  const goalReminderRef = useRef<string | null>(null);
   // Rastrea el estado pending anterior de cada sesión para detectar
   // cuándo pasa de pendiente → completada y cancelar su notificación.
   const sessionPendingRef = useRef<Map<string, boolean>>(new Map());
@@ -84,6 +90,9 @@ export function useNotificationEffects({
         // Cancelar la notificación nativa aunque el ref esté vacío (reinicio de app)
         void cancelEventNotification(event.id);
         scheduledEventFireTimes.current.delete(event.id);
+        // Un evento completado ya no necesita el aviso de "sin fichar".
+        void cancelEventNotification(`unlogged-${event.id}`);
+        unloggedFireRef.current.delete(event.id);
         return;
       }
 
@@ -202,32 +211,48 @@ export function useNotificationEffects({
     }
   }, [estudiosContacts]);
 
-  // ── Estudios perdidos → notificación una vez por sesión ───────────────────
+  // ── Estudios perdidos → alarma nativa a la hora de la sesión + margen ──────
+  // Programamos la alarma para la fecha/hora futura de la sesión pendiente, de
+  // modo que salte aunque la app esté cerrada. Si la sesión ya venció mientras la
+  // app estaba cerrada, disparamos una vez al abrir (guarda en localStorage).
   useEffect(() => {
     const now = Date.now();
+    const live = new Set<string>();
     for (const contact of estudiosContacts) {
       if (!contact.active) continue;
       for (const session of contact.sessions ?? []) {
         if (!session.pending) continue;
         if (isStalePendingSession(contact, session, now)) continue;
-        const sessionMs = new Date(session.date).getTime();
-        if (now - sessionMs <= 5 * 60_000) continue; // aún no vencida
-        const key = `_ml_missed_${session.id}`;
-        try { if (localStorage.getItem(key)) continue; } catch { continue; }
-        try { localStorage.setItem(key, "1"); } catch { /* nada */ }
-        const isToday = now - sessionMs < 24 * 3_600_000;
-        void scheduleEventNotification(
-          `missed-study-${session.id}`,
-          t("notif_study_missed_title"),
-          t(isToday ? "notif_study_missed_today" : "notif_study_missed_week", { name: contact.name }),
-          new Date(Date.now() + 2_000),
-          {
-            actionTypeId: STUDY_ACTION_TYPE,
-            extra: { route: "study", contactId: contact.id, sessionId: session.id },
-          },
-        );
+        const id = `missed-study-${session.id}`;
+        const fireAtMs = missedStudyFireAt(new Date(session.date)).getTime();
+        const isToday = now - new Date(session.date).getTime() < 24 * 3_600_000;
+        const body = t(isToday ? "notif_study_missed_today" : "notif_study_missed_week", { name: contact.name });
+        const opts = {
+          actionTypeId: STUDY_ACTION_TYPE,
+          extra: { route: "study" as const, contactId: contact.id, sessionId: session.id },
+        };
+
+        if (fireAtMs > now) {
+          live.add(id);
+          if (missedStudyFireRef.current.get(id) === fireAtMs) continue;
+          void scheduleEventNotification(id, t("notif_study_missed_title"), body, new Date(fireAtMs), opts)
+            .then((ok) => { if (ok) missedStudyFireRef.current.set(id, fireAtMs); });
+        } else {
+          // Ya venció: dispara una sola vez al abrir la app.
+          const key = `_ml_missed_${session.id}`;
+          try { if (localStorage.getItem(key)) continue; } catch { continue; }
+          try { localStorage.setItem(key, "1"); } catch { /* nada */ }
+          void scheduleEventNotification(id, t("notif_study_missed_title"), body, new Date(Date.now() + 2_000), opts);
+        }
       }
     }
+    // Cancelar alarmas de sesiones que ya no están pendientes/activas.
+    missedStudyFireRef.current.forEach((_, id) => {
+      if (!live.has(id)) {
+        void cancelEventNotification(id);
+        missedStudyFireRef.current.delete(id);
+      }
+    });
   }, [estudiosContacts, t]);
 
   // ── Notificaciones semanales de estudio ────────────────────────────────────
@@ -261,6 +286,7 @@ export function useNotificationEffects({
       if (!contact.active || !contact.schedule) {
         void cancelEventNotification(fixedId);
         void cancelEventNotification(flexId);
+        studyFixedFireRef.current.delete(fixedId);
         return;
       }
 
@@ -274,27 +300,29 @@ export function useNotificationEffects({
 
       if (schedule.dayOfWeek !== undefined) {
         void cancelEventNotification(flexId);
-        if (today.getDay() !== schedule.dayOfWeek) return;
+        // Si ya se estudió hoy, no hace falta recordar en esta ocurrencia.
         const doneToday = contact.sessions.some(
           (s) => !s.pending && new Date(s.date).toDateString() === todayStr
         );
-        if (doneToday) { void cancelEventNotification(fixedId); return; }
-        const [h, m] = schedule.time.split(":").map(Number);
-        const scheduledMs = new Date(today).setHours(h, m, 0, 0);
-        if (now < scheduledMs + 90 * 60_000) return;
-        const storageKey = `_sn_fixed_${contact.id}_${todayStr}`;
-        if (localStorage.getItem(storageKey)) return;
-        localStorage.setItem(storageKey, "1");
+        if (doneToday) {
+          void cancelEventNotification(fixedId);
+          studyFixedFireRef.current.delete(fixedId);
+          return;
+        }
+        // Programa la PRÓXIMA ocurrencia del día fijo + 90 min (futuro), para que
+        // salte ese día aunque la app esté cerrada.
+        const fireAtMs = nextWeekdayAt(schedule.dayOfWeek, schedule.time, today).getTime() + 90 * 60_000;
+        if (studyFixedFireRef.current.get(fixedId) === fireAtMs) return;
         void scheduleEventNotification(
           fixedId,
           t("notif_study_missed_title"),
           t("notif_study_missed_today", { name: contact.name }) + lessonSuffix,
-          new Date(Date.now() + 1_000),
+          new Date(fireAtMs),
           {
             actionTypeId: STUDY_ACTION_TYPE,
             extra: { route: "study", contactId: contact.id },
           },
-        );
+        ).then((ok) => { if (ok) studyFixedFireRef.current.set(fixedId, fireAtMs); });
       } else {
         void cancelEventNotification(fixedId);
         const doneThisWeek = contact.sessions.some(
@@ -319,66 +347,108 @@ export function useNotificationEffects({
   }, [estudiosContacts, isTimerRunning, t]);
 
   // ── Contactos olvidados (sin cita en >14 días) ─────────────────────────────
+  // Una alarma nativa por contacto, programada a "última actividad + 14 días",
+  // para que salte aunque la app esté cerrada. Se cancela si el contacto pasa a
+  // inactivo o gana una cita futura.
   useEffect(() => {
-    const forgotten = getForgottenContacts(estudiosContacts);
-    if (forgotten.length === 0) return;
+    const now = Date.now();
+    const live = new Set<string>();
+    for (const contact of estudiosContacts) {
+      const id = `forgotten-${contact.id}`;
+      if (!contact.active || hasUpcomingSession(contact)) continue; // se limpia abajo
+      live.add(id);
+      const fireAtMs = forgottenFireAt(lastStudyActivityDate(contact)).getTime();
+      const body = t("notif_study_reminder_body", { name: contact.name });
 
-    const storageKey = `_ml_forgotten_${new Date().toDateString()}`;
-    try { if (localStorage.getItem(storageKey)) return; } catch { return; }
-    try { localStorage.setItem(storageKey, "1"); } catch { /* nada */ }
-
-    const body =
-      forgotten.length === 1
-        ? t("notif_study_reminder_body", { name: forgotten[0].name })
-        : t("notif_study_reminder_body_multi", { count: forgotten.length });
-
-    void scheduleEventNotification(
-      "forgotten-contacts",
-      t("notif_study_reminder_title"),
-      body,
-      new Date(Date.now() + 2_000),
-      { extra: { route: "estudios" } },
-    );
+      if (fireAtMs > now) {
+        if (forgottenFireRef.current.get(id) === fireAtMs) continue;
+        void scheduleEventNotification(id, t("notif_study_reminder_title"), body, new Date(fireAtMs), { extra: { route: "estudios" } })
+          .then((ok) => { if (ok) forgottenFireRef.current.set(id, fireAtMs); });
+      } else {
+        // Ya lleva >14 días olvidado: dispara una vez al día al abrir la app.
+        const key = `_ml_forgotten_${contact.id}_${new Date().toDateString()}`;
+        try { if (localStorage.getItem(key)) continue; } catch { continue; }
+        try { localStorage.setItem(key, "1"); } catch { /* nada */ }
+        void scheduleEventNotification(id, t("notif_study_reminder_title"), body, new Date(Date.now() + 2_000), { extra: { route: "estudios" } });
+      }
+    }
+    // Cancelar los que ya no aplican (inactivos o con cita futura).
+    forgottenFireRef.current.forEach((_, id) => {
+      if (!live.has(id)) {
+        void cancelEventNotification(id);
+        forgottenFireRef.current.delete(id);
+      }
+    });
   }, [estudiosContacts, t]);
 
   // ── Actividad del calendario que pasó sin fichar ───────────────────────────
-  // Avisa una vez por evento cuando su hora pasó (margen 30 min) y sigue sin
-  // completarse, dentro de las últimas 24 h para no arrastrar pendientes viejos.
+  // Alarma nativa a "hora del evento + 30 min" para que salte aunque la app esté
+  // cerrada. Se cancela al completar el evento (ver limpieza arriba). Solo se
+  // programan eventos dentro de una ventana próxima para acotar el número de
+  // alarmas pendientes de Android.
   useEffect(() => {
-    if (!notifUnlogged) return;
+    if (!notifUnlogged) {
+      unloggedFireRef.current.forEach((_, id) => void cancelEventNotification(`unlogged-${id}`));
+      unloggedFireRef.current.clear();
+      return;
+    }
+    const UNLOGGED_WINDOW_MS = 7 * 24 * 3_600_000;
     const now = Date.now();
+    const live = new Set<string>();
     for (const event of calendarEvents) {
       if (event.completed) continue;
       if (activeScheduledEvent?.id === event.id) continue;
-      const sincePassed = now - event.date.getTime();
-      if (sincePassed <= 30 * 60_000) continue;
-      if (sincePassed >= 24 * 3_600_000) continue;
-      const key = `_ml_unlogged_${event.id}`;
-      try { if (localStorage.getItem(key)) continue; } catch { continue; }
-      try { localStorage.setItem(key, "1"); } catch { /* nada */ }
+      const fireAtMs = unloggedFireAt(event.date).getTime();
+      if (fireAtMs - now > UNLOGGED_WINDOW_MS) continue; // demasiado lejos; ya se programará
       const time = `${String(event.date.getHours()).padStart(2, "0")}:${String(event.date.getMinutes()).padStart(2, "0")}`;
-      void scheduleEventNotification(
-        `unlogged-${event.id}`,
-        t("notif_unlogged_title"),
-        t("notif_unlogged_body", { category: getCategoryLabel(event.category, t), time }),
-        new Date(Date.now() + 1_000),
-        { extra: { route: "calendar", eventId: event.id } },
-      );
+      const body = t("notif_unlogged_body", { category: getCategoryLabel(event.category, t), time });
+
+      if (fireAtMs > now) {
+        live.add(event.id);
+        if (unloggedFireRef.current.get(event.id) === fireAtMs) continue;
+        void scheduleEventNotification(`unlogged-${event.id}`, t("notif_unlogged_title"), body, new Date(fireAtMs), { extra: { route: "calendar", eventId: event.id } })
+          .then((ok) => { if (ok) unloggedFireRef.current.set(event.id, fireAtMs); });
+      } else if (now - fireAtMs < 24 * 3_600_000) {
+        // Pasó hace poco con la app cerrada: dispara una vez al abrir.
+        const key = `_ml_unlogged_${event.id}`;
+        try { if (localStorage.getItem(key)) continue; } catch { continue; }
+        try { localStorage.setItem(key, "1"); } catch { /* nada */ }
+        void scheduleEventNotification(`unlogged-${event.id}`, t("notif_unlogged_title"), body, new Date(Date.now() + 1_000), { extra: { route: "calendar", eventId: event.id } });
+      }
     }
+    // Cancelar los de eventos que ya no aplican.
+    unloggedFireRef.current.forEach((_, id) => {
+      if (!live.has(id)) {
+        void cancelEventNotification(`unlogged-${id}`);
+        unloggedFireRef.current.delete(id);
+      }
+    });
   }, [calendarEvents, activeScheduledEvent, notifUnlogged, t]);
 
   // ── Meta mensual ────────────────────────────────────────────────────────────
+  // Recordatorio "vas por detrás": alarma nativa 5 días antes de fin de mes, para
+  // que salte con la app cerrada; se cancela si alcanzas la meta. "Meta conseguida"
+  // se mantiene inmediata a propósito: es el instante exacto de cruzarla al fichar
+  // horas, algo que solo se detecta dentro de la app.
   useEffect(() => {
-    if (!notifMonthlyGoal) return;
-    const goalHours = precursorHours ?? 0;
-    if (!goalHours) return;
-    const status = getGoalStatus(goalHours, calMonthMs);
     const monthKey = currentMonthKey();
+    const reminderId = `goal-reminder-${monthKey}`;
+    const goalHours = precursorHours ?? 0;
 
-    if (status.kind === "reached") {
+    if (!notifMonthlyGoal || !goalHours) {
+      void cancelEventNotification(reminderId);
+      goalReminderRef.current = null;
+      return;
+    }
+
+    const remainingHours = goalHours - calMonthMs / 3_600_000;
+
+    // Meta conseguida → aviso inmediato una vez (excepción justificada).
+    if (remainingHours <= 0) {
+      void cancelEventNotification(reminderId);
+      goalReminderRef.current = null;
       const key = `_ml_goal_reached_${monthKey}`;
-      if (localStorage.getItem(key)) return;
-      localStorage.setItem(key, "1");
+      try { if (localStorage.getItem(key)) return; localStorage.setItem(key, "1"); } catch { return; }
       void scheduleEventNotification(
         `goal-reached-${monthKey}`,
         t("notif_goal_reached_title"),
@@ -386,17 +456,40 @@ export function useNotificationEffects({
         new Date(Date.now() + 1_000),
         { extra: { route: "stats" } },
       );
-    } else if (status.kind === "reminder") {
-      const key = `_ml_goal_reminder_${monthKey}`;
-      if (localStorage.getItem(key)) return;
-      localStorage.setItem(key, "1");
+      return;
+    }
+
+    // Casi lograda (≤2h) → no molestamos.
+    if (remainingHours <= 2) {
+      void cancelEventNotification(reminderId);
+      goalReminderRef.current = null;
+      return;
+    }
+
+    // Vas por detrás → recordatorio programado a futuro.
+    const hoursLabel = String(Math.ceil(remainingHours));
+    const fireAt = goalReminderFireAt();
+    if (fireAt.getTime() > Date.now()) {
+      const sig = `${fireAt.getTime()}:${hoursLabel}`;
+      if (goalReminderRef.current === sig) return;
+      goalReminderRef.current = sig;
       void scheduleEventNotification(
-        `goal-reminder-${monthKey}`,
+        reminderId,
         t("notif_goal_reminder_title"),
-        t("notif_goal_reminder_body", {
-          hours: String(Math.ceil(status.remainingHours)),
-          days: String(status.daysLeft),
-        }),
+        t("notif_goal_reminder_body", { hours: hoursLabel, days: "5" }),
+        fireAt,
+        { extra: { route: "stats" } },
+      );
+    } else {
+      // Ya en los últimos 5 días: dispara una vez al abrir la app.
+      const key = `_ml_goal_reminder_${monthKey}`;
+      try { if (localStorage.getItem(key)) return; localStorage.setItem(key, "1"); } catch { return; }
+      const nowDate = new Date();
+      const daysLeft = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate() - nowDate.getDate();
+      void scheduleEventNotification(
+        reminderId,
+        t("notif_goal_reminder_title"),
+        t("notif_goal_reminder_body", { hours: hoursLabel, days: String(daysLeft) }),
         new Date(Date.now() + 1_000),
         { extra: { route: "stats" } },
       );
