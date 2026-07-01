@@ -19,6 +19,7 @@ import {
 } from "@/lib/notifications";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { useSpecialCampaign } from "@/hooks/useSpecialCampaign";
+import { useMonthlyReportCarryover } from "@/hooks/useMonthlyReportCarryover";
 import { getCategoryMeta, getActiveCategoryConfigs } from "@/lib/categories";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 import { removeJsonValue } from "@/lib/jsonFileStorage";
@@ -110,6 +111,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const estudios = useEstudios();
   const activeStudyCount = estudios.contacts.filter((c) => c.active).length;
   const campaign = useSpecialCampaign();
+  // Estado del informe mensual: fuente única compartida por StatsView (envío)
+  // y las notificaciones (para no recordar un informe ya enviado).
+  const { carryover: reportCarryover, saveMonthlyReport } = useMonthlyReportCarryover();
   const { events: calendarEvents, markNotified, getEventsForDate } = calendar;
   const { justBacked } = useAutoBackup({ setup });
 
@@ -172,6 +176,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     notifTimer3h: setup.notifTimer3h,
     notifMonthlyGoal: setup.notifMonthlyGoal,
     notifUnlogged: setup.notifUnlogged,
+    notifReport: setup.notifReport,
+    reportCarryover,
     travelTimeEnabled: setup.travelTimeEnabled,
     travelTimeMinutes: setup.travelTimeMinutes,
   });
@@ -474,6 +480,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   specialCampaignGoals={campaign.goals}
                   onSetSpecialCampaign={campaign.setGoal}
                   categoryConfigs={setup.categorySettings}
+                  carryover={reportCarryover}
+                  onSaveMonthlyReport={saveMonthlyReport}
                 />
               </Suspense>
             }
@@ -499,6 +507,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 categoryConfigs={setup.categorySettings}
                 studyCount={activeStudyCount}
                 onOpenStudies={() => navigate("estudios")}
+                carryover={reportCarryover}
+                onSaveMonthlyReport={saveMonthlyReport}
               />
             </Suspense>
           </>

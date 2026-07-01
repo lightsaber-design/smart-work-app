@@ -39,6 +39,44 @@ export function currentMonthKey(now = new Date()): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// ── Regla 5: Recordatorio de informe mensual ─────────────────────────────────
+// El informe se envía por el mes en curso (ver StatsView). Recordamos dos veces:
+//  · "prepara" el último día del mes a las 9:00 (cierra y envía antes del cambio).
+//  · "envía" el día 1 del mes siguiente a las 9:00 (por si no lo enviaste a tiempo).
+export const REPORT_REMINDER_HOUR = 9;
+
+/** Próximo "último día de mes" a las `hour` que aún esté en el futuro. */
+export function nextReportPrepareAt(now = new Date(), hour = REPORT_REMINDER_HOUR): Date {
+  let d = new Date(now.getFullYear(), now.getMonth() + 1, 0, hour, 0, 0, 0);
+  if (d.getTime() <= now.getTime()) {
+    d = new Date(now.getFullYear(), now.getMonth() + 2, 0, hour, 0, 0, 0);
+  }
+  return d;
+}
+
+/** Próximo "día 1 de mes" a las `hour` que aún esté en el futuro. */
+export function nextReportDeliverAt(now = new Date(), hour = REPORT_REMINDER_HOUR): Date {
+  let d = new Date(now.getFullYear(), now.getMonth(), 1, hour, 0, 0, 0);
+  if (d.getTime() <= now.getTime()) {
+    d = new Date(now.getFullYear(), now.getMonth() + 1, 1, hour, 0, 0, 0);
+  }
+  return d;
+}
+
+/**
+ * ¿Estamos dentro de la ventana de reintento de "envía tu informe"?
+ * Los primeros `days` días del mes; el día 1 sólo a partir de la hora del aviso.
+ */
+export function isReportDeliverWindow(
+  now = new Date(),
+  hour = REPORT_REMINDER_HOUR,
+  days = 3
+): boolean {
+  const day = now.getDate();
+  if (day > days) return false;
+  return day > 1 || now.getHours() >= hour;
+}
+
 // ── Regla 4: Contacto activo sin cita próxima >14 días ───────────────────────
 const FORGOTTEN_DAYS = 14;
 

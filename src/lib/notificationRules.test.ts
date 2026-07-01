@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EstudioContact } from "@/hooks/useEstudios";
-import { currentMonthKey, getForgottenContacts, getGoalStatus, timerLongRunFireAt } from "./notificationRules";
+import { currentMonthKey, getForgottenContacts, getGoalStatus, timerLongRunFireAt, nextReportPrepareAt, nextReportDeliverAt, isReportDeliverWindow } from "./notificationRules";
 
 function contact(overrides: Partial<EstudioContact>): EstudioContact {
   return {
@@ -51,5 +51,29 @@ describe("notification rules", () => {
     const archived = contact({ id: "archived", active: false });
 
     expect(getForgottenContacts([forgotten, upcoming, archived], now).map((item) => item.id)).toEqual(["forgotten"]);
+  });
+
+  it("schedules the report 'prepare' reminder for the last day of the month at 9:00", () => {
+    // Mitad de mayo → último día de mayo (31) a las 9:00.
+    expect(nextReportPrepareAt(new Date(2026, 4, 15, 12))).toEqual(new Date(2026, 4, 31, 9, 0, 0, 0));
+  });
+
+  it("rolls the 'prepare' reminder to next month once this month's last day passed", () => {
+    // 31 de mayo a las 10:00 (ya pasó el aviso) → último día de junio (30).
+    expect(nextReportPrepareAt(new Date(2026, 4, 31, 10))).toEqual(new Date(2026, 5, 30, 9, 0, 0, 0));
+  });
+
+  it("schedules the report 'deliver' reminder for day 1 at 9:00", () => {
+    // Mitad de mayo → día 1 de junio a las 9:00.
+    expect(nextReportDeliverAt(new Date(2026, 4, 15, 12))).toEqual(new Date(2026, 5, 1, 9, 0, 0, 0));
+    // Día 1 antes de las 9:00 → hoy mismo a las 9:00.
+    expect(nextReportDeliverAt(new Date(2026, 5, 1, 7))).toEqual(new Date(2026, 5, 1, 9, 0, 0, 0));
+  });
+
+  it("opens the deliver retry window only on the first days of the month", () => {
+    expect(isReportDeliverWindow(new Date(2026, 5, 1, 7))).toBe(false); // día 1 antes de las 9
+    expect(isReportDeliverWindow(new Date(2026, 5, 1, 9))).toBe(true);  // día 1 a las 9
+    expect(isReportDeliverWindow(new Date(2026, 5, 3, 0))).toBe(true);  // día 3 a cualquier hora
+    expect(isReportDeliverWindow(new Date(2026, 5, 4, 12))).toBe(false); // día 4 ya fuera
   });
 });

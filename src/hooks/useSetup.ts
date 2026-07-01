@@ -24,6 +24,8 @@ export interface SetupData {
   notifMonthlyGoal: boolean;
   /** Aviso cuando pasa una actividad del calendario sin haberla fichado. */
   notifUnlogged: boolean;
+  /** Recordatorio de fin/principio de mes para enviar el informe. */
+  notifReport: boolean;
   /** Aumenta el tamaño de texto base para mejor legibilidad. */
   largeText: boolean;
   autoDarkMode: boolean;
@@ -47,6 +49,7 @@ const DEFAULT: SetupData = {
   notifTimer3h: true,
   notifMonthlyGoal: true,
   notifUnlogged: true,
+  notifReport: true,
   largeText: false,
   autoDarkMode: false,
   autoBackupEnabled: false,
@@ -90,6 +93,7 @@ function parseStoredSetup(value: unknown): SetupData {
     notifTimer3h: typeof value.notifTimer3h === "boolean" ? value.notifTimer3h : DEFAULT.notifTimer3h,
     notifMonthlyGoal: typeof value.notifMonthlyGoal === "boolean" ? value.notifMonthlyGoal : DEFAULT.notifMonthlyGoal,
     notifUnlogged: typeof value.notifUnlogged === "boolean" ? value.notifUnlogged : DEFAULT.notifUnlogged,
+    notifReport: typeof value.notifReport === "boolean" ? value.notifReport : DEFAULT.notifReport,
     largeText: typeof value.largeText === "boolean" ? value.largeText : DEFAULT.largeText,
     autoDarkMode: typeof value.autoDarkMode === "boolean" ? value.autoDarkMode : DEFAULT.autoDarkMode,
     autoBackupEnabled: typeof value.autoBackupEnabled === "boolean" ? value.autoBackupEnabled : DEFAULT.autoBackupEnabled,

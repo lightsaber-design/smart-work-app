@@ -3,10 +3,9 @@ import { EventCategory } from "@/hooks/useCalendarEvents";
 import { TimeEntry } from "@/hooks/useTimeTracker";
 import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { useCategoryFilter } from "@/hooks/useCategoryFilter";
-import { useMonthlyReportCarryover } from "@/hooks/useMonthlyReportCarryover";
 import { CategoryConfig, getActiveCategoryConfigs, getCategoryLabel, getCategoryMeta, SUPPORT_CAP_HOURS } from "@/lib/categories";
 import { applyMonthlySupportCap } from "@/lib/ldcCap";
-import { calculateMonthlyReport } from "@/lib/monthlyReport";
+import { calculateMonthlyReport, type MonthlyReportCalculation, type MonthlyReportCarryoverState } from "@/lib/monthlyReport";
 import { msToLabel } from "@/lib/time";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { Pencil, Check, Send, BookOpen, Plus } from "lucide-react";
@@ -22,6 +21,8 @@ interface StatsViewProps {
   categoryConfigs: CategoryConfig[];
   studyCount?: number;
   onOpenStudies?: () => void;
+  carryover: MonthlyReportCarryoverState;
+  onSaveMonthlyReport: (calculation: MonthlyReportCalculation) => void;
 }
 
 export function StatsView({
@@ -33,6 +34,8 @@ export function StatsView({
   categoryConfigs,
   studyCount = 0,
   onOpenStudies,
+  carryover,
+  onSaveMonthlyReport,
 }: StatsViewProps) {
   const t = useT();
   const lang = useLang();
@@ -42,7 +45,6 @@ export function StatsView({
   const activeCategoryConfigs = useMemo(() => getActiveCategoryConfigs(categoryConfigs), [categoryConfigs]);
   const activeCategoryNames = useMemo(() => activeCategoryConfigs.map((category) => category.name), [activeCategoryConfigs]);
   const { excluded, toggle, isIncluded } = useCategoryFilter(activeCategoryNames);
-  const { carryover, saveMonthlyReport } = useMonthlyReportCarryover();
   const todayKey = new Date().toDateString();
   const now = useMemo(() => new Date(todayKey), [todayKey]);
 
@@ -385,7 +387,7 @@ export function StatsView({
             return (
               <button
                 onClick={() => {
-                  saveMonthlyReport(monthlyReport);
+                  onSaveMonthlyReport(monthlyReport);
                   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
                 }}
                 className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold text-sm transition-colors shadow-sm"

@@ -603,6 +603,18 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
           </div>
           <p className="text-xs text-muted-foreground">{t("settings_notif_unlogged_hint")}</p>
         </div>
+
+        {/* Toggle: recordatorio de informe */}
+        <div className="space-y-0.5 pt-1">
+          <div className="flex items-center justify-between gap-3">
+            <Label className="text-sm text-foreground">{t("settings_notif_report")}</Label>
+            <Switch
+              checked={setup.notifReport}
+              onCheckedChange={(v) => onSaveSetup({ notifReport: v })}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">{t("settings_notif_report_hint")}</p>
+        </div>
       </SettingsSection>
 
       <SettingsSection

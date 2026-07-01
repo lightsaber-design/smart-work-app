@@ -6,7 +6,8 @@ import type { EstudioContact } from "@/hooks/useEstudios";
 import { isStalePendingSession, isSessionDone } from "@/hooks/useEstudios";
 import { scheduleEventNotification, cancelEventNotification, registerStudyActionType, STUDY_ACTION_TYPE } from "@/lib/notifications";
 import { getEventEndDate } from "@/lib/timerOverrun";
-import { timerLongRunFireAt, getGoalStatus, currentMonthKey, getForgottenContacts } from "@/lib/notificationRules";
+import { timerLongRunFireAt, getGoalStatus, currentMonthKey, getForgottenContacts, nextReportPrepareAt, nextReportDeliverAt, isReportDeliverWindow } from "@/lib/notificationRules";
+import type { MonthlyReportCarryoverState } from "@/lib/monthlyReport";
 import { getCategoryLabel } from "@/lib/categories";
 import { startTimerNotification, stopTimerNotification } from "@/lib/timerNotification";
 
@@ -27,6 +28,9 @@ interface UseNotificationEffectsParams {
   notifTimer3h: boolean;
   notifMonthlyGoal: boolean;
   notifUnlogged: boolean;
+  notifReport: boolean;
+  // Estado del informe mensual: para saber si ya se envió el de este mes.
+  reportCarryover: MonthlyReportCarryoverState;
   // Travel time for overrun threshold
   travelTimeEnabled: boolean;
   travelTimeMinutes: number;
@@ -46,12 +50,16 @@ export function useNotificationEffects({
   notifTimer3h,
   notifMonthlyGoal,
   notifUnlogged,
+  notifReport,
+  reportCarryover,
   travelTimeEnabled,
   travelTimeMinutes,
 }: UseNotificationEffectsParams) {
   const scheduledEventFireTimes = useRef<Map<string, number>>(new Map());
   const timer3hRef = useRef<string | null>(null);
   const overrunScheduledKey = useRef<string | null>(null);
+  const reportPrepareRef = useRef<number | null>(null);
+  const reportDeliverRef = useRef<number | null>(null);
   // Rastrea el estado pending anterior de cada sesión para detectar
   // cuándo pasa de pendiente → completada y cancelar su notificación.
   const sessionPendingRef = useRef<Map<string, boolean>>(new Map());
@@ -394,5 +402,75 @@ export function useNotificationEffects({
       );
     }
   }, [calMonthMs, notifMonthlyGoal, precursorHours, t]);
+
+  // ── Recordatorio de informe mensual ────────────────────────────────────────
+  // El informe se envía por el mes en curso, así que si ya está enviado (existe
+  // registro para este mes) no molestamos. Si no, programamos dos alarmas fijas
+  // que llegan con la app cerrada (último día y día 1 a las 9:00) y, además,
+  // reintentamos con la app abierta durante los primeros días del mes.
+  useEffect(() => {
+    if (!notifReport) {
+      void cancelEventNotification("report-prepare");
+      void cancelEventNotification("report-deliver");
+      reportPrepareRef.current = null;
+      reportDeliverRef.current = null;
+      return;
+    }
+
+    const now = new Date();
+    const monthKey = currentMonthKey(now);
+    const alreadyReported = Boolean(reportCarryover.reports[monthKey]);
+
+    if (alreadyReported) {
+      void cancelEventNotification("report-prepare");
+      void cancelEventNotification("report-deliver");
+      reportPrepareRef.current = null;
+      reportDeliverRef.current = null;
+      return;
+    }
+
+    // Aviso "prepara" — último día del mes a las 9:00.
+    const prepareAtMs = nextReportPrepareAt(now).getTime();
+    if (reportPrepareRef.current !== prepareAtMs) {
+      reportPrepareRef.current = prepareAtMs;
+      void scheduleEventNotification(
+        "report-prepare",
+        t("notif_report_prepare_title"),
+        t("notif_report_prepare_body"),
+        new Date(prepareAtMs),
+        { extra: { route: "stats" } },
+      );
+    }
+
+    // Aviso "envía" — día 1 del mes siguiente a las 9:00.
+    const deliverAtMs = nextReportDeliverAt(now).getTime();
+    if (reportDeliverRef.current !== deliverAtMs) {
+      reportDeliverRef.current = deliverAtMs;
+      void scheduleEventNotification(
+        "report-deliver",
+        t("notif_report_deliver_title"),
+        t("notif_report_deliver_body"),
+        new Date(deliverAtMs),
+        { extra: { route: "stats" } },
+      );
+    }
+
+    // Reintento con la app abierta durante los primeros días del mes (una vez/día).
+    if (isReportDeliverWindow(now)) {
+      const key = `_ml_report_deliver_${monthKey}_${now.getDate()}`;
+      try {
+        if (!localStorage.getItem(key)) {
+          localStorage.setItem(key, "1");
+          void scheduleEventNotification(
+            "report-deliver-now",
+            t("notif_report_deliver_title"),
+            t("notif_report_deliver_body"),
+            new Date(Date.now() + 1_000),
+            { extra: { route: "stats" } },
+          );
+        }
+      } catch { /* nada */ }
+    }
+  }, [notifReport, reportCarryover, t]);
 
 }
