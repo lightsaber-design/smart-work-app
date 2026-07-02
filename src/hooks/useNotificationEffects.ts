@@ -99,6 +99,16 @@ export function useNotificationEffects({
         return;
       }
 
+      // Nunca se pueden hacer dos eventos en paralelo: si ahora mismo ya se
+      // está haciendo OTRA actividad, no tiene sentido avisar de que este
+      // evento va a empezar. Se cancela y se reevalúa en cuanto quede libre
+      // (si su hora aún no ha pasado, se reprogramará entonces).
+      if (isTimerRunning && activeScheduledEvent?.id !== event.id) {
+        void cancelEventNotification(event.id);
+        scheduledEventFireTimes.current.delete(event.id);
+        return;
+      }
+
       const reminder = event.reminderMinutesBefore ?? 0;
       const reminderAtMs = event.date.getTime() - reminder * 60_000;
       const startMs = event.date.getTime();
@@ -129,7 +139,7 @@ export function useNotificationEffects({
         scheduledEventFireTimes.current.delete(id);
       }
     });
-  }, [calendarEvents, t]);
+  }, [calendarEvents, isTimerRunning, activeScheduledEvent, t]);
 
   // ── Timer overrun → notificación nativa ────────────────────────────────────
   useEffect(() => {
