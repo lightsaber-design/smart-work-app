@@ -35,7 +35,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Predi"
-            android:textSize="9sp"
+            android:textSize="10sp"
             android:textStyle="bold"
             android:textColor="#FFFFFFFF"
             android:background="@drawable/widget_chip_bg"
@@ -53,7 +53,7 @@
             android:id="@+id/widget_elapsed"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="22sp"
+            android:textSize="25sp"
             android:textColor="#FFFFFFFF"
             android:textStyle="bold"
             android:fontFamily="sans-serif-medium"
@@ -68,7 +68,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="0:00"
-            android:textSize="22sp"
+            android:textSize="25sp"
             android:textStyle="bold"
             android:textColor="#FFFFFFFF"
             android:fontFamily="sans-serif-medium"
@@ -79,8 +79,8 @@
         <!-- Botón central play / stop (bitmap tintado) -->
         <ImageView
             android:id="@+id/widget_action_btn"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:layout_marginTop="3dp"
             android:scaleType="fitCenter"
             android:contentDescription="@null" />

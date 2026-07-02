@@ -15,7 +15,10 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
 import android.os.SystemClock;
+import android.util.TypedValue;
 import android.view.View;
 import android.widget.RemoteViews;
 
@@ -54,11 +57,26 @@ public class TimerWidget extends AppWidgetProvider {
     public static final String ACTION_CYCLE_CAT = "com.ministrylog.app.WIDGET_CYCLE_CATEGORY";
     public static final String EXTRA_CATEGORY   = "category";
 
+    // ── Tamaños base (al tamaño mínimo del widget, 110dp). Crecen con `scale`
+    // cuando el usuario agranda el widget en la pantalla de inicio. ──────────────
+    private static final float ACTION_BTN_BASE_DP = 40f;
+    private static final float CATEGORY_BASE_SP   = 10f;
+    private static final float CLOCK_BASE_SP      = 25f;
+    private static final float REFERENCE_WIDGET_DP = 110f;
+    private static final float MAX_WIDGET_SCALE     = 3f;
+
     @Override
     public void onUpdate(Context context, AppWidgetManager mgr, int[] ids) {
         for (int id : ids) {
             updateWidget(context, mgr, id);
         }
+    }
+
+    /** El usuario arrastró los bordes del widget: recalcular con el nuevo tamaño. */
+    @Override
+    public void onAppWidgetOptionsChanged(Context context, AppWidgetManager mgr, int widgetId, Bundle newOptions) {
+        super.onAppWidgetOptionsChanged(context, mgr, widgetId, newOptions);
+        updateWidget(context, mgr, widgetId);
     }
 
     @Override
@@ -103,6 +121,7 @@ public class TimerWidget extends AppWidgetProvider {
         String[][] cats = readCategories(prefs);
         String category = currentCategory(context);
         int catColor = colorForCategory(cats, category);
+        float scale = widgetScale(mgr, widgetId);
 
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.timer_widget);
 
@@ -115,13 +134,22 @@ public class TimerWidget extends AppWidgetProvider {
         );
         views.setOnClickPendingIntent(R.id.widget_ring, openPi);
 
-        // Anillo y botón dibujados como bitmap, tintados con el color de la categoría
+        // Anillo y botón dibujados como bitmap, tintados con el color de la categoría.
+        // El botón se dibuja más grande cuanto más grande sea el widget en pantalla.
         views.setImageViewBitmap(R.id.widget_ring, buildRing(catColor, running));
-        views.setImageViewBitmap(R.id.widget_action_btn, buildActionButton(catColor, running));
+        views.setImageViewBitmap(R.id.widget_action_btn, buildActionButton(catColor, running, scale));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            float btnDp = ACTION_BTN_BASE_DP * scale;
+            views.setViewLayoutWidth(R.id.widget_action_btn, btnDp, TypedValue.COMPLEX_UNIT_DIP);
+            views.setViewLayoutHeight(R.id.widget_action_btn, btnDp, TypedValue.COMPLEX_UNIT_DIP);
+        }
 
         // Chip de categoría (texto tintado, fondo redondeado estático)
         views.setTextViewText(R.id.widget_category, category);
         views.setTextColor(R.id.widget_category, running ? 0xFFFFFFFF : catColor);
+        views.setTextViewTextSize(R.id.widget_category, TypedValue.COMPLEX_UNIT_SP, CATEGORY_BASE_SP * scale);
+        views.setTextViewTextSize(R.id.widget_elapsed, TypedValue.COMPLEX_UNIT_SP, CLOCK_BASE_SP * scale);
+        views.setTextViewTextSize(R.id.widget_idle_title, TypedValue.COMPLEX_UNIT_SP, CLOCK_BASE_SP * scale);
 
         if (running && startMs > 0) {
             // ── Corriendo: cronómetro + ⏹ ──
@@ -169,6 +197,24 @@ public class TimerWidget extends AppWidgetProvider {
         }
 
         mgr.updateAppWidget(widgetId, views);
+    }
+
+    /**
+     * Factor de escala respecto al tamaño mínimo del widget (110dp). 1.0 al
+     * tamaño mínimo/por defecto; crece si el usuario lo agranda en su pantalla
+     * de inicio, así el botón ▶/⏹ y los textos aprovechan el espacio real en
+     * vez de quedarse siempre en el tamaño mínimo.
+     */
+    private static float widgetScale(AppWidgetManager mgr, int widgetId) {
+        Bundle options = mgr.getAppWidgetOptions(widgetId);
+        int widthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, (int) REFERENCE_WIDGET_DP);
+        int heightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, (int) REFERENCE_WIDGET_DP);
+        int side = Math.min(widthDp, heightDp);
+        if (side <= 0) return 1f;
+        float scale = side / REFERENCE_WIDGET_DP;
+        if (scale < 1f) scale = 1f;
+        if (scale > MAX_WIDGET_SCALE) scale = MAX_WIDGET_SCALE;
+        return scale;
     }
 
     // ── Categoría ───────────────────────────────────────────────────────────────
@@ -255,9 +301,9 @@ public class TimerWidget extends AppWidgetProvider {
         return bmp;
     }
 
-    /** Botón central con degradado de categoría y glifo ▶ / ■. */
-    private static Bitmap buildActionButton(int catColor, boolean running) {
-        int size = 160;
+    /** Botón central con degradado de categoría y glifo ▶ / ■. Escala con `scale`. */
+    private static Bitmap buildActionButton(int catColor, boolean running, float scale) {
+        int size = Math.round(160 * scale);
         Bitmap bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(bmp);
         float cx = size / 2f, cy = size / 2f;
