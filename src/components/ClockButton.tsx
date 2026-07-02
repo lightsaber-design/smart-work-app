@@ -776,13 +776,13 @@ export function ClockButton({
         <div className="flex flex-col items-center gap-2 mt-4">
           <button
             onClick={handleToggleEdit}
-            className={`flex items-center gap-1 text-xs font-semibold transition-colors cursor-pointer ${
+            className={`flex items-center gap-1 text-sm font-semibold transition-colors cursor-pointer ${
               isRunning
                 ? "text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)] hover:text-white/90"
                 : "text-slate-800 hover:text-slate-950"
             }`}
           >
-            <Clock className="w-3 h-3" />
+            <Clock className="w-3.5 h-3.5" />
             {editingTime ? t("timer_cancel") : isRunning ? t("timer_edit_start") : t("timer_forgot")}
           </button>
           {editingTime && (
@@ -794,10 +794,10 @@ export function ClockButton({
                 value={customTimeStr}
                 onChange={(e) => setCustomTimeStr(e.target.value)}
                 onBlur={() => setCustomTimeStr((value) => clampTimeToActivityRange(value, activityStartHour, activityEndHour))}
-                className="text-center text-sm font-medium bg-muted border border-border rounded-xl px-3 py-1.5 text-foreground"
+                className="text-center text-base font-medium bg-muted border border-border rounded-xl px-3 py-1.5 text-foreground"
               />
               {isRunning && (
-                <button onClick={handleSaveStartTime} className="text-xs font-medium text-primary hover:underline cursor-pointer">
+                <button onClick={handleSaveStartTime} className="text-sm font-medium text-primary hover:underline cursor-pointer">
                   {t("timer_save")}
                 </button>
               )}

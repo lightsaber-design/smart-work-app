@@ -6,7 +6,7 @@ import type { EstudioContact } from "@/hooks/useEstudios";
 import { isStalePendingSession, isSessionDone } from "@/hooks/useEstudios";
 import { scheduleEventNotification, cancelEventNotification, registerStudyActionType, STUDY_ACTION_TYPE } from "@/lib/notifications";
 import { getEventEndDate } from "@/lib/timerOverrun";
-import { timerLongRunFireAt, currentMonthKey, nextReportPrepareAt, nextReportDeliverAt, isReportDeliverWindow, missedStudyFireAt, unloggedFireAt, goalReminderFireAt, forgottenFireAt, hasUpcomingSession, lastStudyActivityDate, nextWeekdayAt } from "@/lib/notificationRules";
+import { timerLongRunFireAt, currentMonthKey, nextReportPrepareAt, nextReportDeliverAt, reportReminderMonthKey, missedStudyFireAt, unloggedFireAt, goalReminderFireAt, forgottenFireAt, hasUpcomingSession, lastStudyActivityDate, nextWeekdayAt } from "@/lib/notificationRules";
 import type { MonthlyReportCarryoverState } from "@/lib/monthlyReport";
 import { getCategoryLabel } from "@/lib/categories";
 import { startTimerNotification, stopTimerNotification } from "@/lib/timerNotification";
@@ -60,6 +60,9 @@ export function useNotificationEffects({
   const overrunScheduledKey = useRef<string | null>(null);
   const reportPrepareRef = useRef<number | null>(null);
   const reportDeliverRef = useRef<number | null>(null);
+  // Mes (YYYY-MM) para el que ya se disparó el aviso inmediato de informe en
+  // esta apertura de la app; se reinicia solo al recargar (nuevo montaje).
+  const reportOpenFiredRef = useRef<string | null>(null);
   // Horas de disparo ya programadas, para no reprogramar si no cambian.
   const missedStudyFireRef = useRef<Map<string, number>>(new Map());
   const unloggedFireRef = useRef<Map<string, number>>(new Map());
@@ -218,11 +221,16 @@ export function useNotificationEffects({
   useEffect(() => {
     const now = Date.now();
     const live = new Set<string>();
+    // Si ahora mismo se está estudiando (timer activo en categoría Estudio), no
+    // tiene sentido avisar de sesiones pendientes: se cancelan mientras dure y se
+    // reevalúan en cuanto el timer se detenga o la sesión se marque como hecha.
+    const studyingNow = isTimerRunning && activeEntry?.category === "Estudio";
     for (const contact of estudiosContacts) {
       if (!contact.active) continue;
       for (const session of contact.sessions ?? []) {
         if (!session.pending) continue;
         if (isStalePendingSession(contact, session, now)) continue;
+        if (studyingNow) continue;
         const id = `missed-study-${session.id}`;
         const fireAtMs = missedStudyFireAt(new Date(session.date)).getTime();
         const isToday = now - new Date(session.date).getTime() < 24 * 3_600_000;
@@ -253,7 +261,7 @@ export function useNotificationEffects({
         missedStudyFireRef.current.delete(id);
       }
     });
-  }, [estudiosContacts, t]);
+  }, [estudiosContacts, isTimerRunning, activeEntry, t]);
 
   // ── Notificaciones semanales de estudio ────────────────────────────────────
   useEffect(() => {
@@ -262,7 +270,6 @@ export function useNotificationEffects({
 
     const now = Date.now();
     const today = new Date();
-    const todayStr = today.toDateString();
     const weekStart = new Date(today);
     weekStart.setHours(0, 0, 0, 0);
     const dow = weekStart.getDay();
@@ -300,11 +307,12 @@ export function useNotificationEffects({
 
       if (schedule.dayOfWeek !== undefined) {
         void cancelEventNotification(flexId);
-        // Si ya se estudió hoy, no hace falta recordar en esta ocurrencia.
-        const doneToday = contact.sessions.some(
-          (s) => !s.pending && new Date(s.date).toDateString() === todayStr
+        // Si ya se estudió en algún día de esta semana (no solo hoy), no hace
+        // falta recordar en esta ocurrencia del día fijo.
+        const doneThisWeek = contact.sessions.some(
+          (s) => !s.pending && new Date(s.date).getTime() >= weekStartMs
         );
-        if (doneToday) {
+        if (doneThisWeek) {
           void cancelEventNotification(fixedId);
           studyFixedFireRef.current.delete(fixedId);
           return;
@@ -500,13 +508,15 @@ export function useNotificationEffects({
   // El informe se envía por el mes en curso, así que si ya está enviado (existe
   // registro para este mes) no molestamos. Si no, programamos dos alarmas fijas
   // que llegan con la app cerrada (último día y día 1 a las 9:00) y, además,
-  // reintentamos con la app abierta durante los primeros días del mes.
+  // recordamos con la app abierta en cada apertura durante la ventana de 5 días
+  // alrededor del cambio de mes.
   useEffect(() => {
     if (!notifReport) {
       void cancelEventNotification("report-prepare");
       void cancelEventNotification("report-deliver");
       reportPrepareRef.current = null;
       reportDeliverRef.current = null;
+      reportOpenFiredRef.current = null;
       return;
     }
 
@@ -519,6 +529,7 @@ export function useNotificationEffects({
       void cancelEventNotification("report-deliver");
       reportPrepareRef.current = null;
       reportDeliverRef.current = null;
+      reportOpenFiredRef.current = null;
       return;
     }
 
@@ -548,21 +559,26 @@ export function useNotificationEffects({
       );
     }
 
-    // Reintento con la app abierta durante los primeros días del mes (una vez/día).
-    if (isReportDeliverWindow(now)) {
-      const key = `_ml_report_deliver_${monthKey}_${now.getDate()}`;
-      try {
-        if (!localStorage.getItem(key)) {
-          localStorage.setItem(key, "1");
-          void scheduleEventNotification(
-            "report-deliver-now",
-            t("notif_report_deliver_title"),
-            t("notif_report_deliver_body"),
-            new Date(Date.now() + 1_000),
-            { extra: { route: "stats" } },
-          );
-        }
-      } catch { /* nada */ }
+    // Recordatorio inmediato cada vez que se abre la app dentro de la ventana de
+    // 5 días (2 antes de fin de mes, el propio último día, y los 2 primeros días
+    // del mes siguiente), mientras el informe de ese mes siga sin marcarse como
+    // enviado. A diferencia de las alarmas fijas de arriba, este se dispara en
+    // cada apertura (no solo una vez al día) y deja de hacerlo en cuanto
+    // reportCarryover registra el informe de ese mes.
+    const windowMonthKey = reportReminderMonthKey(now);
+    if (windowMonthKey && !reportCarryover.reports[windowMonthKey]) {
+      if (reportOpenFiredRef.current !== windowMonthKey) {
+        reportOpenFiredRef.current = windowMonthKey;
+        void scheduleEventNotification(
+          "report-deliver-now",
+          t("notif_report_deliver_title"),
+          t("notif_report_deliver_body"),
+          new Date(Date.now() + 1_000),
+          { extra: { route: "stats" } },
+        );
+      }
+    } else {
+      reportOpenFiredRef.current = null;
     }
   }, [notifReport, reportCarryover, t]);
 

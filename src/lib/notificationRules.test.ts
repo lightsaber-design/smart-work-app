@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EstudioContact } from "@/hooks/useEstudios";
-import { currentMonthKey, getForgottenContacts, getGoalStatus, timerLongRunFireAt, nextReportPrepareAt, nextReportDeliverAt, isReportDeliverWindow, missedStudyFireAt, unloggedFireAt, goalReminderFireAt, forgottenFireAt, hasUpcomingSession, lastStudyActivityDate, nextWeekdayAt } from "./notificationRules";
+import { currentMonthKey, getForgottenContacts, getGoalStatus, timerLongRunFireAt, nextReportPrepareAt, nextReportDeliverAt, reportReminderMonthKey, missedStudyFireAt, unloggedFireAt, goalReminderFireAt, forgottenFireAt, hasUpcomingSession, lastStudyActivityDate, nextWeekdayAt } from "./notificationRules";
 
 function contact(overrides: Partial<EstudioContact>): EstudioContact {
   return {
@@ -70,11 +70,16 @@ describe("notification rules", () => {
     expect(nextReportDeliverAt(new Date(2026, 5, 1, 7))).toEqual(new Date(2026, 5, 1, 9, 0, 0, 0));
   });
 
-  it("opens the deliver retry window only on the first days of the month", () => {
-    expect(isReportDeliverWindow(new Date(2026, 5, 1, 7))).toBe(false); // día 1 antes de las 9
-    expect(isReportDeliverWindow(new Date(2026, 5, 1, 9))).toBe(true);  // día 1 a las 9
-    expect(isReportDeliverWindow(new Date(2026, 5, 3, 0))).toBe(true);  // día 3 a cualquier hora
-    expect(isReportDeliverWindow(new Date(2026, 5, 4, 12))).toBe(false); // día 4 ya fuera
+  it("targets the report reminder window to 2 days before/after month end", () => {
+    // Mayo 2026 tiene 31 días: ventana "antes" = 29, 30 y 31 de mayo.
+    expect(reportReminderMonthKey(new Date(2026, 4, 28))).toBeNull();
+    expect(reportReminderMonthKey(new Date(2026, 4, 29))).toBe("2026-05");
+    expect(reportReminderMonthKey(new Date(2026, 4, 31))).toBe("2026-05");
+    // Ventana "después": los días 1 y 2 de junio siguen recordando el informe de mayo.
+    expect(reportReminderMonthKey(new Date(2026, 5, 1))).toBe("2026-05");
+    expect(reportReminderMonthKey(new Date(2026, 5, 2))).toBe("2026-05");
+    // Día 3 de junio ya queda fuera de la ventana de 5 días.
+    expect(reportReminderMonthKey(new Date(2026, 5, 3))).toBeNull();
   });
 
   it("schedules missed-study and unlogged alarms with their grace margins", () => {

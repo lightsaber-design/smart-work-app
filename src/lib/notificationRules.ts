@@ -64,17 +64,26 @@ export function nextReportDeliverAt(now = new Date(), hour = REPORT_REMINDER_HOU
 }
 
 /**
- * ¿Estamos dentro de la ventana de reintento de "envía tu informe"?
- * Los primeros `days` días del mes; el día 1 sólo a partir de la hora del aviso.
+ * Ventana de recordatorio del informe mensual: 5 días alrededor del cambio de
+ * mes (2 antes de fin de mes, el propio último día, y los 2 primeros días del
+ * mes siguiente).
  */
-export function isReportDeliverWindow(
-  now = new Date(),
-  hour = REPORT_REMINDER_HOUR,
-  days = 3
-): boolean {
+export const REPORT_WINDOW_DAYS_BEFORE = 2;
+export const REPORT_WINDOW_DAYS_AFTER = 2;
+
+/**
+ * Si `now` cae dentro de esa ventana de 5 días, devuelve la monthKey (YYYY-MM)
+ * del informe que corresponde recordar (el mes que termina o el que acaba de
+ * terminar). Fuera de la ventana devuelve null.
+ */
+export function reportReminderMonthKey(now = new Date()): string | null {
   const day = now.getDate();
-  if (day > days) return false;
-  return day > 1 || now.getHours() >= hour;
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  if (day >= lastDay - REPORT_WINDOW_DAYS_BEFORE) return currentMonthKey(now);
+  if (day <= REPORT_WINDOW_DAYS_AFTER) {
+    return currentMonthKey(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  }
+  return null;
 }
 
 // ── Regla 4: Contacto activo sin cita próxima >14 días ───────────────────────
