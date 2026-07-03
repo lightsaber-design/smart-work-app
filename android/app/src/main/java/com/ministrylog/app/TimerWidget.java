@@ -51,6 +51,11 @@ public class TimerWidget extends AppWidgetProvider {
     public static final String KEY_CATEGORY       = "timer_category";
     public static final String KEY_CATEGORIES     = "timer_categories"; // JSON [{name,color}]
     public static final String KEY_PENDING_ACTION = "pending_widget_action";
+    // El timer se puede pausar sin fichar salida (ver ClockButton en la app).
+    // Mientras está en pausa el cronómetro nativo debe congelarse en vez de
+    // seguir avanzando con KEY_START_MS, que ya no representa el origen real.
+    public static final String KEY_PAUSED         = "timer_paused";
+    public static final String KEY_PAUSED_ELAPSED_MS = "timer_paused_elapsed_ms";
 
     public static final String ACTION_CLOCK_IN  = "com.ministrylog.app.WIDGET_CLOCK_IN";
     public static final String ACTION_CLOCK_OUT = "com.ministrylog.app.WIDGET_CLOCK_OUT";
@@ -58,10 +63,15 @@ public class TimerWidget extends AppWidgetProvider {
     public static final String EXTRA_CATEGORY   = "category";
 
     // ── Tamaños base (al tamaño mínimo del widget, 110dp). Crecen con `scale`
-    // cuando el usuario agranda el widget en la pantalla de inicio. ──────────────
-    private static final float ACTION_BTN_BASE_DP = 40f;
-    private static final float CATEGORY_BASE_SP   = 10f;
-    private static final float CLOCK_BASE_SP      = 25f;
+    // cuando el usuario agranda el widget en la pantalla de inicio. El escalado
+    // dinámico solo aplica en Android 12+ (ver setViewLayoutWidth más abajo) y
+    // depende de que el launcher informe el tamaño real a tiempo; en la práctica
+    // un widget 2x2 (targetCellWidth/Height) casi siempre ocupa bastante más de
+    // 110dp en pantalla. Por eso el tamaño base debe verse bien POR SÍ SOLO, sin
+    // depender de que el escalado llegue a aplicarse.
+    private static final float ACTION_BTN_BASE_DP = 56f;
+    private static final float CATEGORY_BASE_SP   = 11f;
+    private static final float CLOCK_BASE_SP      = 27f;
     private static final float REFERENCE_WIDGET_DP = 110f;
     private static final float MAX_WIDGET_SCALE     = 3f;
 
@@ -117,6 +127,8 @@ public class TimerWidget extends AppWidgetProvider {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         boolean running  = prefs.getBoolean(KEY_RUNNING, false);
         long    startMs  = prefs.getLong(KEY_START_MS, 0);
+        boolean paused   = prefs.getBoolean(KEY_PAUSED, false);
+        long    pausedElapsedMs = prefs.getLong(KEY_PAUSED_ELAPSED_MS, 0);
 
         String[][] cats = readCategories(prefs);
         String category = currentCategory(context);
@@ -151,7 +163,26 @@ public class TimerWidget extends AppWidgetProvider {
         views.setTextViewTextSize(R.id.widget_elapsed, TypedValue.COMPLEX_UNIT_SP, CLOCK_BASE_SP * scale);
         views.setTextViewTextSize(R.id.widget_idle_title, TypedValue.COMPLEX_UNIT_SP, CLOCK_BASE_SP * scale);
 
-        if (running && startMs > 0) {
+        if (running && startMs > 0 && paused) {
+            // ── En pausa: tiempo congelado (texto estático, no Chronometer) + ⏹ ──
+            // KEY_START_MS ya no es fiable como origen mientras dura la pausa
+            // (la app lo desplazará al reanudar), así que aquí se muestra el
+            // tiempo fijo que había en el momento de pausar en vez de seguir
+            // calculando en base a un startMs desfasado.
+            views.setChronometer(R.id.widget_elapsed, SystemClock.elapsedRealtime(), null, false);
+            views.setViewVisibility(R.id.widget_elapsed, View.GONE);
+            views.setViewVisibility(R.id.widget_idle_title, View.VISIBLE);
+            views.setTextViewText(R.id.widget_idle_title, formatElapsed(pausedElapsedMs));
+
+            Intent stopIntent = new Intent(context, TimerWidget.class);
+            stopIntent.setAction(ACTION_CLOCK_OUT);
+            PendingIntent stopPi = PendingIntent.getBroadcast(
+                context, 1, stopIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+            views.setOnClickPendingIntent(R.id.widget_action_btn, stopPi);
+            views.setOnClickPendingIntent(R.id.widget_category, openPi);
+        } else if (running && startMs > 0) {
             // ── Corriendo: cronómetro + ⏹ ──
             long wallElapsed = System.currentTimeMillis() - startMs;
             long base = SystemClock.elapsedRealtime() - wallElapsed;
@@ -215,6 +246,16 @@ public class TimerWidget extends AppWidgetProvider {
         if (scale < 1f) scale = 1f;
         if (scale > MAX_WIDGET_SCALE) scale = MAX_WIDGET_SCALE;
         return scale;
+    }
+
+    /** Formatea milisegundos como "M:SS" o "H:MM:SS", igual que un Chronometer. */
+    private static String formatElapsed(long ms) {
+        long totalSec = Math.max(0, ms) / 1000;
+        long h = totalSec / 3600;
+        long m = (totalSec % 3600) / 60;
+        long s = totalSec % 60;
+        if (h > 0) return String.format(java.util.Locale.US, "%d:%02d:%02d", h, m, s);
+        return String.format(java.util.Locale.US, "%d:%02d", m, s);
     }
 
     // ── Categoría ───────────────────────────────────────────────────────────────
@@ -303,7 +344,8 @@ public class TimerWidget extends AppWidgetProvider {
 
     /** Botón central con degradado de categoría y glifo ▶ / ■. Escala con `scale`. */
     private static Bitmap buildActionButton(int catColor, boolean running, float scale) {
-        int size = Math.round(160 * scale);
+        // Se rasteriza a 4x el tamaño en dp para que no se vea borroso al agrandarlo.
+        int size = Math.round(ACTION_BTN_BASE_DP * 4 * scale);
         Bitmap bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(bmp);
         float cx = size / 2f, cy = size / 2f;
@@ -396,6 +438,9 @@ public class TimerWidget extends AppWidgetProvider {
         ed.putBoolean(KEY_RUNNING, running);
         ed.putLong(KEY_START_MS, startMs);
         ed.putString(KEY_CATEGORY, category != null ? category : "");
+        // Fichar entrada/salida desde el propio widget siempre parte de un
+        // estado no pausado.
+        ed.putBoolean(KEY_PAUSED, false);
         ed.apply();
     }
 }

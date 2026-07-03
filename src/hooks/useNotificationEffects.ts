@@ -9,7 +9,7 @@ import { getEventEndDate } from "@/lib/timerOverrun";
 import { timerLongRunFireAt, currentMonthKey, nextReportPrepareAt, nextReportDeliverAt, reportReminderMonthKey, missedStudyFireAt, unloggedFireAt, goalReminderFireAt, forgottenFireAt, hasUpcomingSession, lastStudyActivityDate, nextWeekdayAt } from "@/lib/notificationRules";
 import type { MonthlyReportCarryoverState } from "@/lib/monthlyReport";
 import { getCategoryLabel } from "@/lib/categories";
-import { startTimerNotification, stopTimerNotification } from "@/lib/timerNotification";
+import { startTimerNotification, stopTimerNotification, pauseTimerNotification } from "@/lib/timerNotification";
 
 type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -20,6 +20,7 @@ interface UseNotificationEffectsParams {
   t: TranslateFn;
   activeScheduledEvent: CalendarEvent | null;
   activeEntry: TimeEntry | null;
+  isPaused: boolean;
   calMonthMs: number;
   precursorHours: number | null;
   estudiosContacts: EstudioContact[];
@@ -43,6 +44,7 @@ export function useNotificationEffects({
   t,
   activeScheduledEvent,
   activeEntry,
+  isPaused,
   calMonthMs,
   precursorHours,
   estudiosContacts,
@@ -195,9 +197,25 @@ export function useNotificationEffects({
   }, [activeEntry, notifTimer3h, t]);
 
   // ── Notificación persistente mientras el timer está activo ─────────────────
+  // En pausa se congela (no se vuelve a llamar a start con el mismo startTime,
+  // que dejaría el cronómetro nativo del widget/notificación avanzando aunque
+  // la app muestre el timer parado); al reanudar, activeEntry.startTime ya
+  // llega desplazado por el tiempo en pausa, así que un start normal reanuda
+  // el conteo nativo en el punto correcto.
   useEffect(() => {
     if (!activeEntry) {
       void stopTimerNotification();
+      return;
+    }
+    if (isPaused) {
+      const elapsedMs = activeEntry.pausedAt
+        ? activeEntry.pausedAt.getTime() - activeEntry.startTime.getTime()
+        : 0;
+      void pauseTimerNotification(
+        elapsedMs,
+        t("notif_timer_paused_title"),
+        getCategoryLabel(activeEntry.category, t),
+      );
       return;
     }
     void startTimerNotification(
@@ -207,7 +225,7 @@ export function useNotificationEffects({
       getCategoryLabel(activeEntry.category, t),
     );
     return () => { void stopTimerNotification(); };
-  }, [activeEntry, t]);
+  }, [activeEntry, isPaused, t]);
 
   // ── Cancelar notificación cuando una sesión pasa de pendiente → completada ──
   useEffect(() => {

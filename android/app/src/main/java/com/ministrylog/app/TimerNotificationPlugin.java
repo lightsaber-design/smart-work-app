@@ -85,6 +85,50 @@ public class TimerNotificationPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void pause(PluginCall call) {
+        long elapsedMs = call.getLong("elapsedMs", 0L);
+        String title = call.getString("title", "Timer en pausa");
+        String body  = call.getString("body", "");
+
+        Context ctx = getContext();
+
+        Intent intent = new Intent(ctx, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent pi = PendingIntent.getActivity(
+            ctx, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        int iconRes = ctx.getResources().getIdentifier(
+            "ic_launcher_foreground", "drawable", ctx.getPackageName()
+        );
+        if (iconRes == 0) iconRes = android.R.drawable.ic_media_play;
+
+        // Notificación estática (sin chronometer): en pausa el tiempo no debe
+        // seguir avanzando, ni en la notificación ni en el widget.
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(ctx, CHANNEL_ID)
+            .setSmallIcon(iconRes)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setUsesChronometer(false)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(false)
+            .setShowWhen(false)
+            .setContentIntent(pi)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setColor(0xFF34B1AF);
+
+        NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+        nm.notify(NOTIF_ID, builder.build());
+
+        saveWidgetPaused(ctx, elapsedMs);
+        TimerWidget.refreshAll(ctx);
+
+        call.resolve();
+    }
+
+    @PluginMethod
     public void setCategories(PluginCall call) {
         Context ctx = getContext();
         com.getcapacitor.JSArray categories = call.getArray("categories");
@@ -131,6 +175,17 @@ public class TimerNotificationPlugin extends Plugin {
         ed.putBoolean(TimerWidget.KEY_RUNNING, running);
         ed.putLong(TimerWidget.KEY_START_MS, startMs);
         ed.putString(TimerWidget.KEY_CATEGORY, category != null ? category : "");
+        // start()/stop() siempre representan un estado no pausado; el resume
+        // tras una pausa pasa por start() con el startMs ya desplazado.
+        ed.putBoolean(TimerWidget.KEY_PAUSED, false);
         ed.apply();
+    }
+
+    private void saveWidgetPaused(Context ctx, long elapsedMs) {
+        ctx.getSharedPreferences(TimerWidget.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(TimerWidget.KEY_PAUSED, true)
+            .putLong(TimerWidget.KEY_PAUSED_ELAPSED_MS, elapsedMs)
+            .apply();
     }
 }

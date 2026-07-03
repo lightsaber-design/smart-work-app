@@ -169,6 +169,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     t,
     activeScheduledEvent: activeScheduledEvent ?? null,
     activeEntry: activeEntry ?? null,
+    isPaused: tracker.isPaused,
     calMonthMs: tracker.monthTotal,
     precursorHours: setup.precursorHours,
     estudiosContacts: estudios.contacts,

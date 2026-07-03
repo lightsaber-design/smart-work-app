@@ -2,6 +2,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 
 interface TimerNotificationPlugin {
   start(options: { startTimeMs: number; title: string; body: string; category?: string }): Promise<void>;
+  pause(options: { elapsedMs: number; title: string; body: string }): Promise<void>;
   stop(): Promise<void>;
   consumeWidgetAction(): Promise<{ action: string }>;
   setCategories(options: { categories: { name: string; color: string }[] }): Promise<void>;
@@ -15,6 +16,18 @@ export async function startTimerNotification(startTime: Date, title: string, bod
     await TimerNotification.start({ startTimeMs: startTime.getTime(), title, body, category });
   } catch (e) {
     console.warn('[TimerNotif] start:', e);
+  }
+}
+
+// Congela la notificación persistente y el widget de escritorio mientras el
+// timer está en pausa: sin esto, ambos seguían avanzando con el cronómetro
+// nativo aunque la app mostrara el timer parado.
+export async function pauseTimerNotification(elapsedMs: number, title: string, body: string): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    await TimerNotification.pause({ elapsedMs, title, body });
+  } catch (e) {
+    console.warn('[TimerNotif] pause:', e);
   }
 }
 

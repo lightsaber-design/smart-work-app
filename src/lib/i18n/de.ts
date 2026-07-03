@@ -235,6 +235,7 @@ const de: TranslationMap = {    // Navigation
     notif_action_no: 'Nein',
     notif_timer_running_title: '⏱ Timer läuft',
     notif_timer_running_body: '{category}',
+    notif_timer_paused_title: '⏸ Timer pausiert',
     timer_overrun_title: 'Timer läuft noch',
     timer_overrun_notification_body: '{category} hat die geplante Endzeit überschritten.',
     timer_overrun_body: '{category} sollte um {time} enden.',

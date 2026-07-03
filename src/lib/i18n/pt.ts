@@ -235,6 +235,7 @@ const pt: TranslationMap = {    // Navigation
     notif_action_no: 'Não',
     notif_timer_running_title: '⏱ Timer ativo',
     notif_timer_running_body: '{category}',
+    notif_timer_paused_title: '⏸ Timer em pausa',
     timer_overrun_title: 'Timer ainda ativo',
     timer_overrun_notification_body: '{category} passou da hora final programada.',
     timer_overrun_body: '{category} estava programada para terminar às {time}.',
