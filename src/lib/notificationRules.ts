@@ -140,12 +140,15 @@ export function forgottenFireAt(lastActivity: Date, days = FORGOTTEN_DAYS, hour 
   return d;
 }
 
-/** ¿El contacto tiene una sesión pendiente en el futuro? (aún no "olvidado"). */
-export function hasUpcomingSession(contact: EstudioContact, now = new Date()): boolean {
-  const nowMs = now.getTime();
-  return (contact.sessions ?? []).some(
-    (s) => s.pending && new Date(s.date).getTime() > nowMs
-  );
+/**
+ * ¿El contacto tiene una sesión pendiente sin resolver (aún no "olvidado")?
+ * Cuenta cualquier sesión pendiente, tanto futura como ya vencida: las
+ * pendientes atrasadas más de un ciclo se podan aparte (pruneStalePending en
+ * useEstudios), así que si sigue en la lista es que todavía cuenta como
+ * seguimiento activo y no debe dispararse el aviso de "contacto olvidado".
+ */
+export function hasUpcomingSession(contact: EstudioContact, _now = new Date()): boolean {
+  return (contact.sessions ?? []).some((s) => s.pending);
 }
 
 /** Fecha de la última actividad de estudio (sesión hecha) o, si no hay, su creación. */

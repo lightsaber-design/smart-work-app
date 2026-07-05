@@ -122,5 +122,13 @@ describe("notification rules", () => {
     });
     expect(hasUpcomingSession(upcoming, now)).toBe(true);
     expect(hasUpcomingSession(neverStudied, now)).toBe(false);
+
+    // Una sesión pendiente ya vencida (pero aún no podada por estar atrasada
+    // más de un ciclo) sigue contando como seguimiento sin resolver: no debe
+    // dispararse el aviso de "contacto olvidado" mientras siga en la lista.
+    const overduePending = contact({
+      sessions: [{ id: "o", date: new Date(2026, 4, 15).toISOString(), time: "10:00", files: [], pending: true }],
+    });
+    expect(hasUpcomingSession(overduePending, now)).toBe(true);
   });
 });
