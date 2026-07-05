@@ -4,7 +4,6 @@ import { TimerWidget } from "@/components/TimerWidget";
 import type { SetupData } from "@/hooks/useSetup";
 import {
   CurrentWeather,
-  HourlyWeather,
   getWeatherHeroTheme,
   weatherCodeToEmoji,
 } from "@/lib/weatherUtils";
@@ -16,7 +15,6 @@ interface HomeTabProps {
   userName: string;
   displayCityName: string;
   weather: CurrentWeather | null;
-  hourlyWeather: HourlyWeather[];
   heroTheme: ReturnType<typeof getWeatherHeroTheme>;
   setup: SetupData;
   timerIsRunning: boolean;

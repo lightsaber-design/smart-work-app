@@ -12,10 +12,6 @@ export type CategoryTotal = {
   ms: number;
 };
 
-export function applyMonthlyLdcCap(totals: CategoryTotal[], capMs = MONTHLY_LDC_CAP_MS): CategoryTotal[] {
-  return applyMonthlySupportCap(totals, [{ name: "LDC", support: true }], capMs);
-}
-
 export function applyMonthlySupportCap(
   totals: CategoryTotal[],
   categories: Pick<CategoryConfig, "name" | "support">[],

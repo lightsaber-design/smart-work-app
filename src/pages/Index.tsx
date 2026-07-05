@@ -500,7 +500,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             userName={userName}
             displayCityName={displayCityName}
             weather={weather}
-            hourlyWeather={hourlyWeather}
             heroTheme={heroTheme}
             setup={setup}
             timerIsRunning={tracker.isRunning}
