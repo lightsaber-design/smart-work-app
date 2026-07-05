@@ -29,4 +29,18 @@ describe("monthly report carryover", () => {
     expect(repeated.reportedHours).toBe(31);
     expect(repeated.carriedOutMinutes).toBe(45);
   });
+
+  it("still honors a pending carryover from a prior 'carryover'-mode month after switching to 'round'", () => {
+    const january = calculateMonthlyReport((31 * 60 + 45) * 60_000, new Date(2026, 0, 31), emptyMonthlyReportCarryover, "carryover");
+    expect(january.carriedOutMinutes).toBe(45);
+    const state = applyMonthlyReportCalculation(emptyMonthlyReportCarryover, january, "2026-01-31T12:00:00.000Z");
+
+    // El usuario cambia el ajuste a "round" antes de informar febrero: los 45
+    // minutos pendientes de enero no deben perderse.
+    const february = calculateMonthlyReport(32 * 60 * 60_000, new Date(2026, 1, 28), state, "round");
+
+    expect(february.carriedInMinutes).toBe(45);
+    expect(february.reportedHours).toBe(33); // (32h + 45min) redondeado
+    expect(february.carriedOutMinutes).toBe(0); // el modo "round" no genera arrastre nuevo
+  });
 });

@@ -79,9 +79,11 @@ export function calculateMonthlyReport(
 ): MonthlyReportCalculation {
   const key = monthlyReportKey(date);
   const actualMinutes = Math.max(0, Math.floor(actualMs / 60_000));
-  // En modo "round" cada mes se redondea de forma independiente: no hay
-  // arrastre de minutos entrando ni saliendo.
-  const carriedInMinutes = mode === "round" ? 0 : getCarriedInMinutes(state, key);
+  // En modo "round" no se genera arrastre saliente propio, pero si venía un
+  // arrastre pendiente de un mes anterior en modo "carryover" (o de antes de
+  // cambiar el ajuste), se sigue sumando esta vez para no perderlo: solo se
+  // deja de generar arrastre nuevo, no se descarta el que ya existía.
+  const carriedInMinutes = getCarriedInMinutes(state, key);
   const totalMinutes = actualMinutes + carriedInMinutes;
 
   return {
