@@ -1,7 +1,7 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { MinistryMark, MinistryWordmark } from "@/components/MinistryMark";
 import { Trash2, MapPin, User, Moon, Sunrise, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil, Upload, Download, Bell, Cloud, LogIn, LogOut, RefreshCw, RotateCcw, Type } from "lucide-react";
-import { useGoogleDriveSync } from "@/hooks/useGoogleDriveSync";
+import { useGoogleDriveSync, DriveConflictError } from "@/hooks/useGoogleDriveSync";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -96,6 +96,20 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
     if (hrs < 24) return rtf.format(-hrs, "hour");
     return rtf.format(-Math.round(hrs / 24), "day");
   })();
+
+  const handleGDriveBackup = () => {
+    gdrive.backup().catch((e) => {
+      if (e instanceof DriveConflictError) {
+        const date = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(e.remoteFile.modifiedTime));
+        if (confirm(t("gdrive_backup_conflict_confirm", { date }))) {
+          gdrive.backup({ force: true }).catch(() => null);
+        }
+        return;
+      }
+      // otros errores ya quedan reflejados en gdrive.errorMsg
+    });
+  };
+
   const [editingCity, setEditingCity] = useState(false);
   const [cityDraft, setCityDraft] = useState(setup.city ?? undefined);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -827,7 +841,7 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
                 {/* Acciones manuales */}
                 <div className="flex gap-2 border-t border-border pt-3">
                   <button
-                    onClick={() => gdrive.backup().catch(() => null)}
+                    onClick={handleGDriveBackup}
                     disabled={gdrive.status === "syncing"}
                     className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-primary bg-primary/10 px-3 py-2.5 text-sm font-semibold text-primary active:scale-[0.98] transition-transform disabled:opacity-60"
                   >

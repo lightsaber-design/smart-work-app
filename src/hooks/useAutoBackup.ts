@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { GoogleAuth } from "@codetrix-studio/capacitor-google-auth";
 import { getDataSnapshot } from "@/lib/jsonFileStorage";
-import { uploadToDrive } from "@/lib/googleDrive";
+import { uploadToDriveSafely } from "@/lib/googleDrive";
 import type { SetupData } from "@/hooks/useSetup";
 
 const BACKUP_DATE_KEY = "auto-backup-date";
@@ -48,8 +48,12 @@ export function useAutoBackup({ setup }: Options = {}) {
     const intervalMs = freqToMs(setup.autoBackupFreq);
     if (Date.now() - lastSyncMs < intervalMs) return;
 
+    // No forzar: si hay una copia remota más reciente que este dispositivo
+    // no ha descargado (p.ej. subida desde otro dispositivo), el auto-backup
+    // silencioso no tiene forma de preguntar — mejor omitir este ciclo que
+    // sobrescribirla sin que nadie se entere.
     GoogleAuth.refresh()
-      .then((r) => uploadToDrive(r.accessToken, getDataSnapshot()))
+      .then((r) => uploadToDriveSafely(r.accessToken, getDataSnapshot(), lastSyncMs || null))
       .then(() => localStorage.setItem(KEY_GDRIVE_LAST_SYNC, String(Date.now())))
       .catch(() => null);
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -48,3 +48,36 @@ export async function downloadFromDrive(token: string): Promise<string> {
   if (!file) throw new Error("NO_BACKUP");
   return await (await req(`${DRIVE_API}/files/${file.id}?alt=media`, token)).text();
 }
+
+export class DriveConflictError extends Error {
+  constructor(public remoteFile: DriveFile) {
+    super("DRIVE_CONFLICT");
+    this.name = "DriveConflictError";
+  }
+}
+
+/**
+ * Sube el snapshot a Drive, pero antes comprueba que no exista ya una copia
+ * remota más reciente que `lastSyncMs` (la última vez que este dispositivo
+ * sincronizó con Drive, en cualquier sentido). uploadToDrive() por sí solo
+ * era "el último que escribe gana": si otro dispositivo había subido una
+ * copia más nueva que este todavía no había descargado, se perdía en
+ * silencio al subir la propia. Si hay conflicto, no sobrescribe — lanza
+ * DriveConflictError para que el llamador decida (forzar tras confirmar con
+ * el usuario, o simplemente omitir el guardado en el caso de un auto-backup
+ * silencioso sin nadie delante para confirmar nada).
+ */
+export async function uploadToDriveSafely(
+  token: string,
+  json: string,
+  lastSyncMs: number | null,
+  options: { force?: boolean } = {}
+): Promise<DriveFile> {
+  if (!options.force) {
+    const existing = await findBackupFile(token);
+    if (existing && (!lastSyncMs || new Date(existing.modifiedTime).getTime() > lastSyncMs)) {
+      throw new DriveConflictError(existing);
+    }
+  }
+  return uploadToDrive(token, json);
+}

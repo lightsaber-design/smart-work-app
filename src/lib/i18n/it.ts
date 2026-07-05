@@ -537,6 +537,7 @@ const it: TranslationMap = {    // Navigation
     gdrive_restore_ok: 'Dati ripristinati con successo',
     gdrive_error: 'Errore: {msg}',
     gdrive_restore_confirm: 'Ripristinare i dati da Drive? I dati attuali verranno sostituiti.',
+    gdrive_backup_conflict_confirm: 'Su Drive c\'è una copia più recente (del {date}) che questo dispositivo non ha scaricato. Sovrascriverla comunque?',
     gdrive_remote_file: 'File su Drive: {date}',
     home_goal_target: 'obiettivo',
     manual_entry_title: 'Aggiungi ore passate',

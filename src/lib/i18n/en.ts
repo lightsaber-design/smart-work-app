@@ -538,6 +538,7 @@ const en: TranslationMap = {    // Navigation
     gdrive_restore_ok: 'Data restored successfully',
     gdrive_error: 'Error: {msg}',
     gdrive_restore_confirm: 'Restore data from Drive? Current data will be replaced.',
+    gdrive_backup_conflict_confirm: 'There is a newer backup in Drive (from {date}) that this device hasn\'t downloaded. Overwrite it anyway?',
     gdrive_remote_file: 'Drive file: {date}',
     manual_entry_title: 'Add past hours',
     manual_entry_date: 'Date',

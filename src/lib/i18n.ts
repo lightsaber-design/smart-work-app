@@ -559,6 +559,7 @@ const es: TranslationMap = {
     gdrive_restore_ok: 'Datos restaurados correctamente',
     gdrive_error: 'Error: {msg}',
     gdrive_restore_confirm: '¿Restaurar datos desde Drive? Se reemplazarán los datos actuales.',
+    gdrive_backup_conflict_confirm: 'Hay una copia en Drive más reciente (del {date}) que este dispositivo no ha descargado. ¿Sobrescribirla igualmente?',
     gdrive_remote_file: 'Archivo en Drive: {date}',
     // Manual entry
     manual_entry_title: 'Añadir horas pasadas',

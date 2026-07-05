@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { GoogleAuth } from "@codetrix-studio/capacitor-google-auth";
-import { uploadToDrive, downloadFromDrive, findBackupFile, DriveFile } from "@/lib/googleDrive";
+import { uploadToDriveSafely, downloadFromDrive, findBackupFile, DriveConflictError, DriveFile } from "@/lib/googleDrive";
 import { getDataSnapshot, importAllData } from "@/lib/jsonFileStorage";
+
+export { DriveConflictError } from "@/lib/googleDrive";
 
 const KEY_USER = "gdrive-user";
 const KEY_LAST_SYNC = "gdrive-last-sync";
@@ -23,7 +25,7 @@ export interface GoogleDriveSync {
   remoteFile: DriveFile | null;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
-  backup: () => Promise<void>;
+  backup: (options?: { force?: boolean }) => Promise<void>;
   restore: () => Promise<void>;
 }
 
@@ -97,25 +99,33 @@ export function useGoogleDriveSync(): GoogleDriveSync {
     setErrorMsg(null);
   }, []);
 
-  const backup = useCallback(async () => {
+  const backup = useCallback(async (options?: { force?: boolean }) => {
     setStatus("syncing");
     setErrorMsg(null);
     try {
       const token = await getToken();
       const snapshot = getDataSnapshot();
-      const file = await uploadToDrive(token, snapshot);
+      const file = await uploadToDriveSafely(token, snapshot, lastSync?.getTime() ?? null, options);
       setRemoteFile(file);
       const now = Date.now();
       localStorage.setItem(KEY_LAST_SYNC, String(now));
       setLastSync(new Date(now));
       setStatus("ok");
     } catch (e) {
+      if (e instanceof DriveConflictError) {
+        // No es un fallo: hay una copia remota más reciente sin descargar.
+        // Se deja el estado tal cual para que quien llame decida (mostrar
+        // confirmación y reintentar con force, o descartar).
+        setRemoteFile(e.remoteFile);
+        setStatus("idle");
+        throw e;
+      }
       const msg = e instanceof Error ? e.message : "Error al hacer copia de seguridad";
       setErrorMsg(msg);
       setStatus("error");
       throw e;
     }
-  }, [getToken]);
+  }, [getToken, lastSync]);
 
   const restore = useCallback(async () => {
     setStatus("syncing");
