@@ -80,16 +80,28 @@ function parseStoredEvent(value: unknown): CalendarEvent | null {
   };
 }
 
+// Suma `months` meses conservando el día del mes cuando existe en el mes de
+// destino, y si no (p.ej. 31 de enero + 1 mes) lo recorta al último día de
+// ese mes en vez de dejar que JS lo desborde al mes siguiente (31 ene → 3
+// mar en vez de 28/29 feb).
+function addMonthsClamped(date: Date, months: number): Date {
+  const day = date.getDate();
+  const firstOfTargetMonth = new Date(date.getFullYear(), date.getMonth() + months, 1);
+  const daysInTargetMonth = new Date(firstOfTargetMonth.getFullYear(), firstOfTargetMonth.getMonth() + 1, 0).getDate();
+  const result = new Date(date);
+  result.setDate(1); // evita desbordar el mes al reasignarlo mientras el día original aún no encaja
+  result.setFullYear(firstOfTargetMonth.getFullYear(), firstOfTargetMonth.getMonth(), Math.min(day, daysInTargetMonth));
+  return result;
+}
+
 function generateRecurringEvents(params: AddEventParams, count: number): CalendarEvent[] {
   const parentId = generateId();
   const events: CalendarEvent[] = [];
 
   for (let i = 0; i < count; i++) {
-    const date = new Date(params.date);
+    const date = params.recurrence === "monthly" ? addMonthsClamped(params.date, i) : new Date(params.date);
     if (params.recurrence === "weekly") {
       date.setDate(date.getDate() + i * 7);
-    } else if (params.recurrence === "monthly") {
-      date.setMonth(date.getMonth() + i);
     }
 
     events.push({

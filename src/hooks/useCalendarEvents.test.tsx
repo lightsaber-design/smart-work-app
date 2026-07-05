@@ -132,4 +132,26 @@ describe("useCalendarEvents", () => {
     expect(result.current.events[0]).toMatchObject({ id: "scheduled", completed: true, notified: true });
     expect(result.current.events[0].date).toEqual(new Date(2026, 4, 10, 10, 5));
   });
+
+  it("clamps monthly recurrence to month-end instead of overflowing (Jan 31 -> Feb 28, not Mar)", async () => {
+    const { result } = renderHook(() => useCalendarEvents());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      result.current.addEvent({
+        date: new Date(2026, 0, 31, 9, 0),
+        category: "Predi",
+        reminderMinutesBefore: 15,
+        recurrence: "monthly",
+      });
+    });
+
+    const dates = result.current.events.map((e) => e.date.getMonth());
+    // Jan(0), Feb(1), Mar(2), Apr(3), May(4)... nunca debe saltarse un mes.
+    expect(dates.slice(0, 5)).toEqual([0, 1, 2, 3, 4]);
+    expect(result.current.events[1].date).toEqual(new Date(2026, 1, 28, 9, 0)); // Feb 28, no Mar 3
+    expect(result.current.events[2].date).toEqual(new Date(2026, 2, 31, 9, 0)); // vuelve al día 31 cuando existe
+  });
 });
