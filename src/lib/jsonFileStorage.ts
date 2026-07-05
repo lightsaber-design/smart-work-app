@@ -97,10 +97,25 @@ async function storeHandle(handle: FileSystemFileHandle) {
   });
 }
 
+class JsonStorageCorruptedError extends Error {
+  constructor(cause: unknown) {
+    super("The connected JSON data file is corrupted or not valid JSON.");
+    this.name = "JsonStorageCorruptedError";
+    this.cause = cause;
+  }
+}
+
 function parseData(text: string): AppData {
   if (!text.trim()) return {};
-  const parsed = JSON.parse(text) as unknown;
-  return typeof parsed === "object" && parsed !== null ? (parsed as AppData) : {};
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return typeof parsed === "object" && parsed !== null ? (parsed as AppData) : {};
+  } catch (error) {
+    // Un JSON truncado/corrupto (p.ej. tras un cierre inesperado) no debe
+    // tirar la promesa de inicialización para siempre: se relanza como un
+    // tipo distinguible para que initializeJsonStorage pueda recuperarse.
+    throw new JsonStorageCorruptedError(error);
+  }
 }
 
 function parseLegacyValue(key: string) {
@@ -159,13 +174,27 @@ async function ensurePermission(handle: FileSystemFileHandle): Promise<boolean> 
   return requested === "granted";
 }
 
-async function writeFile() {
+async function writeFileNow() {
   if (!handleCache) throw new Error("No JSON data file is connected.");
   if (!(await ensurePermission(handleCache))) throw new Error("JSON data file permission was denied.");
 
   const writable = await handleCache.createWritable();
   await writable.write(JSON.stringify({ ...dataCache, schemaVersion: 1, updatedAt: new Date().toISOString() }, null, 2));
   await writable.close();
+}
+
+// Serializa todas las escrituras al archivo conectado: sin esto, dos
+// escrituras casi simultáneas (p.ej. dos hooks distintos guardando a la vez)
+// pueden completarse (close()) en un orden distinto al que empezaron, y la
+// que termina más tarde pisa en disco los datos de la que terminó antes
+// aunque fuera más reciente. Encolarlas asegura que cada una parte siempre
+// del dataCache más actualizado y que se escriben en orden.
+let writeQueue: Promise<void> = Promise.resolve();
+
+function writeFile(): Promise<void> {
+  const run = writeQueue.then(writeFileNow, writeFileNow);
+  writeQueue = run.then(() => undefined, () => undefined);
+  return run;
 }
 
 export function isJsonFileStorageSupported() {
@@ -183,8 +212,21 @@ export async function initializeJsonStorage() {
     dataCache = readLegacyBrowserData();
     const handle = await getStoredHandle();
     if (!handle || !(await ensurePermission(handle))) return;
-    handleCache = handle;
-    await readFromHandle(handle);
+    try {
+      handleCache = handle;
+      await readFromHandle(handle);
+    } catch (error) {
+      // El archivo conectado no se pudo leer (dañado/JSON inválido): no lo
+      // tratamos como fuente de verdad esta sesión para no bloquear la app
+      // (readyPromise quedaría rechazado para siempre) ni arriesgarnos a
+      // sobrescribirlo a ciegas en el próximo guardado. Se sigue con los
+      // datos ya cargados de localStorage y se libera el candado para poder
+      // reintentar (p.ej. si el usuario reconecta/repara el archivo).
+      handleCache = null;
+      readyPromise = null;
+      console.error("Error reading connected JSON data file:", error);
+      throw error;
+    }
     notify();
   })();
   return readyPromise;
