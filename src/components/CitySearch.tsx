@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { MapPin, Loader2 } from "lucide-react";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
@@ -30,24 +30,39 @@ export function CitySearch({ value, onChange, placeholder }: CitySearchProps) {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Cancela cualquier búsqueda pendiente al desmontar, para no dejar timers ni
+  // peticiones en vuelo que intenten actualizar el estado después.
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    abortRef.current?.abort();
+  }, []);
 
   const search = (q: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    // Cancela la búsqueda anterior: sin esto, una respuesta vieja y lenta
+    // podía llegar después de una más reciente y pisar sus resultados.
+    abortRef.current?.abort();
     if (!q.trim()) { setSuggestions([]); setOpen(false); return; }
     debounceRef.current = setTimeout(async () => {
+      const controller = new AbortController();
+      abortRef.current = controller;
       setLoading(true);
       try {
         const res = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&addressdetails=1&accept-language=${encodeURIComponent(locale)}`,
-          { referrerPolicy: "no-referrer" }
+          { referrerPolicy: "no-referrer", signal: controller.signal }
         );
         const data: CityResult[] = await res.json();
         setSuggestions(data);
         setOpen(data.length > 0);
-      } catch {
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
         setSuggestions([]);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }, 400);
   };
 

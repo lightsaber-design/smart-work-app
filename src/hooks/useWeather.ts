@@ -25,25 +25,36 @@ export function useWeather(city: SetupData["city"]) {
     return [];
   });
 
+  // Depende de lat/lng (no del objeto `city` entero) para no volver a pedir
+  // el tiempo si el padre pasa un objeto nuevo con las mismas coordenadas.
+  const lat = city?.lat;
+  const lng = city?.lng;
+
   useEffect(() => {
-    if (!city) {
+    if (lat === undefined || lng === undefined) {
       setWeather(null);
       setHourlyWeather([]);
       return;
     }
     try {
       const c = JSON.parse(localStorage.getItem(WEATHER_CACHE_KEY) ?? "null");
-      if (c && c.cityKey === `${city.lat},${city.lng}` && Date.now() - c.ts < WEATHER_TTL) return;
+      if (c && c.cityKey === `${lat},${lng}` && Date.now() - c.ts < WEATHER_TTL) return;
     } catch {
       // ignore corrupt cache
     }
 
-    const { lat, lng } = city;
+    let cancelled = false;
+    const controller = new AbortController();
+
     fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true&hourly=temperature_2m,weather_code,precipitation_probability&forecast_days=7&timezone=auto`,
+      { signal: controller.signal },
     )
       .then((r) => r.json())
       .then((data) => {
+        // Una respuesta lenta de una ciudad ya no seleccionada no debe pisar
+        // el tiempo de la ciudad actual.
+        if (cancelled) return;
         const cw = data?.current_weather;
         let newWeather: CurrentWeather | null = null;
         if (cw) {
@@ -87,8 +98,16 @@ export function useWeather(city: SetupData["city"]) {
           }
         }
       })
-      .catch((error) => console.warn("Weather fetch failed:", error));
-  }, [city]);
+      .catch((error) => {
+        if (cancelled || (error instanceof DOMException && error.name === "AbortError")) return;
+        console.warn("Weather fetch failed:", error);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [lat, lng]);
 
   return { weather, hourlyWeather };
 }

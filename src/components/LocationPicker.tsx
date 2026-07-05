@@ -121,6 +121,7 @@ export function LocationPicker({ value, onChange, defaultCenter }: LocationPicke
   const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
+  const manualSearchAbortRef = useRef<AbortController | null>(null);
 
   const applyResult = (result: NominatimResult) => {
     const loc = { lat: parseFloat(result.lat), lng: parseFloat(result.lon) };
@@ -172,27 +173,36 @@ export function LocationPicker({ value, onChange, defaultCenter }: LocationPicke
     };
   }, [defaultCenter, locale, search]);
 
+  useEffect(() => () => manualSearchAbortRef.current?.abort(), []);
+
   const handleSearch = async () => {
     if (!search.trim()) return;
     if (suggestions[0]) {
       applyResult(suggestions[0]);
       return;
     }
+    // Cancela una búsqueda manual anterior todavía en vuelo: sin esto, pulsar
+    // buscar varias veces seguidas podía dejar que una respuesta vieja y
+    // lenta aplicara su resultado después de una más reciente.
+    manualSearchAbortRef.current?.abort();
+    const controller = new AbortController();
+    manualSearchAbortRef.current = controller;
     setSearching(true);
     try {
       const localResults = defaultCenter
-        ? sortByNearestCity(await fetchNominatim(search, { center: defaultCenter, bounded: true, limit: 3, locale }), defaultCenter)
+        ? sortByNearestCity(await fetchNominatim(search, { center: defaultCenter, bounded: true, limit: 3, locale, signal: controller.signal }), defaultCenter)
         : [];
-      const broaderResults = sortByNearestCity(await fetchNominatim(search, { center: defaultCenter, bounded: false, limit: 5, locale }), defaultCenter);
+      const broaderResults = sortByNearestCity(await fetchNominatim(search, { center: defaultCenter, bounded: false, limit: 5, locale, signal: controller.signal }), defaultCenter);
       const data = mergeResults(localResults, broaderResults);
       const firstResult = data[0];
       if (firstResult) {
         applyResult(firstResult);
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       // La busqueda depende de red externa; si falla mantenemos la seleccion actual.
     } finally {
-      setSearching(false);
+      if (manualSearchAbortRef.current === controller) setSearching(false);
     }
   };
 
