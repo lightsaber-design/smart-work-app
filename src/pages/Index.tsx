@@ -507,6 +507,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   categoryConfigs={setup.categorySettings}
                   carryover={reportCarryover}
                   onSaveMonthlyReport={saveMonthlyReport}
+                  reportRounding={setup.monthlyReportRounding}
                 />
               </Suspense>
             }
@@ -534,6 +535,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 onOpenStudies={() => navigate("estudios")}
                 carryover={reportCarryover}
                 onSaveMonthlyReport={saveMonthlyReport}
+                reportRounding={setup.monthlyReportRounding}
               />
             </Suspense>
           </>

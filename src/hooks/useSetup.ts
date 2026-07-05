@@ -31,6 +31,8 @@ export interface SetupData {
   autoDarkMode: boolean;
   autoBackupEnabled: boolean;
   autoBackupFreq: 'daily' | 'weekly' | 'monthly';
+  /** Qué hacer con los minutos sobrantes del informe mensual: arrastrarlos al mes siguiente o redondear sin arrastre. */
+  monthlyReportRounding: 'carryover' | 'round';
 }
 
 const DEFAULT: SetupData = {
@@ -54,6 +56,7 @@ const DEFAULT: SetupData = {
   autoDarkMode: false,
   autoBackupEnabled: false,
   autoBackupFreq: 'daily',
+  monthlyReportRounding: 'carryover',
 };
 
 function isLanguage(value: unknown): value is Lang {
@@ -98,6 +101,7 @@ function parseStoredSetup(value: unknown): SetupData {
     autoDarkMode: typeof value.autoDarkMode === "boolean" ? value.autoDarkMode : DEFAULT.autoDarkMode,
     autoBackupEnabled: typeof value.autoBackupEnabled === "boolean" ? value.autoBackupEnabled : DEFAULT.autoBackupEnabled,
     autoBackupFreq: (value.autoBackupFreq === 'daily' || value.autoBackupFreq === 'weekly' || value.autoBackupFreq === 'monthly') ? value.autoBackupFreq : DEFAULT.autoBackupFreq,
+    monthlyReportRounding: value.monthlyReportRounding === 'round' ? 'round' : DEFAULT.monthlyReportRounding,
   };
 }
 

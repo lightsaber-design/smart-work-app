@@ -441,6 +441,13 @@ const fr: TranslationMap = {    // Navigation
     settings_data_saved_device: 'Les données sont enregistrées sur cet appareil',
     settings_open_json_file: 'Ouvrir un autre fichier JSON',
     settings_save_json_file: 'Enregistrer les données dans un fichier JSON',
+    settings_data_local_title: 'Local',
+    settings_report_calc_title: 'Calcul du rapport mensuel',
+    settings_report_calc_hint: 'Que faire des minutes restantes chaque mois',
+    settings_report_calc_carryover: 'Reporter les minutes',
+    settings_report_calc_carryover_hint: 'Les minutes restantes sont reportées au rapport du mois suivant',
+    settings_report_calc_round: 'Arrondir les heures',
+    settings_report_calc_round_hint: "Chaque mois est arrondi à l'heure la plus proche, sans report",
     // DaySummary
     day_today: "Aujourd'hui",
     day_month: 'Mois',

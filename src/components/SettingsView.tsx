@@ -234,6 +234,34 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
           />
         </div>
 
+        <div className="space-y-2 pt-1 border-t border-border">
+          <Label className="text-sm text-foreground">{t("settings_report_calc_title")}</Label>
+          <p className="text-xs text-muted-foreground">{t("settings_report_calc_hint")}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(["carryover", "round"] as const).map((mode) => {
+              const selected = (setup.monthlyReportRounding ?? "carryover") === mode;
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => onSaveSetup({ monthlyReportRounding: mode })}
+                  aria-pressed={selected}
+                  className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                    selected ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"
+                  }`}
+                >
+                  <p className="text-xs font-semibold text-foreground">
+                    {t(mode === "carryover" ? "settings_report_calc_carryover" : "settings_report_calc_round")}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">
+                    {t(mode === "carryover" ? "settings_report_calc_carryover_hint" : "settings_report_calc_round_hint")}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="space-y-2 pt-1">
           <TravelTimeConfig
             enabled={setup.travelTimeEnabled}
@@ -656,205 +684,175 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
           </span>
         </div>
 
-        <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-3">
-          <div className="flex items-center gap-2">
+        {/* LOCAL: almacenamiento en este dispositivo */}
+        <div className="overflow-hidden rounded-xl border border-border">
+          <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
             <FileJson className="h-4 w-4 text-primary" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">
-                {storage.connected ? t("settings_json_file") : t("settings_local_storage")}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {storage.fileName ?? t("settings_data_saved_device")}
-              </p>
-            </div>
+            <p className="text-sm font-semibold text-foreground">{t("settings_data_local_title")}</p>
           </div>
-          {storage.supported && (
-            <button
-              onClick={storage.connected ? storage.openFile : storage.createFile}
-              className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-            >
-              <FolderOpen className="w-4 h-4" />
-              {storage.connected ? t("settings_open_json_file") : t("settings_save_json_file")}
-            </button>
-          )}
-        </div>
-        {sinceDateLabel && (
-          <p className="text-sm text-muted-foreground mb-4">
-            {t('set_data_since', { date: sinceDateLabel })}
-          </p>
-        )}
-
-        {/* Export / Import */}
-        <div className="flex flex-col gap-2 mb-4">
-          <button
-            onClick={() => storage.exportData()}
-            className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-          >
-            <Download className="w-4 h-4" />
-            {t('set_export_data')}
-          </button>
-          <label className="flex items-center gap-2 text-sm font-medium text-primary hover:underline cursor-pointer">
-            <Upload className="w-4 h-4" />
-            {t('set_import_data')}
-            <input
-              type="file"
-              accept=".json,application/json"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                if (confirm(t('set_import_confirm'))) {
-                  await storage.importData(file);
-                }
-                e.target.value = '';
-              }}
-            />
-          </label>
-        </div>
-
-        {/* Backup */}
-        <div className="border-t border-border pt-4 space-y-3">
-          <p className="text-sm font-semibold text-foreground">{t("backup_section")}</p>
-
-          {/* Local auto-save (always on) */}
-          <div className="rounded-xl bg-muted/40 border border-border px-4 py-3 space-y-1">
-            <p className="text-sm font-medium text-foreground">{t("backup_local_auto")}</p>
-            <p className="text-xs text-muted-foreground">{t("backup_local_hint")}</p>
-          </div>
-
-          {/* Auto Drive backup toggle */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
+          <div className="space-y-3 p-4">
+            <div className="flex items-center gap-2">
+              <FileJson className="h-4 w-4 text-primary flex-shrink-0" />
               <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">{t("backup_auto_drive")}</p>
-                {!gdrive.isSignedIn && (
-                  <p className="text-xs text-muted-foreground">{t("backup_need_signin")}</p>
-                )}
-                {gdrive.isSignedIn && (
-                  <p className="text-xs text-muted-foreground">{t("backup_auto_drive_hint")}</p>
-                )}
+                <p className="text-sm font-medium text-foreground">
+                  {storage.connected ? t("settings_json_file") : t("settings_local_storage")}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {storage.fileName ?? t("settings_data_saved_device")}
+                </p>
               </div>
-              <Switch
-                checked={setup.autoBackupEnabled && gdrive.isSignedIn}
-                onCheckedChange={(v) => {
-                  if (!gdrive.isSignedIn) return;
-                  onSaveSetup({ autoBackupEnabled: v });
-                }}
-                disabled={!gdrive.isSignedIn}
-              />
             </div>
-
-            {setup.autoBackupEnabled && gdrive.isSignedIn && (
-              <div className="flex items-center gap-3">
-                <p className="text-sm text-muted-foreground shrink-0">{t("backup_freq")}</p>
-                <div className="flex gap-2">
-                  {(["daily", "weekly", "monthly"] as const).map((freq) => (
-                    <button
-                      key={freq}
-                      type="button"
-                      onClick={() => onSaveSetup({ autoBackupFreq: freq })}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${setup.autoBackupFreq === freq ? "bg-primary text-primary-foreground" : "bg-muted/60 text-muted-foreground hover:bg-muted"}`}
-                    >
-                      {t(`backup_freq_${freq}` as const)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Last Drive backup timestamp */}
-            {gdrive.isSignedIn && (
-              <p className="text-xs text-muted-foreground">
-                {gdrive.lastSync
-                  ? t("backup_saved_at", { date: new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(gdrive.lastSync) })
-                  : t("backup_never")}
-              </p>
-            )}
-
-            {/* Manual save to Drive button */}
-            {gdrive.isSignedIn && (
+            {storage.supported && (
               <button
-                onClick={() => gdrive.backup().catch(() => null)}
-                disabled={gdrive.status === "syncing"}
-                className="flex items-center gap-2 text-sm font-medium text-primary hover:underline disabled:opacity-60"
+                onClick={storage.connected ? storage.openFile : storage.createFile}
+                className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
               >
-                {gdrive.status === "syncing" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                {t("backup_save_now")}
+                <FolderOpen className="w-4 h-4" />
+                {storage.connected ? t("settings_open_json_file") : t("settings_save_json_file")}
               </button>
             )}
+            {sinceDateLabel && (
+              <p className="text-xs text-muted-foreground">{t('set_data_since', { date: sinceDateLabel })}</p>
+            )}
+            <p className="text-xs text-muted-foreground">{t("backup_local_hint")}</p>
+
+            {/* Export / Import */}
+            <div className="flex flex-col gap-2 border-t border-border pt-3">
+              <button
+                onClick={() => storage.exportData()}
+                className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+              >
+                <Download className="w-4 h-4" />
+                {t('set_export_data')}
+              </button>
+              <label className="flex items-center gap-2 text-sm font-medium text-primary hover:underline cursor-pointer">
+                <Upload className="w-4 h-4" />
+                {t('set_import_data')}
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (confirm(t('set_import_confirm'))) {
+                      await storage.importData(file);
+                    }
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
           </div>
         </div>
 
-        {/* Google Drive */}
-        <div className="border-t border-border pt-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Cloud className="w-4 h-4 text-primary" />
+        {/* GOOGLE DRIVE: copia en la nube */}
+        <div className="overflow-hidden rounded-xl border border-border">
+          <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
+            <Cloud className="h-4 w-4 text-primary" />
             <p className="text-sm font-semibold text-foreground">{t("gdrive_section_title")}</p>
             {gdrive.isSignedIn && (
               <span className="ml-auto text-xs font-semibold text-green-500 truncate max-w-[140px]">{gdrive.user?.email}</span>
             )}
           </div>
+          <div className="space-y-3 p-4">
+            {gdrive.errorMsg && (
+              <p className="text-xs text-destructive rounded-lg bg-destructive/10 px-3 py-2">
+                {t("gdrive_error", { msg: gdrive.errorMsg })}
+              </p>
+            )}
 
-          {gdrive.errorMsg && (
-            <p className="text-xs text-destructive rounded-lg bg-destructive/10 px-3 py-2">
-              {t("gdrive_error", { msg: gdrive.errorMsg })}
-            </p>
-          )}
-
-          {!gdrive.isSignedIn ? (
-            <button
-              onClick={() => gdrive.signIn().catch(() => null)}
-              disabled={gdrive.status === "syncing"}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-sm active:scale-[0.98] transition-transform disabled:opacity-60"
-            >
-              {gdrive.status === "syncing" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
-              {gdrive.status === "syncing" ? t("gdrive_syncing") : t("gdrive_sign_in")}
-            </button>
-          ) : (
-            <div className="space-y-3">
-              {gdrive.lastSync ? (
-                <p className="text-xs text-muted-foreground">
-                  {t("gdrive_last_sync", {
-                    date: new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(gdrive.lastSync),
-                  })}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">{t("gdrive_no_backup")}</p>
-              )}
-              {gdrive.remoteFile && (
-                <p className="text-xs text-muted-foreground">
-                  {t("gdrive_remote_file", {
-                    date: new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" }).format(new Date(gdrive.remoteFile.modifiedTime)),
-                  })}
-                </p>
-              )}
-              <div className="flex gap-2">
+            {!gdrive.isSignedIn ? (
+              <>
+                <p className="text-xs text-muted-foreground">{t("backup_need_signin")}</p>
                 <button
-                  onClick={() => gdrive.backup().catch(() => null)}
+                  onClick={() => gdrive.signIn().catch(() => null)}
                   disabled={gdrive.status === "syncing"}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-primary bg-primary/10 px-3 py-2.5 text-sm font-semibold text-primary active:scale-[0.98] transition-transform disabled:opacity-60"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-sm active:scale-[0.98] transition-transform disabled:opacity-60"
                 >
-                  {gdrive.status === "syncing" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  {t("gdrive_backup")}
+                  {gdrive.status === "syncing" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+                  {gdrive.status === "syncing" ? t("gdrive_syncing") : t("gdrive_sign_in")}
                 </button>
+              </>
+            ) : (
+              <>
+                {/* Auto Drive backup toggle */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">{t("backup_auto_drive")}</p>
+                    <p className="text-xs text-muted-foreground">{t("backup_auto_drive_hint")}</p>
+                  </div>
+                  <Switch
+                    checked={setup.autoBackupEnabled}
+                    onCheckedChange={(v) => onSaveSetup({ autoBackupEnabled: v })}
+                  />
+                </div>
+
+                {setup.autoBackupEnabled && (
+                  <div className="flex items-center gap-3">
+                    <p className="text-sm text-muted-foreground shrink-0">{t("backup_freq")}</p>
+                    <div className="flex gap-2">
+                      {(["daily", "weekly", "monthly"] as const).map((freq) => (
+                        <button
+                          key={freq}
+                          type="button"
+                          onClick={() => onSaveSetup({ autoBackupFreq: freq })}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${setup.autoBackupFreq === freq ? "bg-primary text-primary-foreground" : "bg-muted/60 text-muted-foreground hover:bg-muted"}`}
+                        >
+                          {t(`backup_freq_${freq}` as const)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Última copia y archivo remoto */}
+                {gdrive.lastSync ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t("gdrive_last_sync", {
+                      date: new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(gdrive.lastSync),
+                    })}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t("gdrive_no_backup")}</p>
+                )}
+                {gdrive.remoteFile && (
+                  <p className="text-xs text-muted-foreground">
+                    {t("gdrive_remote_file", {
+                      date: new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" }).format(new Date(gdrive.remoteFile.modifiedTime)),
+                    })}
+                  </p>
+                )}
+
+                {/* Acciones manuales */}
+                <div className="flex gap-2 border-t border-border pt-3">
+                  <button
+                    onClick={() => gdrive.backup().catch(() => null)}
+                    disabled={gdrive.status === "syncing"}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-primary bg-primary/10 px-3 py-2.5 text-sm font-semibold text-primary active:scale-[0.98] transition-transform disabled:opacity-60"
+                  >
+                    {gdrive.status === "syncing" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    {t("gdrive_backup")}
+                  </button>
+                  <button
+                    onClick={() => { if (confirm(t("gdrive_restore_confirm"))) gdrive.restore().catch(() => null); }}
+                    disabled={gdrive.status === "syncing" || !gdrive.remoteFile}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm font-semibold text-foreground active:scale-[0.98] transition-transform disabled:opacity-40"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    {t("gdrive_restore")}
+                  </button>
+                </div>
                 <button
-                  onClick={() => { if (confirm(t("gdrive_restore_confirm"))) gdrive.restore().catch(() => null); }}
-                  disabled={gdrive.status === "syncing" || !gdrive.remoteFile}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm font-semibold text-foreground active:scale-[0.98] transition-transform disabled:opacity-40"
+                  onClick={() => gdrive.signOut()}
+                  className="flex items-center gap-2 text-sm font-medium text-destructive hover:underline"
                 >
-                  <RotateCcw className="w-4 h-4" />
-                  {t("gdrive_restore")}
+                  <LogOut className="w-4 h-4" />
+                  {t("gdrive_sign_out")}
                 </button>
-              </div>
-              <button
-                onClick={() => gdrive.signOut()}
-                className="flex items-center gap-2 text-sm font-medium text-destructive hover:underline"
-              >
-                <LogOut className="w-4 h-4" />
-                {t("gdrive_sign_out")}
-              </button>
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </div>
 
         <button

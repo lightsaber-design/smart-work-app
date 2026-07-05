@@ -1,3 +1,5 @@
+export type MonthlyReportRoundingMode = "carryover" | "round";
+
 export interface MonthlyReportRecord {
   carriedInMinutes: number;
   reportedHours: number;
@@ -72,11 +74,14 @@ function getCarriedInMinutes(state: MonthlyReportCarryoverState, monthKey: strin
 export function calculateMonthlyReport(
   actualMs: number,
   date: Date,
-  state: MonthlyReportCarryoverState
+  state: MonthlyReportCarryoverState,
+  mode: MonthlyReportRoundingMode = "carryover"
 ): MonthlyReportCalculation {
   const key = monthlyReportKey(date);
   const actualMinutes = Math.max(0, Math.floor(actualMs / 60_000));
-  const carriedInMinutes = getCarriedInMinutes(state, key);
+  // En modo "round" cada mes se redondea de forma independiente: no hay
+  // arrastre de minutos entrando ni saliendo.
+  const carriedInMinutes = mode === "round" ? 0 : getCarriedInMinutes(state, key);
   const totalMinutes = actualMinutes + carriedInMinutes;
 
   return {
@@ -84,8 +89,8 @@ export function calculateMonthlyReport(
     actualMinutes,
     carriedInMinutes,
     totalMinutes,
-    reportedHours: Math.floor(totalMinutes / 60),
-    carriedOutMinutes: totalMinutes % 60,
+    reportedHours: mode === "round" ? Math.round(totalMinutes / 60) : Math.floor(totalMinutes / 60),
+    carriedOutMinutes: mode === "round" ? 0 : totalMinutes % 60,
   };
 }
 

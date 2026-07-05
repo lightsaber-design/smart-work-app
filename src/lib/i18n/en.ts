@@ -448,6 +448,13 @@ const en: TranslationMap = {    // Navigation
     settings_data_saved_device: 'Data is saved on this device',
     settings_open_json_file: 'Open another JSON file',
     settings_save_json_file: 'Save data to a JSON file',
+    settings_data_local_title: 'Local',
+    settings_report_calc_title: 'Monthly report calculation',
+    settings_report_calc_hint: 'What to do with leftover minutes each month',
+    settings_report_calc_carryover: 'Carry over minutes',
+    settings_report_calc_carryover_hint: "Leftover minutes roll into next month's report",
+    settings_report_calc_round: 'Round hours',
+    settings_report_calc_round_hint: 'Each month is rounded to the nearest hour, no carryover',
     // DaySummary
     day_today: 'Today',
     day_month: 'Month',

@@ -23,6 +23,7 @@ interface StatsViewProps {
   onOpenStudies?: () => void;
   carryover: MonthlyReportCarryoverState;
   onSaveMonthlyReport: (calculation: MonthlyReportCalculation) => void;
+  reportRounding?: "carryover" | "round";
 }
 
 export function StatsView({
@@ -36,6 +37,7 @@ export function StatsView({
   onOpenStudies,
   carryover,
   onSaveMonthlyReport,
+  reportRounding = "carryover",
 }: StatsViewProps) {
   const t = useT();
   const lang = useLang();
@@ -90,7 +92,7 @@ export function StatsView({
     .filter((item) => activeCategoryConfigs.find((category) => category.name === item.cat)?.support)
     .reduce((sum, item) => sum + item.ms, 0);
   const isMonthlySupportCapped = monthlySupportRawMs > monthlySupportCountedMs;
-  const monthlyReport = calculateMonthlyReport(monthlyFilteredMs, now, carryover);
+  const monthlyReport = calculateMonthlyReport(monthlyFilteredMs, now, carryover, reportRounding);
 
 
   // ── ANUAL (año sep–ago) ───────────────────────────────────────────────────
