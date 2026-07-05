@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
-import { openGoogleMaps } from "@/lib/maps";
+import { haversineDistanceM, openGoogleMaps } from "@/lib/maps";
 
 interface LeafletDefaultIconPrototype extends L.Icon.Default {
   _getIconUrl?: () => string;
@@ -25,15 +25,7 @@ function distanceFromCenter(result: NominatimResult, center: SearchCenter): numb
   const lat = parseFloat(result.lat);
   const lng = parseFloat(result.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return Number.POSITIVE_INFINITY;
-
-  const toRadians = (value: number) => (value * Math.PI) / 180;
-  const earthRadiusKm = 6371;
-  const dLat = toRadians(lat - center.lat);
-  const dLng = toRadians(lng - center.lng);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRadians(center.lat)) * Math.cos(toRadians(lat)) * Math.sin(dLng / 2) ** 2;
-  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return haversineDistanceM(center, { lat, lng });
 }
 
 function sortByNearestCity(results: NominatimResult[], center?: SearchCenter): NominatimResult[] {
