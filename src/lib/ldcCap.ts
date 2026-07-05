@@ -1,7 +1,11 @@
 import type { EventCategory } from "@/hooks/useCalendarEvents";
 import type { CategoryConfig } from "@/lib/categories";
+import { SUPPORT_CAP_HOURS } from "@/lib/categories";
 
-export const MONTHLY_LDC_CAP_MS = 55 * 3_600_000;
+// Deriva de SUPPORT_CAP_HOURS (categories.ts) en vez de repetir el número:
+// dos constantes independientes para el mismo tope de 55h podían desincronizarse
+// si una se cambiaba sin la otra (el aviso mostrado y el tope aplicado de verdad).
+export const MONTHLY_LDC_CAP_MS = SUPPORT_CAP_HOURS * 3_600_000;
 
 export type CategoryTotal = {
   cat: EventCategory;
