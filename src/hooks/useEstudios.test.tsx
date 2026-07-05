@@ -11,6 +11,14 @@ vi.mock("@/lib/jsonFileStorage", () => ({
   writeJsonValue: storageMocks.writeJsonValue,
 }));
 
+const sessionFilesMocks = vi.hoisted(() => ({
+  deleteFile: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/sessionFiles", () => ({
+  deleteFile: sessionFilesMocks.deleteFile,
+}));
+
 import { getNextOccurrences, hasActiveStudyWork, useEstudios } from "./useEstudios";
 
 describe("study scheduling", () => {
@@ -21,6 +29,8 @@ describe("study scheduling", () => {
     storageMocks.writeJsonValue.mockResolvedValue(undefined);
     storageMocks.readJsonValue.mockClear();
     storageMocks.writeJsonValue.mockClear();
+    sessionFilesMocks.deleteFile.mockClear();
+    localStorage.clear();
   });
 
   afterEach(() => {
@@ -91,5 +101,73 @@ describe("study scheduling", () => {
 
     expect(result.current.contacts[0].sessions.find((session) => session.id === "first")?.pending).toBe(false);
     expect(result.current.contacts[0].sessions.filter((session) => session.pending)).toHaveLength(4);
+  });
+
+  it("cleans up attached files and the voice note when a session is deleted for good", async () => {
+    storageMocks.readJsonValue.mockResolvedValue([
+      {
+        id: "contact",
+        name: "Student",
+        active: true,
+        createdAt: new Date(2026, 4, 1).toISOString(),
+        sessions: [
+          {
+            id: "done",
+            date: new Date(2026, 4, 9).toISOString(),
+            time: "10:00",
+            files: [{ id: "file-1", name: "a.pdf", type: "application/pdf", size: 10 }],
+            pending: false,
+          },
+        ],
+      },
+    ]);
+    localStorage.setItem("vn-done", "data:audio/webm;base64,xyz");
+
+    const { result } = renderHook(() => useEstudios());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      result.current.deleteSession("contact", "done");
+    });
+
+    expect(sessionFilesMocks.deleteFile).toHaveBeenCalledWith("file-1");
+    expect(localStorage.getItem("vn-done")).toBeNull();
+    expect(result.current.contacts[0].sessions).toHaveLength(0);
+  });
+
+  it("cleans up all sessions' attachments when a contact is deleted", async () => {
+    storageMocks.readJsonValue.mockResolvedValue([
+      {
+        id: "contact",
+        name: "Student",
+        active: true,
+        createdAt: new Date(2026, 4, 1).toISOString(),
+        sessions: [
+          {
+            id: "s1",
+            date: new Date(2026, 4, 9).toISOString(),
+            time: "10:00",
+            files: [{ id: "file-1", name: "a.pdf", type: "application/pdf", size: 10 }],
+            pending: false,
+          },
+        ],
+      },
+    ]);
+    localStorage.setItem("vn-s1", "data:audio/webm;base64,xyz");
+
+    const { result } = renderHook(() => useEstudios());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      result.current.deleteContact("contact");
+    });
+
+    expect(sessionFilesMocks.deleteFile).toHaveBeenCalledWith("file-1");
+    expect(localStorage.getItem("vn-s1")).toBeNull();
+    expect(result.current.contacts).toHaveLength(0);
   });
 });

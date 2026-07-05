@@ -4,6 +4,7 @@ import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 import { useDebouncedJsonWriter } from "@/hooks/useDebouncedJsonWriter";
 import { isRecord } from "@/lib/utils";
 import { dateKey } from "@/lib/time";
+import { deleteFile } from "@/lib/sessionFiles";
 
 export interface SessionFile {
   id: string;
@@ -285,6 +286,15 @@ function sessionSlotKey(session: Pick<EstudioSession, "date" | "time">): string 
   return `${dateKey(new Date(session.date))}-${session.time}`;
 }
 
+/* Borra del IndexedDB los archivos adjuntos de una sesión y su nota de voz
+   (si tiene) de localStorage. Se llama solo cuando la sesión desaparece de
+   verdad (no en el borrado "blando" que la marca como skipped), para no
+   dejar huérfanos que crezcan sin límite. */
+function cleanupSessionAttachments(session: Pick<EstudioSession, "id" | "files">) {
+  session.files.forEach((file) => { void deleteFile(file.id).catch(() => undefined); });
+  try { localStorage.removeItem(`vn-${session.id}`); } catch { /* localStorage no disponible */ }
+}
+
 function dedupePendingSessions(sessions: EstudioSession[]): EstudioSession[] {
   const seen = new Set<string>();
   return sessions.filter((session) => {
@@ -363,6 +373,8 @@ export function useEstudios() {
 
   const deleteContact = useCallback((id: string) => {
     setContacts((prev) => {
+      const removed = prev.find((c) => c.id === id);
+      removed?.sessions.forEach(cleanupSessionAttachments);
       const updated = prev.filter((c) => c.id !== id);
       persist(updated);
       return updated;
@@ -459,6 +471,9 @@ export function useEstudios() {
             ),
           };
         }
+        // Borrado definitivo (no queda registro de la sesión): limpia sus
+        // archivos adjuntos y nota de voz para no dejarlos huérfanos.
+        if (target) cleanupSessionAttachments(target);
         return { ...c, sessions: c.sessions.filter((s) => s.id !== sessionId) };
       });
       persist(updated);
@@ -483,6 +498,10 @@ export function useEstudios() {
                   const [hours, minutes] = data.time.split(":").map(Number);
                   const d = new Date(year, month - 1, day, hours, minutes);
                   targetDate = d;
+                  // Los archivos que ya no están en la lista nueva (el usuario
+                  // los quitó al editar) quedarían huérfanos en IndexedDB.
+                  const keptIds = new Set(data.files.map((f) => f.id));
+                  s.files.filter((f) => !keptIds.has(f.id)).forEach((f) => { void deleteFile(f.id).catch(() => undefined); });
                   return {
                     ...s,
                     date: d.toISOString(),
