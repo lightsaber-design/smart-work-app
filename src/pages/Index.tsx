@@ -179,6 +179,17 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
   const confirmDeleteEvent = (scope: "single" | "all" = "all") => {
     if (!deleteEventPromptId) return;
+    const target = calendarEvents.find((e) => e.id === deleteEventPromptId);
+    const idsToUnlink =
+      target && scope === "all" && target.recurrence !== "none"
+        ? (() => {
+            const parentId = target.parentId || target.id;
+            return calendarEvents.filter((e) => e.id === parentId || e.parentId === parentId).map((e) => e.id);
+          })()
+        : [deleteEventPromptId];
+    // Las horas ya fichadas de un evento que se borra no deben perderse ni
+    // quedar huérfanas apuntando a un evento inexistente.
+    tracker.detachEntriesLinkedToEvents(idsToUnlink);
     calendar.deleteEvent(deleteEventPromptId, scope);
     setDeleteEventPromptId(null);
   };

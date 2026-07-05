@@ -188,12 +188,15 @@ export function useTimeTracker() {
   }, [persistEntries]);
 
   const updateStartTime = useCallback((id: string, startTime: Date) => {
+    // El inicio de una actividad en marcha nunca puede ser posterior a ahora
+    // (produciría un elapsed/duración negativos que contaminan los totales).
+    const clampedStart = startTime.getTime() > Date.now() ? new Date() : startTime;
     setEntries((prev) => {
-      const updated = prev.map((e) => (e.id === id ? { ...e, startTime } : e));
+      const updated = prev.map((e) => (e.id === id ? { ...e, startTime: clampedStart } : e));
       persistEntries(updated);
       return updated;
     });
-    setElapsed(Math.floor((Date.now() - startTime.getTime()) / 1000));
+    setElapsed(Math.max(0, Math.floor((Date.now() - clampedStart.getTime()) / 1000)));
   }, [persistEntries]);
 
   // Ajusta el inicio/fin de una entrada ya completada (p.ej. al editar sus
@@ -202,6 +205,25 @@ export function useTimeTracker() {
   const updateEntryTimes = useCallback((id: string, startTime: Date, endTime: Date) => {
     setEntries((prev) => {
       const updated = prev.map((e) => (e.id === id ? { ...e, startTime, endTime } : e));
+      persistEntries(updated);
+      return updated;
+    });
+  }, [persistEntries]);
+
+  // Desvincula (sin borrar) las entradas cuyo evento de calendario enlazado
+  // acaba de eliminarse: las horas ya fichadas son reales y deben seguir
+  // contando en las estadísticas aunque el evento de calendario desaparezca.
+  const detachEntriesLinkedToEvents = useCallback((eventIds: string[]) => {
+    if (eventIds.length === 0) return;
+    setEntries((prev) => {
+      let changed = false;
+      const updated = prev.map((e) => {
+        if (!e.linkedEventId || !eventIds.includes(e.linkedEventId)) return e;
+        changed = true;
+        const { linkedEventId: _linkedEventId, ...rest } = e;
+        return rest;
+      });
+      if (!changed) return prev;
       persistEntries(updated);
       return updated;
     });
@@ -300,6 +322,7 @@ export function useTimeTracker() {
     updateCategory,
     addManualEntry,
     deleteEntry,
+    detachEntriesLinkedToEvents,
     todayTotal,
     monthTotal,
   };
