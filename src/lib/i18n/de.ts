@@ -550,6 +550,7 @@ const de: TranslationMap = {    // Navigation
     manual_entry_mode_duration: 'Start + Dauer',
     manual_entry_error_duration: 'Die Mindestdauer beträgt 1 Minute',
     manual_entry_error_too_long: 'Der Eintrag darf nicht länger als 24 Stunden dauern',
+    manual_entry_error_overlap: 'In diesem Zeitraum sind bereits Stunden erfasst',
     manual_entry_add_button: 'Vergangene Stunden hinzufügen',};
 
 export default de;

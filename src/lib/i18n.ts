@@ -572,6 +572,7 @@ const es: TranslationMap = {
     manual_entry_mode_duration: 'Inicio + Duración',
     manual_entry_error_duration: 'La duración debe ser mayor que 0',
     manual_entry_error_too_long: 'La entrada no puede durar más de 24 horas',
+    manual_entry_error_overlap: 'Ya tienes horas registradas en ese rango',
     manual_entry_add_button: 'Añadir horas pasadas',
 };
 

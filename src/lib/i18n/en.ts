@@ -550,6 +550,7 @@ const en: TranslationMap = {    // Navigation
     manual_entry_mode_duration: 'Start + Duration',
     manual_entry_error_duration: 'Duration must be greater than 0',
     manual_entry_error_too_long: 'Entry cannot last more than 24 hours',
+    manual_entry_error_overlap: 'You already have hours logged in that range',
     manual_entry_add_button: 'Add past hours',};
 
 export default en;

@@ -13,6 +13,8 @@ type RecurrenceType = "none" | "weekly" | "monthly";
 export interface ManualEntrySheetProps {
   categoryConfigs: CategoryConfig[];
   estudiosContacts?: { id: string; name: string }[];
+  /** Entradas ya fichadas, para avisar si la nueva se solapa con alguna. */
+  existingEntries?: { startTime: Date; endTime: Date | null }[];
   onSavePast: (start: Date, end: Date, category: WorkCategory, description: string, location?: { lat: number; lng: number }) => void;
   onSaveFuture: (params: AddEventParams) => void;
   onClose: () => void;
@@ -55,6 +57,19 @@ function addDurToTime(timeStr: string, durStr: string): string {
   return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
+export function overlapsExisting(
+  startMs: number,
+  endMs: number,
+  entries: { startTime: Date; endTime: Date | null }[]
+): boolean {
+  return entries.some((e) => {
+    const entryStart = e.startTime.getTime();
+    // Una entrada aún en marcha (sin fichar salida) ocupa hasta ahora.
+    const entryEnd = e.endTime ? e.endTime.getTime() : Date.now();
+    return entryStart < endMs && entryEnd > startMs;
+  });
+}
+
 function formatDateLabel(dateStr: string): string {
   if (!dateStr) return "";
   const [y, mo, d] = dateStr.split("-").map(Number);
@@ -64,7 +79,7 @@ function formatDateLabel(dateStr: string): string {
 
 // ─── component ──────────────────────────────────────────────────────────────
 
-export function ManualEntrySheet({ categoryConfigs, estudiosContacts = [], onSavePast, onSaveFuture, onClose, t }: ManualEntrySheetProps) {
+export function ManualEntrySheet({ categoryConfigs, estudiosContacts = [], existingEntries = [], onSavePast, onSaveFuture, onClose, t }: ManualEntrySheetProps) {
   const activeCategories = categoryConfigs.filter((c) => c.active);
   const { places: favoritePlaces } = useFavoritePlaces();
 
@@ -150,6 +165,10 @@ export function ManualEntrySheet({ categoryConfigs, estudiosContacts = [], onSav
     }
     if (diff > 24 * 3600 * 1000) {
       setError(t('manual_entry_error_too_long'));
+      return;
+    }
+    if (overlapsExisting(startMs, adjustedEnd, existingEntries)) {
+      setError(t('manual_entry_error_overlap'));
       return;
     }
 

@@ -302,6 +302,7 @@ export function TimerTab({
         <ManualEntrySheet
           categoryConfigs={setup.categorySettings}
           estudiosContacts={estudios.contacts.filter((c) => c.active).map((c) => ({ id: c.id, name: c.name }))}
+          existingEntries={tracker.entries}
           onSavePast={(start, end, cat, desc, loc) => {
             tracker.addManualEntry(start, end, cat, desc, loc);
             const endTimeStr = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;

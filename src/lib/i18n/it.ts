@@ -550,6 +550,7 @@ const it: TranslationMap = {    // Navigation
     manual_entry_mode_duration: 'Inizio + Durata',
     manual_entry_error_duration: 'La durata minima è 1 minuto',
     manual_entry_error_too_long: "La voce non può durare più di 24 ore",
+    manual_entry_error_overlap: 'Hai già ore registrate in quell\'intervallo',
     manual_entry_add_button: 'Aggiungi ore passate',};
 
 export default it;

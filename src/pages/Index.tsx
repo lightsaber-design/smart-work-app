@@ -466,6 +466,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         <ManualEntrySheet
           categoryConfigs={setup.categorySettings}
           estudiosContacts={estudios.contacts.filter((c) => c.active).map((c) => ({ id: c.id, name: c.name }))}
+          existingEntries={tracker.entries}
           onSavePast={(start, end, category, description, location) =>
             tracker.addManualEntry(start, end, category, description, location)
           }
