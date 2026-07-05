@@ -130,6 +130,30 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     tracker.clockOut((eventId, endTime) => calendar.updateEvent(eventId, { endTime, completed: true }), customTime);
   };
 
+  // Al editar las horas de un evento del calendario (p.ej. reducir su
+  // duración), sincroniza también la TimeEntry enlazada: las estadísticas
+  // calculan el total a partir de las TimeEntries, no de los eventos.
+  const handleUpdateCalendarEvent = (id: string, updates: Parameters<typeof calendar.updateEvent>[1]) => {
+    calendar.updateEvent(id, updates);
+    if (updates.date === undefined && updates.endTime === undefined) return;
+    const linkedEntry = tracker.entries.find((e) => e.linkedEventId === id && e.endTime !== null);
+    if (!linkedEntry) return;
+    const newStart = updates.date ?? linkedEntry.startTime;
+    if (typeof updates.endTime === "string" && updates.endTime) {
+      const [h, m] = updates.endTime.split(":").map(Number);
+      const newEnd = new Date(newStart);
+      newEnd.setHours(h, m, 0, 0);
+      tracker.updateEntryTimes(
+        linkedEntry.id,
+        newStart,
+        newEnd.getTime() > newStart.getTime() ? newEnd : new Date(newStart.getTime() + 60 * 60_000)
+      );
+    } else if (updates.date) {
+      const duration = linkedEntry.endTime!.getTime() - linkedEntry.startTime.getTime();
+      tracker.updateEntryTimes(linkedEntry.id, newStart, new Date(newStart.getTime() + duration));
+    }
+  };
+
   const requestClockOut = (customTime?: Date) => {
     if (!activeEntry) { completeClockOut(customTime); return; }
     const end = customTime ?? new Date();
@@ -581,7 +605,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 onAddEvent={calendar.addEvent}
                 onDeleteEvent={calendar.deleteEvent}
                 onToggleCompleted={calendar.toggleEventCompleted}
-                onUpdateEvent={calendar.updateEvent}
+                onUpdateEvent={handleUpdateCalendarEvent}
                 getEventsForDate={calendar.getEventsForDate}
                 favoritePlaces={favorites.places}
                 defaultCenter={defaultCenter}

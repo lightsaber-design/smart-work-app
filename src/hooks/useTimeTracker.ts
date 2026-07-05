@@ -196,6 +196,17 @@ export function useTimeTracker() {
     setElapsed(Math.floor((Date.now() - startTime.getTime()) / 1000));
   }, [persistEntries]);
 
+  // Ajusta el inicio/fin de una entrada ya completada (p.ej. al editar sus
+  // horas desde el calendario). A diferencia de updateStartTime, no toca
+  // `elapsed` porque esa entrada no es la del cronómetro en marcha.
+  const updateEntryTimes = useCallback((id: string, startTime: Date, endTime: Date) => {
+    setEntries((prev) => {
+      const updated = prev.map((e) => (e.id === id ? { ...e, startTime, endTime } : e));
+      persistEntries(updated);
+      return updated;
+    });
+  }, [persistEntries]);
+
   const updateDescription = useCallback((id: string, description: string) => {
     setEntries((prev) => {
       const updated = prev.map((e) => (e.id === id ? { ...e, description } : e));
@@ -284,6 +295,7 @@ export function useTimeTracker() {
     pause,
     resume,
     updateStartTime,
+    updateEntryTimes,
     updateDescription,
     updateCategory,
     addManualEntry,
