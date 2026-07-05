@@ -356,6 +356,12 @@ const pt: TranslationMap = {    // Navigation
     places_gps_error: 'GPS indisponível',
     places_view_list: 'Vista lista',
     places_view_map: 'Vista mapa',
+    places_open_now: 'Aberto agora',
+    places_open: 'Aberto',
+    places_closed: 'Fechado',
+    places_hours: 'Horário',
+    places_add_favorite: 'Adicionar aos favoritos',
+    places_added_favorite: 'Guardado nos favoritos',
     // LocationPicker
     picker_search_placeholder: 'Buscar endereço...',
     picker_search_btn: 'Buscar',
