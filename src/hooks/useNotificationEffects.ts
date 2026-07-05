@@ -249,10 +249,12 @@ export function useNotificationEffects({
   useEffect(() => {
     const now = Date.now();
     const live = new Set<string>();
-    // Si ahora mismo se está estudiando (timer activo en categoría Estudio), no
-    // tiene sentido avisar de sesiones pendientes: se cancelan mientras dure y se
-    // reevalúan en cuanto el timer se detenga o la sesión se marque como hecha.
-    const studyingNow = isTimerRunning && activeEntry?.category === "Estudio";
+    // Solo puede haber una actividad a la vez: mientras el timer esté en
+    // marcha (con cualquier categoría) no tiene sentido preguntar "¿hiciste
+    // este estudio?" — no se podría empezar a registrarlo ahora mismo de
+    // todos modos. Se cancelan mientras dure y se reevalúan en cuanto el
+    // timer se detenga o la sesión se marque como hecha.
+    const studyingNow = isTimerRunning;
     for (const contact of estudiosContacts) {
       if (!contact.active) continue;
       for (const session of contact.sessions ?? []) {
@@ -428,6 +430,16 @@ export function useNotificationEffects({
       unloggedFireRef.current.clear();
       return;
     }
+    // Solo puede haber una actividad a la vez: si el timer está en marcha, no
+    // tiene sentido preguntar "¿registraste esta otra actividad?" — el propio
+    // heurístico que enlaza el timer con su evento programado (activeScheduledEvent)
+    // es estricto con la ventana horaria y puede no reconocer la actividad que
+    // sí se está haciendo. Se reevalúa en cuanto el timer se detenga.
+    if (isTimerRunning) {
+      unloggedFireRef.current.forEach((_, id) => void cancelEventNotification(`unlogged-${id}`));
+      unloggedFireRef.current.clear();
+      return;
+    }
     const UNLOGGED_WINDOW_MS = 7 * 24 * 3_600_000;
     const now = Date.now();
     const live = new Set<string>();
@@ -459,7 +471,7 @@ export function useNotificationEffects({
         unloggedFireRef.current.delete(id);
       }
     });
-  }, [calendarEvents, activeScheduledEvent, notifUnlogged, t]);
+  }, [calendarEvents, activeScheduledEvent, isTimerRunning, notifUnlogged, t]);
 
   // ── Meta mensual ────────────────────────────────────────────────────────────
   // Recordatorio "vas por detrás": alarma nativa 5 días antes de fin de mes, para
