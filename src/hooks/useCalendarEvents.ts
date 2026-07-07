@@ -4,6 +4,7 @@ import { readJsonValue } from "@/lib/jsonFileStorage";
 import { useDebouncedJsonWriter } from "@/hooks/useDebouncedJsonWriter";
 import { clampReminderMinutes } from "@/lib/eventReminders";
 import { findScheduledEventAtTimerStart, findScheduledEventForTimerStart } from "@/lib/timerOverrun";
+import { resolveEndDate } from "@/lib/eventTime";
 import { isRecord } from "@/lib/utils";
 
 export type EventCategory = string;
@@ -122,11 +123,7 @@ function generateRecurringEvents(params: AddEventParams, count: number): Calenda
 }
 
 function getEventEndDate(event: CalendarEvent): Date {
-  if (!event.endTime) return new Date(event.date.getTime() + 60 * 60_000);
-  const [hours, minutes] = event.endTime.split(":").map(Number);
-  const end = new Date(event.date);
-  end.setHours(hours, minutes, 0, 0);
-  return end.getTime() > event.date.getTime() ? end : new Date(event.date.getTime() + 60 * 60_000);
+  return resolveEndDate(event.date, event.endTime) ?? new Date(event.date.getTime() + 60 * 60_000);
 }
 
 function isSameCalendarDay(a: Date, b: Date) {

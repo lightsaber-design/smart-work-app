@@ -33,6 +33,7 @@ import {
 import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { getTravelReminderMinutes, type TravelReminderSettings } from "@/lib/eventReminders";
+import { resolveEndDate } from "@/lib/eventTime";
 import { formatFileSize, saveFile } from "@/lib/sessionFiles";
 import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
@@ -111,10 +112,8 @@ function getWeekDates(anchorDate: Date): Date[] {
 
 function dayTotalFromEvents(dayEvents: CalendarEvent[]): { ms: number; hrs: number; mins: number } {
   const ms = dayEvents.filter((e) => e.completed).reduce((acc, e) => {
-    if (!e.endTime) return acc;
-    const [h, m] = e.endTime.split(":").map(Number);
-    const end = new Date(e.date);
-    end.setHours(h, m, 0, 0);
+    const end = resolveEndDate(e.date, e.endTime);
+    if (!end) return acc;
     return acc + Math.max(0, end.getTime() - e.date.getTime());
   }, 0);
   return { ms, hrs: Math.floor(ms / 3600000), mins: Math.floor((ms % 3600000) / 60000) };
@@ -126,10 +125,13 @@ function calAddDurToTime(timeStr: string, durStr: string): string {
   const total = (th || 0) * 60 + (tm || 0) + (dh || 0) * 60 + (dm || 0);
   return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
+// Si la hora de fin es "anterior" a la de inicio, se interpreta como que la
+// actividad cruza la medianoche (p.ej. 22:00 -> 02:00 son 4h, no 0).
 function calDiffToStr(startStr: string, endStr: string): string {
   const [sh, sm] = startStr.split(":").map(Number);
   const [eh, em] = endStr.split(":").map(Number);
-  const mins = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+  let mins = (eh * 60 + em) - (sh * 60 + sm);
+  if (mins < 0) mins += 24 * 60;
   return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
 }
 
@@ -156,19 +158,11 @@ function minutesFromTimelineStart(date: Date, startHour: number): number {
 }
 
 function eventEndDate(event: CalendarEvent): Date {
-  if (!event.endTime) return new Date(event.date.getTime() + 60 * 60_000);
-  const [h, m] = event.endTime.split(":").map(Number);
-  const end = new Date(event.date);
-  end.setHours(h, m, 0, 0);
-  return end.getTime() > event.date.getTime() ? end : new Date(event.date.getTime() + 60 * 60_000);
+  return resolveEndDate(event.date, event.endTime) ?? new Date(event.date.getTime() + 60 * 60_000);
 }
 
 function addParamsEndDate(params: AddEventParams): Date {
-  if (!params.endTime) return new Date(params.date.getTime() + 60 * 60_000);
-  const [h, m] = params.endTime.split(":").map(Number);
-  const end = new Date(params.date);
-  end.setHours(h, m, 0, 0);
-  return end.getTime() > params.date.getTime() ? end : new Date(params.date.getTime() + 60 * 60_000);
+  return resolveEndDate(params.date, params.endTime) ?? new Date(params.date.getTime() + 60 * 60_000);
 }
 
 function isSameCalendarDay(a: Date, b: Date) {
@@ -829,7 +823,18 @@ export function CalendarView({
   const handleSaveEdit = () => {
     if (!editEvent) return;
     const safeEditTime = clampTimeToActivityRange(editTime, activityStartHour, activityEndHour);
-    const safeEditEndTime = editEndTime ? clampTimeToActivityRange(editEndTime, activityStartHour, activityEndHour) : "";
+    // Si la hora de fin cruza la medianoche (es "anterior" a la de inicio), no
+    // tiene sentido acotarla a la ventana de actividad del mismo día: sería
+    // forzar, p.ej., un fin real de 00:30 a las 06:00 solo por caer fuera del
+    // rango diurno configurado.
+    const editEndMins = editEndTime ? timeMinutes(editEndTime) : null;
+    const editStartMins = timeMinutes(safeEditTime);
+    const editCrossesMidnight = editEndMins !== null && editStartMins !== null && editEndMins < editStartMins;
+    const safeEditEndTime = !editEndTime
+      ? ""
+      : editCrossesMidnight
+      ? editEndTime
+      : clampTimeToActivityRange(editEndTime, activityStartHour, activityEndHour);
     const [h, m] = safeEditTime.split(":").map(Number);
     const newDate = new Date(editEvent.date);
     newDate.setHours(h, m, 0, 0);
@@ -945,7 +950,16 @@ export function CalendarView({
   const handleAdd = async () => {
     if (savingAdd) return;
     const safeTime = clampTimeToActivityRange(time, activityStartHour, activityEndHour);
-    const safeEndTime = endTime ? clampTimeToActivityRange(endTime, activityStartHour, activityEndHour) : "";
+    // Igual que en la edición: si la hora de fin cruza la medianoche, no se
+    // acota a la ventana de actividad del mismo día.
+    const addEndMins = endTime ? timeMinutes(endTime) : null;
+    const addStartMins = timeMinutes(safeTime);
+    const addCrossesMidnight = addEndMins !== null && addStartMins !== null && addEndMins < addStartMins;
+    const safeEndTime = !endTime
+      ? ""
+      : addCrossesMidnight
+      ? endTime
+      : clampTimeToActivityRange(endTime, activityStartHour, activityEndHour);
     const [safeHours, safeMinutes] = safeTime.split(":").map(Number);
     const date = new Date(selectedDate);
     date.setHours(safeHours, safeMinutes, 0, 0);

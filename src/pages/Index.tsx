@@ -24,6 +24,7 @@ import { getCategoryMeta, getActiveCategoryConfigs } from "@/lib/categories";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
 import { removeJsonValue } from "@/lib/jsonFileStorage";
 import { findActiveScheduledEvent } from "@/lib/timerOverrun";
+import { resolveEndDate } from "@/lib/eventTime";
 import { consumeWidgetAction, setWidgetCategories } from "@/lib/timerNotification";
 import { formatPlaceName } from "@/lib/placeNames";
 import { formatDateLong } from "@/lib/dateFormat";
@@ -140,14 +141,11 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     if (!linkedEntry) return;
     const newStart = updates.date ?? linkedEntry.startTime;
     if (typeof updates.endTime === "string" && updates.endTime) {
-      const [h, m] = updates.endTime.split(":").map(Number);
-      const newEnd = new Date(newStart);
-      newEnd.setHours(h, m, 0, 0);
-      tracker.updateEntryTimes(
-        linkedEntry.id,
-        newStart,
-        newEnd.getTime() > newStart.getTime() ? newEnd : new Date(newStart.getTime() + 60 * 60_000)
-      );
+      // Si la hora de fin "parece" anterior a la de inicio, es que la
+      // actividad cruza la medianoche (p.ej. empezó a las 22:00 y terminó a
+      // las 02:00): se pasa al día siguiente en vez de recortar a +1h.
+      const newEnd = resolveEndDate(newStart, updates.endTime) ?? new Date(newStart.getTime() + 60 * 60_000);
+      tracker.updateEntryTimes(linkedEntry.id, newStart, newEnd);
     } else if (updates.date) {
       const duration = linkedEntry.endTime!.getTime() - linkedEntry.startTime.getTime();
       tracker.updateEntryTimes(linkedEntry.id, newStart, new Date(newStart.getTime() + duration));
