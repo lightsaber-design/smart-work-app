@@ -452,7 +452,7 @@ function SessionEditSheet({ session, contact, defaultLesson, onSave, onComplete,
                       onClick={async () => {
                         const url = await getFileURL(f.id);
                         if (url) {
-                          window.open(url, "_blank");
+                          window.open(url, "_blank", "noopener,noreferrer");
                           setTimeout(() => URL.revokeObjectURL(url), 300_000);
                         }
                       }}

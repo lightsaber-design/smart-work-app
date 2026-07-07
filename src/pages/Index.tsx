@@ -50,6 +50,8 @@ type Tab = AppTab;
 type Category = EventCategory;
 type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
 
+const VALID_TABS = new Set<Tab>(["home", "summary", "timer", "calendar", "profile", "estudios", "map"]);
+
 const SHORT_ACTIVITY_MS = 5 * 60_000;
 
 function getGreeting(t: TranslateFn): string {
@@ -247,8 +249,11 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         }
       } else if (action === 'CLOCK_OUT') {
         if (tracker.isRunning) requestClockOut(time);
-      } else if (action === 'NAV' && msStr) {
-        // Atajos del icono de Android: abrir una pestaña concreta.
+      } else if (action === 'NAV' && msStr && VALID_TABS.has(msStr as Tab)) {
+        // Atajos del icono de Android: abrir una pestaña concreta. Se valida
+        // contra la lista de pestañas reales porque este valor llega desde un
+        // extra de Intent que, en teoría, podría forjar otra app instalada
+        // (MainActivity es exported=true, como toda activity launcher).
         navigate(msStr as Tab);
       }
     });
@@ -373,6 +378,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         return true;
       case "stats":
         navigate("home");
+        return true;
+      default:
+        // Ruta desconocida (payload corrupto o de una versión futura/pasada):
+        // se da por gestionada para no reintentar indefinidamente.
         return true;
     }
   };
