@@ -304,10 +304,14 @@ export function TimerTab({
           estudiosContacts={estudios.contacts.filter((c) => c.active).map((c) => ({ id: c.id, name: c.name }))}
           existingEntries={tracker.entries}
           onSavePast={(start, end, cat, desc, loc) => {
-            tracker.addManualEntry(start, end, cat, desc, loc);
+            // Se crea primero el evento y se enlaza a la TimeEntry (igual que
+            // al fichar en vivo) para que la actividad manual sea editable y
+            // borrable desde el Calendario, en vez de quedar duplicada como
+            // un bloque "huérfano" sin controles.
             const endTimeStr = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
-            const eventId = calendar.addCompletedEventNow({ date: start, category: cat });
+            const eventId = calendar.addCompletedEventNow({ date: start, category: cat, location: loc });
             if (eventId) calendar.updateEvent(eventId, { endTime: endTimeStr });
+            tracker.addManualEntry(start, end, cat, desc, loc, eventId);
           }}
           onSaveFuture={(params) => calendar.addEvent(params)}
           onClose={() => setManualSheetOpen(false)}

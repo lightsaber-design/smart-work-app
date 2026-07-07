@@ -250,7 +250,8 @@ export function useTimeTracker() {
     endTime: Date,
     category: WorkCategory,
     description = "",
-    location?: GeoLocation
+    location?: GeoLocation,
+    linkedEventId?: string
   ) => {
     const entry: TimeEntry = {
       id: generateId(),
@@ -260,6 +261,7 @@ export function useTimeTracker() {
       category,
       startLocation: location ?? null,
       endLocation: null,
+      linkedEventId,
     };
     setEntries((prev) => {
       const updated = [...prev, entry].sort((a, b) => b.startTime.getTime() - a.startTime.getTime());

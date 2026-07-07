@@ -92,6 +92,8 @@ interface CalendarViewProps {
   timeEntryMonthTotalMs?: number;
   /** Todas las entradas del timer para calcular totales por día. */
   timeEntries?: TimeEntry[];
+  /** Borra una TimeEntry "huérfana" (sin evento de calendario enlazado). */
+  onDeleteEntry?: (id: string) => void;
 }
 
 const HOUR_HEIGHT = 64;
@@ -562,6 +564,7 @@ export function CalendarView({
   categoryConfigs,
   timeEntryMonthTotalMs,
   timeEntries = [],
+  onDeleteEntry,
 }: CalendarViewProps) {
   const t = useT();
   const lang = useLang();
@@ -622,6 +625,7 @@ export function CalendarView({
   const [studySessionPendingFiles, setStudySessionPendingFiles] = useState<{ file: File; id: string }[]>([]);
   const [savingStudySession, setSavingStudySession] = useState(false);
   const [deleteEventPromptId, setDeleteEventPromptId] = useState<string | null>(null);
+  const [deleteEntryPromptId, setDeleteEntryPromptId] = useState<string | null>(null);
 
   // ── add form chips state ─────────────────────────────────────────────────────
   const [addNotes, setAddNotes] = useState("");
@@ -1363,7 +1367,17 @@ export function CalendarView({
                               </p>
                             )}
                           </div>
-                          <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                          <div className="flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                            {onDeleteEntry && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setDeleteEntryPromptId(entry.id); }}
+                                className="ml-auto p-0.5 text-foreground/40"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -2082,6 +2096,27 @@ export function CalendarView({
                 </AlertDialogAction>
               </>
             )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deleteEntryPromptId} onOpenChange={(open) => { if (!open) setDeleteEntryPromptId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("cal_delete_confirm_title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("cal_delete_confirm_body")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteEntryPromptId) onDeleteEntry?.(deleteEntryPromptId);
+                setDeleteEntryPromptId(null);
+              }}
+            >
+              {t("home_delete_activity")}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

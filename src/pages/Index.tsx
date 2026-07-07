@@ -638,6 +638,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 categoryConfigs={setup.categorySettings}
                 timeEntryMonthTotalMs={tracker.monthTotal}
                 timeEntries={tracker.entries}
+                onDeleteEntry={tracker.deleteEntry}
               />
             </Suspense>
           </>
