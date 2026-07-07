@@ -42,7 +42,7 @@
 <!-- ═══════════════════  ESPAÑOL  ═══════════════════ -->
 <span class="badge">🇪🇸 Español</span>
 <h1>Política de Privacidad</h1>
-<p class="subtitle">MinistryLog · Última actualización: 12 de junio de 2026</p>
+<p class="subtitle">MinistryLog · Última actualización: 7 de julio de 2026</p>
 
 <h2>1. Responsable de los datos</h2>
 <p>
@@ -51,15 +51,18 @@
 </p>
 
 <h2>2. Datos que la app recopila</h2>
-<p>MinistryLog <strong>no recopila ni transmite datos personales a ningún servidor externo</strong>.
-  Toda la información que el usuario introduce se almacena <strong>únicamente en el dispositivo</strong>:</p>
+<p>MinistryLog <strong>no recopila ni transmite datos personales a ningún servidor propio</strong>.
+  Toda la información que el usuario introduce se almacena <strong>únicamente en el dispositivo</strong>
+  (y, si el usuario lo activa explícitamente, en su propia cuenta de Google Drive; ver sección 7):</p>
 <ul>
   <li>Nombre del usuario (opcional, solo para personalización local)</li>
   <li>Ciudad de referencia (nombre, latitud y longitud) para cálculos de horario solar</li>
   <li>Registros de tiempo y actividades de ministerio</li>
   <li>Eventos de calendario y sesiones de estudios bíblicos</li>
+  <li>Notas de voz grabadas por el usuario tras un estudio (opcional, ver sección 4)</li>
   <li>Lugares favoritos marcados en el mapa</li>
   <li>Preferencias de configuración (idioma, tema, notificaciones)</li>
+  <li>Si se inicia sesión con Google: nombre y correo de la cuenta, solo para identificarla (ver sección 7)</li>
 </ul>
 
 <h2>3. Permiso de ubicación</h2>
@@ -73,52 +76,87 @@
 <p>
   Las coordenadas de ubicación <strong>nunca se envían fuera del dispositivo</strong>.
   El usuario puede conceder o revocar este permiso en cualquier momento desde
-  Ajustes → Aplicaciones → MinistryLog → Permisos.
+  Ajustes → Aplicaciones → MinistryLog → Permisos, o desde Ajustes → Permisos dentro de la propia app.
 </p>
 
-<h2>4. Conexión a Internet</h2>
+<h2>4. Permiso de micrófono</h2>
 <p>
-  La app utiliza Internet exclusivamente para cargar los <strong>mapas de calles</strong>
-  (teselas de OpenStreetMap, proveedor: <a href="https://www.openstreetmap.org/copyright" target="_blank">openstreetmap.org</a>).
-  Estas solicitudes no incluyen datos personales del usuario.
-  El resto de la funcionalidad de la app es completamente offline.
+  La app solicita acceso al micrófono <strong>únicamente</strong> para grabar una nota de voz
+  opcional justo después de completar un estudio bíblico. La grabación se guarda
+  <strong>solo en el dispositivo</strong>, nunca se transmite a ningún servidor, y el usuario
+  puede eliminarla en cualquier momento. Este permiso puede revocarse igual que el de ubicación.
 </p>
 
-<h2>5. Notificaciones</h2>
+<h2>5. Conexión a Internet</h2>
 <p>
-  Las notificaciones locales (recordatorio de temporizador, objetivo mensual) se generan
-  íntegramente en el dispositivo mediante el sistema de notificaciones de Android.
+  La app utiliza Internet para:
+</p>
+<ul>
+  <li>Cargar los <strong>mapas de calles</strong> (teselas de OpenStreetMap, proveedor:
+    <a href="https://www.openstreetmap.org/copyright" target="_blank">openstreetmap.org</a>).</li>
+  <li>Consultar el <strong>tiempo meteorológico</strong> de la ciudad configurada (proveedor de datos abiertos, sin identificar al usuario).</li>
+  <li>Si el usuario lo activa: iniciar sesión con Google y sincronizar la copia de seguridad con su Google Drive (ver sección 7).</li>
+</ul>
+<p>
+  Estas solicitudes no incluyen datos personales del usuario más allá de lo estrictamente
+  necesario para la funcionalidad solicitada. El resto de la funcionalidad de la app es
+  completamente offline.
+</p>
+
+<h2>6. Notificaciones</h2>
+<p>
+  Las notificaciones locales (recordatorio de temporizador, objetivo mensual, estudios pendientes)
+  se generan íntegramente en el dispositivo mediante el sistema de notificaciones de Android.
   No se utilizan servicios de push de terceros.
 </p>
 
-<h2>6. Copias de seguridad y exportación</h2>
+<h2>7. Copias de seguridad, exportación y Google Drive</h2>
 <p>
   El usuario puede exportar todos sus datos en formato JSON en cualquier momento
-  desde la pantalla de Ajustes → Copia de seguridad. Estos ficheros permanecen
-  bajo el control exclusivo del usuario.
-  La copia de seguridad automática de Android está <strong>desactivada</strong> para
-  esta app, de modo que los datos no se suben a Google Drive sin consentimiento explícito.
+  desde Ajustes → Copia de seguridad. Estos ficheros permanecen bajo el control exclusivo del usuario.
 </p>
-
-<h2>7. Datos de terceros</h2>
 <p>
-  MinistryLog <strong>no integra</strong> SDKs de analítica, publicidad, redes sociales
-  ni ningún otro servicio de seguimiento de usuarios.
+  Adicionalmente, MinistryLog ofrece la opción de <strong>iniciar sesión con una cuenta de Google</strong>
+  para guardar una copia de seguridad de estos mismos datos en Google Drive. Esta función es
+  <strong>opcional</strong> y solo se activa si el usuario la solicita explícitamente. Los detalles:
+</p>
+<ul>
+  <li>Se solicita el permiso de Google <code>drive.appdata</code>, que da acceso <strong>únicamente</strong>
+    a una carpeta oculta y privada de esta app dentro de la cuenta de Drive del usuario — la app
+    <strong>no puede ver, leer ni modificar</strong> ningún otro archivo o carpeta del Drive del usuario.</li>
+  <li>Se solicitan también los permisos básicos de <code>perfil</code> y <code>correo electrónico</code>
+    únicamente para mostrar qué cuenta está conectada.</li>
+  <li>Ningún dato pasa por servidores propios de MinistryLog: la copia de seguridad va directamente
+    del dispositivo del usuario a su propia cuenta de Google Drive.</li>
+  <li>El usuario puede cerrar sesión y desconectar esta función en cualquier momento desde
+    Ajustes → Copia de seguridad en Google Drive.</li>
+</ul>
+<p>
+  La copia de seguridad automática nativa de Android está <strong>desactivada</strong> para esta app,
+  de modo que los datos no se suben a ningún sitio sin la acción explícita descrita arriba.
 </p>
 
-<h2>8. Menores de edad</h2>
+<h2>8. Datos de terceros</h2>
+<p>
+  MinistryLog <strong>no integra</strong> SDKs de analítica, publicidad ni redes sociales, y no
+  usa ningún servicio de seguimiento de usuarios. La única integración de terceros es el inicio
+  de sesión de Google descrito en la sección 7, usado exclusivamente para esa función y bajo
+  el control directo del usuario.
+</p>
+
+<h2>9. Menores de edad</h2>
 <p>
   La app no está dirigida a menores de 13 años. No se recopilan datos de forma
   intencionada de ningún usuario.
 </p>
 
-<h2>9. Cambios en esta política</h2>
+<h2>10. Cambios en esta política</h2>
 <p>
   Cualquier modificación se publicará en esta misma página. El uso continuado de
   la app tras la publicación de cambios implica la aceptación de los mismos.
 </p>
 
-<h2>10. Contacto</h2>
+<h2>11. Contacto</h2>
 <p>
   Para cualquier consulta relacionada con la privacidad, escribe a:
   <a href="mailto:carol.torres.dev2@gmail.com">carol.torres.dev2@gmail.com</a>
@@ -129,7 +167,7 @@
 <!-- ═══════════════════  ENGLISH  ═══════════════════ -->
 <span class="badge">🇬🇧 English</span>
 <h1>Privacy Policy</h1>
-<p class="subtitle">MinistryLog · Last updated: June 12, 2026</p>
+<p class="subtitle">MinistryLog · Last updated: July 7, 2026</p>
 
 <h2>1. Data Controller</h2>
 <p>
@@ -138,15 +176,18 @@
 </p>
 
 <h2>2. What data the app collects</h2>
-<p>MinistryLog <strong>does not collect or transmit personal data to any external server</strong>.
-  All information entered by the user is stored <strong>on-device only</strong>:</p>
+<p>MinistryLog <strong>does not collect or transmit personal data to any server we operate</strong>.
+  All information entered by the user is stored <strong>on-device only</strong>
+  (and, only if the user explicitly enables it, in the user's own Google Drive account; see section 7):</p>
 <ul>
   <li>User name (optional, for local personalization only)</li>
   <li>Reference city (name, latitude, longitude) for solar schedule calculations</li>
   <li>Time entries and ministry activity records</li>
   <li>Calendar events and Bible study sessions</li>
+  <li>Voice notes recorded by the user after a study (optional, see section 4)</li>
   <li>Favorite places marked on the map</li>
   <li>App preferences (language, theme, notifications)</li>
+  <li>If the user signs in with Google: the account's name and email, solely to identify it (see section 7)</li>
 </ul>
 
 <h2>3. Location permission</h2>
@@ -160,50 +201,85 @@
 <p>
   Location coordinates are <strong>never sent outside the device</strong>.
   This permission can be granted or revoked at any time via
-  Settings → Apps → MinistryLog → Permissions.
+  Settings → Apps → MinistryLog → Permissions, or from Settings → Permissions inside the app.
 </p>
 
-<h2>4. Internet access</h2>
+<h2>4. Microphone permission</h2>
 <p>
-  The app uses the Internet exclusively to load <strong>street map tiles</strong>
-  (OpenStreetMap, provider: <a href="https://www.openstreetmap.org/copyright" target="_blank">openstreetmap.org</a>).
-  These requests do not include personal user data.
-  All other app functionality works fully offline.
+  The app requests microphone access <strong>only</strong> to record an optional voice note
+  right after completing a Bible study. The recording is stored <strong>on-device only</strong>,
+  is never transmitted to any server, and the user can delete it at any time. This permission
+  can be revoked the same way as location.
 </p>
 
-<h2>5. Notifications</h2>
+<h2>5. Internet access</h2>
 <p>
-  Local notifications (timer reminder, monthly goal) are generated entirely on-device
-  using the Android notification system. No third-party push services are used.
+  The app uses the Internet to:
+</p>
+<ul>
+  <li>Load <strong>street map tiles</strong> (OpenStreetMap, provider:
+    <a href="https://www.openstreetmap.org/copyright" target="_blank">openstreetmap.org</a>).</li>
+  <li>Fetch <strong>weather data</strong> for the configured city (open weather data provider, no user identification involved).</li>
+  <li>If enabled by the user: sign in with Google and sync the backup to the user's Google Drive (see section 7).</li>
+</ul>
+<p>
+  These requests do not include personal user data beyond what's strictly necessary for the
+  requested feature. All other app functionality works fully offline.
 </p>
 
-<h2>6. Backup and export</h2>
+<h2>6. Notifications</h2>
+<p>
+  Local notifications (timer reminder, monthly goal, pending studies) are generated entirely
+  on-device using the Android notification system. No third-party push services are used.
+</p>
+
+<h2>7. Backup, export, and Google Drive</h2>
 <p>
   Users can export all their data as a JSON file at any time via
   Settings → Backup. These files remain under the user's exclusive control.
-  Android's automatic cloud backup is <strong>disabled</strong> for this app,
-  so data is not uploaded to Google Drive without explicit user action.
 </p>
-
-<h2>7. Third-party SDKs</h2>
 <p>
-  MinistryLog <strong>does not include</strong> any analytics, advertising, social media,
-  or user-tracking SDKs of any kind.
+  MinistryLog additionally offers the option to <strong>sign in with a Google account</strong>
+  to back up this same data to Google Drive. This feature is <strong>optional</strong> and only
+  activates if the user explicitly requests it. Details:
+</p>
+<ul>
+  <li>The app requests Google's <code>drive.appdata</code> permission, which grants access
+    <strong>only</strong> to a hidden, app-private folder within the user's Drive account — the app
+    <strong>cannot see, read, or modify</strong> any other file or folder in the user's Drive.</li>
+  <li>Basic <code>profile</code> and <code>email</code> permissions are also requested solely to
+    display which account is connected.</li>
+  <li>No data passes through any server operated by MinistryLog: the backup goes directly from
+    the user's device to their own Google Drive account.</li>
+  <li>The user can sign out and disconnect this feature at any time via
+    Settings → Google Drive Backup.</li>
+</ul>
+<p>
+  Android's native automatic backup is <strong>disabled</strong> for this app, so data is not
+  uploaded anywhere without the explicit action described above.
 </p>
 
-<h2>8. Children</h2>
+<h2>8. Third-party data</h2>
+<p>
+  MinistryLog <strong>does not include</strong> any analytics, advertising, or social media SDKs,
+  and does not use any user-tracking service. The only third-party integration is the Google
+  sign-in described in section 7, used exclusively for that feature and fully under the user's
+  control.
+</p>
+
+<h2>9. Children</h2>
 <p>
   This app is not directed at children under 13. No data is intentionally
   collected from any user.
 </p>
 
-<h2>9. Changes to this policy</h2>
+<h2>10. Changes to this policy</h2>
 <p>
   Any changes will be published on this page. Continued use of the app after
   changes are posted constitutes acceptance of those changes.
 </p>
 
-<h2>10. Contact</h2>
+<h2>11. Contact</h2>
 <p>
   For any privacy-related questions, write to:
   <a href="mailto:carol.torres.dev2@gmail.com">carol.torres.dev2@gmail.com</a>

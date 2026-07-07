@@ -1,6 +1,6 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { MinistryMark, MinistryWordmark } from "@/components/MinistryMark";
-import { Trash2, MapPin, User, Moon, Sunrise, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil, Upload, Download, Bell, Cloud, LogIn, LogOut, RefreshCw, RotateCcw, Type } from "lucide-react";
+import { Trash2, MapPin, User, Moon, Sunrise, FileJson, FolderOpen, Plus, Check, ChevronRight, Pencil, Upload, Download, Bell, Cloud, LogIn, LogOut, RefreshCw, RotateCcw, Type, Mic, ShieldCheck } from "lucide-react";
 import { useGoogleDriveSync, DriveConflictError } from "@/hooks/useGoogleDriveSync";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,15 @@ import { ActivityHoursConfig } from "@/components/ActivityHoursConfig";
 import { LanguageFlag } from "@/components/LanguageFlag";
 import { SetupData } from "@/hooks/useSetup";
 import { hasNotificationPermission, requestNotificationPermission } from "@/lib/notifications";
+import {
+  type PermissionState,
+  getLocationPermissionState,
+  requestLocationPermission,
+  getMicrophonePermissionState,
+  requestMicrophonePermission,
+  getNotifPermissionState,
+  requestNotifPermission,
+} from "@/lib/permissions";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { LANGUAGES, Lang } from "@/lib/i18n";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
@@ -73,6 +82,52 @@ function SettingsSection({
   );
 }
 
+function permissionStatusLabel(state: PermissionState | null, t: (key: string) => string): string {
+  if (state === null) return "";
+  if (state === "granted") return t("settings_perm_status_granted");
+  if (state === "denied") return t("settings_perm_status_denied");
+  if (state === "unsupported") return t("settings_perm_status_unsupported");
+  return t("settings_perm_status_prompt");
+}
+
+function PermissionRow({
+  icon,
+  title,
+  hint,
+  state,
+  onRequest,
+  t,
+}: {
+  icon: ReactNode;
+  title: string;
+  hint: string;
+  state: PermissionState | null;
+  onRequest: () => void;
+  t: (key: string) => string;
+}) {
+  const granted = state === "granted";
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">{title}</p>
+          <p className="text-xs text-muted-foreground">{hint}</p>
+        </div>
+      </div>
+      {granted ? (
+        <span className="flex-shrink-0 text-xs font-semibold text-green-500">{permissionStatusLabel(state, t)}</span>
+      ) : (
+        <Button size="sm" variant="outline" onClick={onRequest}>
+          {t("settings_perm_request")}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, onSaveSetup, isDark, onToggleDark, autoDarkMode, onToggleAutoDark, hasActiveStudies = false }: SettingsViewProps) {
   const t = useT();
   const lang = useLang();
@@ -122,10 +177,21 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(true);
   const [notifPermission, setNotifPermission] = useState<boolean | null>(null);
+  const [permissionsOpen, setPermissionsOpen] = useState(false);
+  const [locationPermission, setLocationPermission] = useState<PermissionState | null>(null);
+  const [micPermission, setMicPermission] = useState<PermissionState | null>(null);
+  const [notifPermState, setNotifPermState] = useState<PermissionState | null>(null);
 
   useEffect(() => {
     hasNotificationPermission().then(setNotifPermission).catch(() => setNotifPermission(false));
   }, []);
+
+  const refreshPermissionStates = () => {
+    getLocationPermissionState().then(setLocationPermission);
+    getMicrophonePermissionState().then(setMicPermission);
+    getNotifPermissionState().then(setNotifPermState);
+  };
+  useEffect(refreshPermissionStates, []);
   const [editingCategoryName, setEditingCategoryName] = useState<string | null>(null);
   const [categoryNameDraft, setCategoryNameDraft] = useState("");
 
@@ -559,6 +625,39 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
           )}
         </SettingsSection>
       )}
+
+      <SettingsSection
+        icon={<ShieldCheck className="w-4 h-4" />}
+        title={t("settings_permissions")}
+        summary={t("settings_permissions_hint")}
+        open={permissionsOpen}
+        onToggle={() => setPermissionsOpen((o) => !o)}
+      >
+        <PermissionRow
+          icon={<MapPin className="w-4 h-4" />}
+          title={t("settings_perm_location")}
+          hint={t("settings_perm_location_hint")}
+          state={locationPermission}
+          onRequest={() => requestLocationPermission().then(setLocationPermission)}
+          t={t}
+        />
+        <PermissionRow
+          icon={<Bell className="w-4 h-4" />}
+          title={t("settings_perm_notifications")}
+          hint={t("settings_perm_notifications_hint")}
+          state={notifPermState}
+          onRequest={() => requestNotifPermission().then(setNotifPermState).then(() => hasNotificationPermission().then(setNotifPermission))}
+          t={t}
+        />
+        <PermissionRow
+          icon={<Mic className="w-4 h-4" />}
+          title={t("settings_perm_microphone")}
+          hint={t("settings_perm_microphone_hint")}
+          state={micPermission}
+          onRequest={() => requestMicrophonePermission().then(setMicPermission)}
+          t={t}
+        />
+      </SettingsSection>
 
       <SettingsSection
         icon={<Bell className="w-4 h-4" />}
