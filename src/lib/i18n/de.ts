@@ -395,6 +395,8 @@ const de: TranslationMap = {    // Navigation
     travel_time_hint: 'Wenn Aktivitäten nah beieinander liegen, wird die Erinnerung verkürzt, damit sie sich nicht mit der vorherigen Aktivität überschneidet.',
     // Settings
     set_profile: 'Mein Profil',
+    set_name: 'Name',
+    set_no_name: 'Kein Name konfiguriert',
     set_city: 'Stadt',
     set_edit: 'Bearbeiten',
     set_save: 'Speichern',

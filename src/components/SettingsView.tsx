@@ -165,6 +165,8 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
     });
   };
 
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(setup.name ?? "");
   const [editingCity, setEditingCity] = useState(false);
   const [cityDraft, setCityDraft] = useState(setup.city ?? undefined);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -194,6 +196,11 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
   useEffect(refreshPermissionStates, []);
   const [editingCategoryName, setEditingCategoryName] = useState<string | null>(null);
   const [categoryNameDraft, setCategoryNameDraft] = useState("");
+
+  const handleSaveName = () => {
+    onSaveSetup({ name: nameDraft.trim() || undefined });
+    setEditingName(false);
+  };
 
   const handleSaveCity = () => {
     if (cityDraft) onSaveSetup({ city: cityDraft });
@@ -276,6 +283,41 @@ export function SettingsView({ onClearAll, entryCount, firstEntryDate, setup, on
         open={profileOpen}
         onToggle={() => setProfileOpen((open) => !open)}
       >
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-1.5 text-sm">
+              <User className="w-3.5 h-3.5 text-muted-foreground" />
+              {t('set_name')}
+            </Label>
+            {!editingName && (
+              <button
+                onClick={() => { setNameDraft(setup.name ?? ""); setEditingName(true); }}
+                className="text-xs text-primary hover:underline"
+              >
+                {t('set_edit')}
+              </button>
+            )}
+          </div>
+          {editingName ? (
+            <div className="space-y-2">
+              <Input
+                value={nameDraft}
+                onChange={(event) => setNameDraft(event.target.value)}
+                placeholder={t('setup_name_placeholder')}
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleSaveName} className="flex-1">{t('set_save')}</Button>
+                <Button size="sm" variant="outline" onClick={() => setEditingName(false)} className="flex-1">{t('set_cancel')}</Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {setup.name?.trim() || t('set_no_name')}
+            </p>
+          )}
+        </div>
+
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label className="flex items-center gap-1.5 text-sm">

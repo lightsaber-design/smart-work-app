@@ -395,6 +395,8 @@ const fr: TranslationMap = {    // Navigation
     travel_time_hint: "Si les activités sont très proches, le rappel est raccourci pour ne pas chevaucher l'activité précédente.",
     // Settings
     set_profile: 'Mon profil',
+    set_name: 'Nom',
+    set_no_name: 'Aucun nom configuré',
     set_city: 'Ville',
     set_edit: 'Modifier',
     set_save: 'Enregistrer',

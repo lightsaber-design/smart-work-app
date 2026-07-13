@@ -395,6 +395,8 @@ const it: TranslationMap = {    // Navigation
     travel_time_hint: 'Se le attività sono molto vicine, il promemoria viene accorciato per non sovrapporsi all’attività precedente.',
     // Settings
     set_profile: 'Il mio profilo',
+    set_name: 'Nome',
+    set_no_name: 'Nessun nome configurato',
     set_city: 'Città',
     set_edit: 'Modifica',
     set_save: 'Salva',

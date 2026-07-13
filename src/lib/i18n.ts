@@ -416,6 +416,8 @@ const es: TranslationMap = {
     travel_time_hint: 'Si las actividades están muy cerca, el recordatorio se acorta para no solaparse con la actividad anterior.',
     // Settings
     set_profile: 'Mi perfil',
+    set_name: 'Nombre',
+    set_no_name: 'Sin nombre configurado',
     set_city: 'Ciudad',
     set_edit: 'Editar',
     set_save: 'Guardar',

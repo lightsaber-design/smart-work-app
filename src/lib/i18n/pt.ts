@@ -395,6 +395,8 @@ const pt: TranslationMap = {    // Navigation
     travel_time_hint: 'Se as atividades estiverem muito próximas, o lembrete é encurtado para não se sobrepor à atividade anterior.',
     // Settings
     set_profile: 'Meu perfil',
+    set_name: 'Nome',
+    set_no_name: 'Nenhum nome configurado',
     set_city: 'Cidade',
     set_edit: 'Editar',
     set_save: 'Salvar',

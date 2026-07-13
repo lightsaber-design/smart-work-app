@@ -396,6 +396,8 @@ const en: TranslationMap = {    // Navigation
     travel_time_hint: 'If activities are close together, the reminder is shortened so it does not overlap the previous activity.',
     // Settings
     set_profile: 'My profile',
+    set_name: 'Name',
+    set_no_name: 'No name configured',
     set_city: 'City',
     set_edit: 'Edit',
     set_save: 'Save',
