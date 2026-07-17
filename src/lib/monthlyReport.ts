@@ -61,14 +61,14 @@ export function parseMonthlyReportCarryover(value: unknown): MonthlyReportCarryo
 
 function getCarriedInMinutes(state: MonthlyReportCarryoverState, monthKey: string): number {
   const currentReport = state.reports[monthKey];
-  if (currentReport) return currentReport.carriedInMinutes;
+  if (currentReport) return Math.max(0, currentReport.carriedInMinutes);
 
   const previousKey = Object.keys(state.reports)
     .filter((key) => key < monthKey)
     .sort()
     .at(-1);
 
-  return previousKey ? state.reports[previousKey].carriedOutMinutes : 0;
+  return previousKey ? Math.max(0, state.reports[previousKey].carriedOutMinutes) : 0;
 }
 
 export function calculateMonthlyReport(
@@ -84,15 +84,19 @@ export function calculateMonthlyReport(
   // cambiar el ajuste), se sigue sumando esta vez para no perderlo: solo se
   // deja de generar arrastre nuevo, no se descarta el que ya existía.
   const carriedInMinutes = getCarriedInMinutes(state, key);
-  const totalMinutes = actualMinutes + carriedInMinutes;
+  const totalMinutes = Math.max(0, actualMinutes + carriedInMinutes);
 
   return {
     monthKey: key,
     actualMinutes,
     carriedInMinutes,
     totalMinutes,
-    reportedHours: mode === "round" ? Math.round(totalMinutes / 60) : Math.floor(totalMinutes / 60),
-    carriedOutMinutes: mode === "round" ? 0 : totalMinutes % 60,
+    // Clamps defensivos: ni las horas del informe ni los minutos de arrastre
+    // deben poder mostrarse en negativo (el arrastre solo acumula/reparte, nunca
+    // resta). `((x % 60) + 60) % 60` evita un módulo negativo si algún dato
+    // heredado llegara corrupto.
+    reportedHours: Math.max(0, mode === "round" ? Math.round(totalMinutes / 60) : Math.floor(totalMinutes / 60)),
+    carriedOutMinutes: mode === "round" ? 0 : ((totalMinutes % 60) + 60) % 60,
   };
 }
 

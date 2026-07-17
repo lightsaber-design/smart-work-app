@@ -139,7 +139,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   // calculan el total a partir de las TimeEntries, no de los eventos.
   const handleUpdateCalendarEvent = (id: string, updates: Parameters<typeof calendar.updateEvent>[1]) => {
     calendar.updateEvent(id, updates);
-    if (updates.date === undefined && updates.endTime === undefined) return;
     // Se busca el entry enlazado esté o no ya cerrado: si sigue abierto
     // (p.ej. quedó "colgado" por un desajuste de sincronización previo) y
     // aquí se le pone una hora de fin, hay que cerrarlo también — si no, el
@@ -148,6 +147,13 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     // mismo mes dejan de cuadrar entre las dos pantallas.
     const linkedEntry = tracker.entries.find((e) => e.linkedEventId === id);
     if (!linkedEntry) return;
+    // La categoría también vive en la TimeEntry: si solo se cambiara en el
+    // evento, el desglose "por actividad" del Resumen (que lee TimeEntries)
+    // seguiría mostrando la categoría vieja. Se sincroniza aquí mismo.
+    if (typeof updates.category === "string" && updates.category !== linkedEntry.category) {
+      tracker.updateCategory(linkedEntry.id, updates.category);
+    }
+    if (updates.date === undefined && updates.endTime === undefined) return;
     const newStart = updates.date ?? linkedEntry.startTime;
     if (typeof updates.endTime === "string" && updates.endTime) {
       // Si la hora de fin "parece" anterior a la de inicio, es que la
@@ -191,39 +197,68 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   };
 
   // ── Reconciliación de arranque ────────────────────────────────────────────────
-  // Repara datos ya existentes: por cada evento de calendario COMPLETADO con
-  // duración pero sin una TimeEntry enlazada, crea la TimeEntry que falta. Así
-  // el Resumen/Home (que cuenta TimeEntries) vuelve a cuadrar con el Calendario
-  // (que cuenta eventos) para las actividades pasadas que se añadieron cuando
-  // esa ruta aún no creaba la entrada. Se ejecuta una sola vez por sesión, ya
-  // con ambos almacenes cargados, para no crear duplicados ni condiciones de
-  // carrera con el fichaje en vivo.
+  // Hace que las TimeEntries reflejen exactamente los eventos de calendario
+  // completados, que es lo que el usuario ve y edita en el Calendario. Por cada
+  // evento COMPLETADO con duración:
+  //   · si no tiene TimeEntry enlazada → la crea (repara actividades que solo
+  //     existían como evento, p.ej. añadidas desde el Calendario o importadas).
+  //   · si su entry quedó ABIERTA (sin hora de fin) o desincronizada en tiempo
+  //     o categoría (una edición previa tocó el evento pero no el entry) → la
+  //     corrige para que coincida con el evento.
+  // Así el total del Resumen (suma de entries) cuadra con el del Calendario
+  // (suma de eventos): antes, cuando el evento tenía más horas que su entry, el
+  // Calendario mostraba max(eventos, entries) y el Resumen solo entries → salía
+  // ~1h de diferencia. Se ejecuta una vez por sesión, con ambos almacenes ya
+  // cargados, para no duplicar ni pelear con el fichaje en vivo (a un entry en
+  // marcha, cuyo evento aún no tiene hora de fin, no se le toca).
   const reconciledRef = useRef(false);
   useEffect(() => {
     if (reconciledRef.current) return;
     if (!tracker.loaded || !calendar.loaded) return;
     reconciledRef.current = true;
-    const linkedIds = new Set(
-      tracker.entries.map((e) => e.linkedEventId).filter((id): id is string => !!id),
-    );
+    const entryByEvent = new Map<string, TimeEntry>();
+    for (const e of tracker.entries) {
+      if (e.linkedEventId) entryByEvent.set(e.linkedEventId, e);
+    }
     const missing: TimeEntry[] = [];
+    const patches: { id: string; startTime?: Date; endTime?: Date; category?: string }[] = [];
     for (const ev of calendarEvents) {
-      if (!ev.completed || linkedIds.has(ev.id)) continue;
+      if (!ev.completed) continue;
       const end = resolveEndDate(ev.date, ev.endTime);
       if (!end || end.getTime() <= ev.date.getTime()) continue;
-      missing.push({
-        id: generateId(),
-        startTime: ev.date,
-        endTime: end,
-        description: ev.notes ?? "",
-        category: ev.category,
-        startLocation: ev.location ?? null,
-        endLocation: null,
-        linkedEventId: ev.id,
-        pausedAt: null,
-      });
+      const linked = entryByEvent.get(ev.id);
+      if (!linked) {
+        missing.push({
+          id: generateId(),
+          startTime: ev.date,
+          endTime: end,
+          description: ev.notes ?? "",
+          category: ev.category,
+          startLocation: ev.location ?? null,
+          endLocation: null,
+          linkedEventId: ev.id,
+          pausedAt: null,
+        });
+        continue;
+      }
+      // Se corrige el entry enlazado si está abierto, si su inicio/fin difieren
+      // del evento en más de un minuto (el fichaje en vivo guarda segundos; el
+      // evento se trunca al minuto, así que <1 min se deja como está para no
+      // perder precisión), o si la categoría no coincide.
+      const startOff = Math.abs(linked.startTime.getTime() - ev.date.getTime()) > 60_000;
+      const endOff = linked.endTime === null || Math.abs(linked.endTime.getTime() - end.getTime()) > 60_000;
+      const catOff = linked.category !== ev.category;
+      if (startOff || endOff || catOff) {
+        patches.push({
+          id: linked.id,
+          startTime: ev.date,
+          endTime: end,
+          category: ev.category,
+        });
+      }
     }
     if (missing.length > 0) tracker.importEntries(missing);
+    if (patches.length > 0) tracker.patchEntries(patches);
   }, [tracker.loaded, calendar.loaded, tracker, calendarEvents]);
 
   const requestClockOut = (customTime?: Date) => {

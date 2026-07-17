@@ -286,6 +286,35 @@ export function useTimeTracker() {
     });
   }, [persistEntries]);
 
+  // Corrige en bloque varias entradas de una vez (inicio/fin/categoría). Lo usa
+  // la reconciliación para poner al día las TimeEntries cuyo evento de calendario
+  // enlazado se editó por otra vía y quedaron desincronizadas (o abiertas), sin
+  // disparar un render por cada una.
+  const patchEntries = useCallback(
+    (patches: { id: string; startTime?: Date; endTime?: Date; category?: WorkCategory }[]) => {
+      if (patches.length === 0) return;
+      const byId = new Map(patches.map((p) => [p.id, p]));
+      setEntries((prev) => {
+        let changed = false;
+        const updated = prev.map((e) => {
+          const p = byId.get(e.id);
+          if (!p) return e;
+          changed = true;
+          return {
+            ...e,
+            startTime: p.startTime ?? e.startTime,
+            endTime: p.endTime ?? e.endTime,
+            category: p.category ?? e.category,
+          };
+        });
+        if (!changed) return prev;
+        persistEntries(updated);
+        return updated;
+      });
+    },
+    [persistEntries]
+  );
+
   const deleteEntry = useCallback((id: string) => {
     setEntries((prev) => {
       const deletedEntry = prev.find((e) => e.id === id);
@@ -341,6 +370,7 @@ export function useTimeTracker() {
     updateCategory,
     addManualEntry,
     importEntries,
+    patchEntries,
     deleteEntry,
     detachEntriesLinkedToEvents,
     todayTotal,
