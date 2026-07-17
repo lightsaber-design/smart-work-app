@@ -149,6 +149,7 @@ function removeCompletedScheduleDuplicates(events: CalendarEvent[], completedEve
 
 export function useCalendarEvents() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const eventsRef = useRef<CalendarEvent[]>([]);
   const writeCalendarEvents = useDebouncedJsonWriter("calendar-events");
 
@@ -170,7 +171,8 @@ export function useCalendarEvents() {
         eventsRef.current = cleaned;
         setEvents(cleaned);
       })
-      .catch((error) => console.error("Error loading events:", error));
+      .catch((error) => console.error("Error loading events:", error))
+      .finally(() => setLoaded(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -356,5 +358,5 @@ export function useCalendarEvents() {
     [persistEvents]
   );
 
-  return { events, addEvent, addCompletedEventNow, deleteEvent, getEventsForDate, toggleEventCompleted, updateEvent, markNotified };
+  return { events, loaded, addEvent, addCompletedEventNow, deleteEvent, getEventsForDate, toggleEventCompleted, updateEvent, markNotified };
 }

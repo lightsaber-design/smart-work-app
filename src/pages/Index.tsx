@@ -1,7 +1,8 @@
 import { lazy, Suspense, useMemo, useState, useEffect, useRef, startTransition } from "react";
 import { MinistryMark } from "@/components/MinistryMark";
-import { useTimeTracker } from "@/hooks/useTimeTracker";
-import { useCalendarEvents, EventCategory } from "@/hooks/useCalendarEvents";
+import { useTimeTracker, TimeEntry } from "@/hooks/useTimeTracker";
+import { useCalendarEvents, EventCategory, AddEventParams } from "@/hooks/useCalendarEvents";
+import { generateId } from "@/lib/uuid";
 import { useFavoritePlaces } from "@/hooks/useFavoritePlaces";
 import { useSetup, SetupData } from "@/hooks/useSetup";
 import { BottomNav, AppTab } from "@/components/BottomNav";
@@ -162,6 +163,68 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       tracker.updateStartTime(linkedEntry.id, newStart);
     }
   };
+
+  // Añadir actividad desde el Calendario. Una actividad PASADA (de un solo día)
+  // debe crear tanto el evento como su TimeEntry enlazada: el Calendario lee de
+  // los eventos, pero el Resumen/Home cuenta TimeEntries. Si solo se creara el
+  // evento, la actividad aparecería en el Calendario pero NO sumaría en el
+  // Resumen (era la causa del descuadre "el Calendario dice 15h y Home 9h").
+  // Las actividades futuras o recurrentes siguen siendo solo eventos.
+  const handleAddCalendarEvent = (params: AddEventParams) => {
+    const end = resolveEndDate(params.date, params.endTime);
+    const isPastCompleted =
+      params.recurrence === "none" &&
+      params.date.getTime() < Date.now() &&
+      end !== null &&
+      end.getTime() > params.date.getTime();
+    if (!isPastCompleted) {
+      calendar.addEvent(params);
+      return;
+    }
+    const eventId = calendar.addCompletedEventNow({
+      date: params.date,
+      category: params.category,
+      location: params.location,
+    });
+    if (eventId && params.endTime) calendar.updateEvent(eventId, { endTime: params.endTime });
+    tracker.addManualEntry(params.date, end, params.category, params.notes ?? "", params.location, eventId);
+  };
+
+  // ── Reconciliación de arranque ────────────────────────────────────────────────
+  // Repara datos ya existentes: por cada evento de calendario COMPLETADO con
+  // duración pero sin una TimeEntry enlazada, crea la TimeEntry que falta. Así
+  // el Resumen/Home (que cuenta TimeEntries) vuelve a cuadrar con el Calendario
+  // (que cuenta eventos) para las actividades pasadas que se añadieron cuando
+  // esa ruta aún no creaba la entrada. Se ejecuta una sola vez por sesión, ya
+  // con ambos almacenes cargados, para no crear duplicados ni condiciones de
+  // carrera con el fichaje en vivo.
+  const reconciledRef = useRef(false);
+  useEffect(() => {
+    if (reconciledRef.current) return;
+    if (!tracker.loaded || !calendar.loaded) return;
+    reconciledRef.current = true;
+    const linkedIds = new Set(
+      tracker.entries.map((e) => e.linkedEventId).filter((id): id is string => !!id),
+    );
+    const missing: TimeEntry[] = [];
+    for (const ev of calendarEvents) {
+      if (!ev.completed || linkedIds.has(ev.id)) continue;
+      const end = resolveEndDate(ev.date, ev.endTime);
+      if (!end || end.getTime() <= ev.date.getTime()) continue;
+      missing.push({
+        id: generateId(),
+        startTime: ev.date,
+        endTime: end,
+        description: ev.notes ?? "",
+        category: ev.category,
+        startLocation: ev.location ?? null,
+        endLocation: null,
+        linkedEventId: ev.id,
+        pausedAt: null,
+      });
+    }
+    if (missing.length > 0) tracker.importEntries(missing);
+  }, [tracker.loaded, calendar.loaded, tracker, calendarEvents]);
 
   const requestClockOut = (customTime?: Date) => {
     if (!activeEntry) { completeClockOut(customTime); return; }
@@ -651,7 +714,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             <Suspense fallback={<TabLoading />}>
               <CalendarView
                 events={calendar.events}
-                onAddEvent={calendar.addEvent}
+                onAddEvent={handleAddCalendarEvent}
                 onDeleteEvent={calendar.deleteEvent}
                 onToggleCompleted={calendar.toggleEventCompleted}
                 onUpdateEvent={handleUpdateCalendarEvent}

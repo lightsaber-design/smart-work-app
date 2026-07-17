@@ -68,6 +68,7 @@ function parseStoredEntry(value: unknown): TimeEntry | null {
 
 export function useTimeTracker() {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const persistEntries = useDebouncedJsonWriter("time-entries");
 
   const activeEntry = useMemo(() => entries.find((e) => e.endTime === null), [entries]);
@@ -92,7 +93,8 @@ export function useTimeTracker() {
         const active = parsed.find((e) => e.endTime === null);
         setElapsed(active ? entryElapsedSeconds(active) : 0);
       })
-      .catch((error) => console.error("Error loading entries:", error));
+      .catch((error) => console.error("Error loading entries:", error))
+      .finally(() => setLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -270,6 +272,20 @@ export function useTimeTracker() {
     });
   }, [persistEntries]);
 
+  // Añade entradas ya construidas (sin crear eventos de calendario): lo usa la
+  // reconciliación de arranque para reparar actividades que quedaron solo como
+  // evento de calendario completado, sin su TimeEntry (p.ej. añadidas desde el
+  // Calendario antes de que esa ruta creara la entrada). Sin esto, el Resumen
+  // —que cuenta TimeEntries— no las sumaba y descuadraba respecto al Calendario.
+  const importEntries = useCallback((newEntries: TimeEntry[]) => {
+    if (newEntries.length === 0) return;
+    setEntries((prev) => {
+      const updated = [...prev, ...newEntries].sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
+      persistEntries(updated);
+      return updated;
+    });
+  }, [persistEntries]);
+
   const deleteEntry = useCallback((id: string) => {
     setEntries((prev) => {
       const deletedEntry = prev.find((e) => e.id === id);
@@ -309,6 +325,7 @@ export function useTimeTracker() {
 
   return {
     entries,
+    loaded,
     todayEntries,
     monthEntries,
     isRunning,
@@ -323,6 +340,7 @@ export function useTimeTracker() {
     updateDescription,
     updateCategory,
     addManualEntry,
+    importEntries,
     deleteEntry,
     detachEntriesLinkedToEvents,
     todayTotal,
