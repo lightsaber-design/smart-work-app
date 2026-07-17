@@ -39,9 +39,11 @@ import org.json.JSONObject;
  * la categoría, para conseguir el círculo redondo (los widgets no soportan SVG).
  *
  * Los botones disparan broadcasts a este mismo receiver (onReceive), que actualiza
- * SharedPreferences y refresca el widget. La acción de fichar se deja como
- * "pendiente" para que la app, al volver al frente, la sincronice con la marca
- * de tiempo exacta mediante consumeWidgetAction().
+ * SharedPreferences y refresca el widget. Cada acción de fichar se encola como
+ * "pendiente" (no se sobrescribe) para que la app, al volver al frente, las
+ * sincronice todas en orden con su marca de tiempo exacta mediante
+ * consumeWidgetAction() — así un ciclo start+stop completo hecho sin abrir la
+ * app nunca se pierde.
  */
 public class TimerWidget extends AppWidgetProvider {
 
@@ -98,13 +100,13 @@ public class TimerWidget extends AppWidgetProvider {
             if (category == null || category.isEmpty()) category = currentCategory(context);
             long now = System.currentTimeMillis();
             saveWidgetState(context, true, now, category);
-            setPendingAction(context, "CLOCK_IN|" + now + "|" + category);
+            addPendingAction(context, "CLOCK_IN|" + now + "|" + category);
             refreshAll(context);
         } else if (ACTION_CLOCK_OUT.equals(action)) {
             long now = System.currentTimeMillis();
             String lastCat = currentCategory(context); // conserva la categoría como predeterminada
             saveWidgetState(context, false, 0, lastCat);
-            setPendingAction(context, "CLOCK_OUT|" + now);
+            addPendingAction(context, "CLOCK_OUT|" + now);
             refreshAll(context);
         } else if (ACTION_CYCLE_CAT.equals(action)) {
             cycleCategory(context);
@@ -424,11 +426,19 @@ public class TimerWidget extends AppWidgetProvider {
         };
     }
 
-    private static void setPendingAction(Context ctx, String value) {
-        ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_PENDING_ACTION, value)
-            .apply();
+    /**
+     * Encola una acción pendiente en vez de sobrescribir la anterior: si el
+     * usuario arranca y para el timer desde el widget sin abrir nunca la app
+     * entre medio (el widget "funciona sin abrir la app"), un solo slot
+     * sobrescribible perdería el CLOCK_IN al llegar el CLOCK_OUT y la sesión
+     * entera desaparecería. consumeWidgetAction() en el plugin las procesa
+     * todas, en orden, en la próxima apertura.
+     */
+    private static void addPendingAction(Context ctx, String value) {
+        SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        String existing = prefs.getString(KEY_PENDING_ACTION, "");
+        String updated = existing.isEmpty() ? value : existing + "\n" + value;
+        prefs.edit().putString(KEY_PENDING_ACTION, updated).apply();
     }
 
     private static void saveWidgetState(Context ctx, boolean running, long startMs, String category) {

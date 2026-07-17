@@ -146,12 +146,22 @@ public class TimerNotificationPlugin extends Plugin {
         Context ctx = getContext();
         android.content.SharedPreferences prefs =
             ctx.getSharedPreferences(TimerWidget.PREFS_NAME, Context.MODE_PRIVATE);
-        String action = prefs.getString(TimerWidget.KEY_PENDING_ACTION, "");
-        if (!action.isEmpty()) {
+        String raw = prefs.getString(TimerWidget.KEY_PENDING_ACTION, "");
+        if (!raw.isEmpty()) {
             prefs.edit().remove(TimerWidget.KEY_PENDING_ACTION).apply();
         }
+        // Puede haber varias acciones encoladas (p.ej. CLOCK_IN + CLOCK_OUT si
+        // el usuario arrancó y paró el timer desde el widget sin abrir nunca
+        // la app entre medio); se devuelven todas, en orden, para que la app
+        // las reproduzca sin perder ninguna.
+        com.getcapacitor.JSArray actions = new com.getcapacitor.JSArray();
+        if (!raw.isEmpty()) {
+            for (String part : raw.split("\n")) {
+                if (!part.isEmpty()) actions.put(part);
+            }
+        }
         com.getcapacitor.JSObject result = new com.getcapacitor.JSObject();
-        result.put("action", action);
+        result.put("actions", actions);
         call.resolve(result);
     }
 

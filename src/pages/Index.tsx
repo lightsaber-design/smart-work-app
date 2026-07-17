@@ -139,7 +139,13 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const handleUpdateCalendarEvent = (id: string, updates: Parameters<typeof calendar.updateEvent>[1]) => {
     calendar.updateEvent(id, updates);
     if (updates.date === undefined && updates.endTime === undefined) return;
-    const linkedEntry = tracker.entries.find((e) => e.linkedEventId === id && e.endTime !== null);
+    // Se busca el entry enlazado esté o no ya cerrado: si sigue abierto
+    // (p.ej. quedó "colgado" por un desajuste de sincronización previo) y
+    // aquí se le pone una hora de fin, hay que cerrarlo también — si no, el
+    // Calendario cuenta esas horas (las lee de los eventos) pero el Resumen
+    // nunca las ve (solo cuenta TimeEntries con endTime), y los totales del
+    // mismo mes dejan de cuadrar entre las dos pantallas.
+    const linkedEntry = tracker.entries.find((e) => e.linkedEventId === id);
     if (!linkedEntry) return;
     const newStart = updates.date ?? linkedEntry.startTime;
     if (typeof updates.endTime === "string" && updates.endTime) {
@@ -148,9 +154,12 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       // las 02:00): se pasa al día siguiente en vez de recortar a +1h.
       const newEnd = resolveEndDate(newStart, updates.endTime) ?? new Date(newStart.getTime() + 60 * 60_000);
       tracker.updateEntryTimes(linkedEntry.id, newStart, newEnd);
-    } else if (updates.date) {
-      const duration = linkedEntry.endTime!.getTime() - linkedEntry.startTime.getTime();
+    } else if (updates.date && linkedEntry.endTime) {
+      const duration = linkedEntry.endTime.getTime() - linkedEntry.startTime.getTime();
       tracker.updateEntryTimes(linkedEntry.id, newStart, new Date(newStart.getTime() + duration));
+    } else if (updates.date) {
+      // Entry aún abierto y sin nueva hora de fin: solo se mueve el inicio.
+      tracker.updateStartTime(linkedEntry.id, newStart);
     }
   };
 
@@ -233,28 +242,48 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const widgetActionRef = useRef<() => void>(() => {});
   widgetActionRef.current = () => {
     if (document.visibilityState !== 'visible') return;
-    void consumeWidgetAction().then((raw) => {
-      if (!raw) return;
-      const [action, msStr, category] = raw.split('|');
-      const ms = msStr ? Number(msStr) : NaN;
-      const time = Number.isFinite(ms) ? new Date(ms) : undefined;
-      if (action === 'CLOCK_IN') {
-        if (!tracker.isRunning) {
-          void tracker.clockIn(
-            category || 'Predi',
-            ({ date, category: cat, location }) =>
-              calendar.addCompletedEventNow({ date, category: cat, location }),
-            time,
-          );
+    void consumeWidgetAction().then((actions) => {
+      // El widget puede haber encolado varias acciones (p.ej. arranca y para
+      // sin abrir nunca la app entre medio): se reproducen todas en orden.
+      // `tracker.isRunning` no se actualiza hasta el siguiente render, así
+      // que se lleva un flag local para saber si ya "arrancamos" dentro de
+      // este mismo lote antes de decidir si un CLOCK_OUT tiene con qué parar.
+      let localRunning = tracker.isRunning;
+      let startedThisBatch = false;
+      for (const raw of actions) {
+        const [action, msStr, category] = raw.split('|');
+        const ms = msStr ? Number(msStr) : NaN;
+        const time = Number.isFinite(ms) ? new Date(ms) : undefined;
+        if (action === 'CLOCK_IN') {
+          if (!localRunning) {
+            void tracker.clockIn(
+              category || 'Predi',
+              ({ date, category: cat, location }) =>
+                calendar.addCompletedEventNow({ date, category: cat, location }),
+              time,
+            );
+            localRunning = true;
+            startedThisBatch = true;
+          }
+        } else if (action === 'CLOCK_OUT') {
+          if (localRunning) {
+            // Si el arranque también vino de este mismo lote, ya sabemos la
+            // duración exacta por los timestamps del widget: se cierra
+            // directo en vez de pasar por el prompt de "actividad corta"
+            // (pensado para paradas en vivo, no para reproducir un ciclo ya
+            // ocurrido por completo mientras la app estaba cerrada).
+            if (startedThisBatch) completeClockOut(time);
+            else requestClockOut(time);
+            localRunning = false;
+            startedThisBatch = false;
+          }
+        } else if (action === 'NAV' && msStr && VALID_TABS.has(msStr as Tab)) {
+          // Atajos del icono de Android: abrir una pestaña concreta. Se valida
+          // contra la lista de pestañas reales porque este valor llega desde un
+          // extra de Intent que, en teoría, podría forjar otra app instalada
+          // (MainActivity es exported=true, como toda activity launcher).
+          navigate(msStr as Tab);
         }
-      } else if (action === 'CLOCK_OUT') {
-        if (tracker.isRunning) requestClockOut(time);
-      } else if (action === 'NAV' && msStr && VALID_TABS.has(msStr as Tab)) {
-        // Atajos del icono de Android: abrir una pestaña concreta. Se valida
-        // contra la lista de pestañas reales porque este valor llega desde un
-        // extra de Intent que, en teoría, podría forjar otra app instalada
-        // (MainActivity es exported=true, como toda activity launcher).
-        navigate(msStr as Tab);
       }
     });
   };

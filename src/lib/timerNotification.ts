@@ -4,7 +4,7 @@ interface TimerNotificationPlugin {
   start(options: { startTimeMs: number; title: string; body: string; category?: string }): Promise<void>;
   pause(options: { elapsedMs: number; title: string; body: string }): Promise<void>;
   stop(): Promise<void>;
-  consumeWidgetAction(): Promise<{ action: string }>;
+  consumeWidgetAction(): Promise<{ actions: string[] }>;
   setCategories(options: { categories: { name: string; color: string }[] }): Promise<void>;
 }
 
@@ -49,13 +49,16 @@ export async function setWidgetCategories(categories: { name: string; color: str
   }
 }
 
-export async function consumeWidgetAction(): Promise<string> {
-  if (!Capacitor.isNativePlatform()) return '';
+// Puede haber varias acciones encoladas (p.ej. CLOCK_IN + CLOCK_OUT si el
+// usuario arrancó y paró el timer desde el widget sin abrir nunca la app
+// entre medio): se procesan todas, en orden, para no perder la sesión.
+export async function consumeWidgetAction(): Promise<string[]> {
+  if (!Capacitor.isNativePlatform()) return [];
   try {
     const result = await TimerNotification.consumeWidgetAction();
-    return result.action ?? '';
+    return result.actions ?? [];
   } catch (e) {
     console.warn('[TimerNotif] consumeWidgetAction:', e);
-    return '';
+    return [];
   }
 }
