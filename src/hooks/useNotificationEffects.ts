@@ -121,6 +121,15 @@ export function useNotificationEffects({
 
       if (scheduledEventFireTimes.current.get(event.id) === fireAtMs) return;
 
+      // Se reserva el fireAt en el mapa SÍNCRONAMENTE, antes del await:
+      // scheduleEventNotification tarda varios awaits (permiso, cancelación,
+      // schedule nativo) y este efecto puede re-ejecutarse durante esa ventana
+      // (cambia calendarEvents / activeScheduledEvent / t). Si la marca se
+      // pusiera solo en el .then, cada re-ejecución programaría OTRA
+      // notificación nativa con un id nuevo dejando huérfanas las anteriores, y
+      // todas saltarían a la vez → el usuario recibía ~20 avisos del mismo
+      // evento. Con la reserva síncrona, las re-ejecuciones ven la marca y salen.
+      scheduledEventFireTimes.current.set(event.id, fireAtMs);
       void scheduleEventNotification(
         event.id,
         t("notif_activity_upcoming"),
@@ -128,8 +137,7 @@ export function useNotificationEffects({
         fireAt,
         { extra: { route: "calendar", eventId: event.id } },
       ).then((scheduled) => {
-        if (scheduled) scheduledEventFireTimes.current.set(event.id, fireAtMs);
-        else if (scheduledEventFireTimes.current.get(event.id) === fireAtMs)
+        if (!scheduled && scheduledEventFireTimes.current.get(event.id) === fireAtMs)
           scheduledEventFireTimes.current.delete(event.id);
       });
     });
@@ -273,8 +281,11 @@ export function useNotificationEffects({
         if (fireAtMs > now) {
           live.add(id);
           if (missedStudyFireRef.current.get(id) === fireAtMs) continue;
+          // Reserva síncrona antes del await para no duplicar en re-ejecuciones
+          // (ver nota del recordatorio de eventos).
+          missedStudyFireRef.current.set(id, fireAtMs);
           void scheduleEventNotification(id, t("notif_study_missed_title"), body, new Date(fireAtMs), opts)
-            .then((ok) => { if (ok) missedStudyFireRef.current.set(id, fireAtMs); });
+            .then((ok) => { if (!ok && missedStudyFireRef.current.get(id) === fireAtMs) missedStudyFireRef.current.delete(id); });
         } else {
           // Ya venció: dispara una sola vez al abrir la app.
           const key = `_ml_missed_${session.id}`;
@@ -351,6 +362,7 @@ export function useNotificationEffects({
         // salte ese día aunque la app esté cerrada.
         const fireAtMs = nextWeekdayAt(schedule.dayOfWeek, schedule.time, today).getTime() + 90 * 60_000;
         if (studyFixedFireRef.current.get(fixedId) === fireAtMs) return;
+        studyFixedFireRef.current.set(fixedId, fireAtMs); // reserva síncrona (ver nota)
         void scheduleEventNotification(
           fixedId,
           t("notif_study_missed_title"),
@@ -360,7 +372,7 @@ export function useNotificationEffects({
             actionTypeId: STUDY_ACTION_TYPE,
             extra: { route: "study", contactId: contact.id },
           },
-        ).then((ok) => { if (ok) studyFixedFireRef.current.set(fixedId, fireAtMs); });
+        ).then((ok) => { if (!ok && studyFixedFireRef.current.get(fixedId) === fireAtMs) studyFixedFireRef.current.delete(fixedId); });
       } else {
         void cancelEventNotification(fixedId);
         const doneThisWeek = contact.sessions.some(
@@ -400,8 +412,9 @@ export function useNotificationEffects({
 
       if (fireAtMs > now) {
         if (forgottenFireRef.current.get(id) === fireAtMs) continue;
+        forgottenFireRef.current.set(id, fireAtMs); // reserva síncrona (ver nota)
         void scheduleEventNotification(id, t("notif_study_reminder_title"), body, new Date(fireAtMs), { extra: { route: "estudios" } })
-          .then((ok) => { if (ok) forgottenFireRef.current.set(id, fireAtMs); });
+          .then((ok) => { if (!ok && forgottenFireRef.current.get(id) === fireAtMs) forgottenFireRef.current.delete(id); });
       } else {
         // Ya lleva >14 días olvidado: dispara una vez al día al abrir la app.
         const key = `_ml_forgotten_${contact.id}_${new Date().toDateString()}`;
@@ -454,8 +467,9 @@ export function useNotificationEffects({
       if (fireAtMs > now) {
         live.add(event.id);
         if (unloggedFireRef.current.get(event.id) === fireAtMs) continue;
+        unloggedFireRef.current.set(event.id, fireAtMs); // reserva síncrona (ver nota)
         void scheduleEventNotification(`unlogged-${event.id}`, t("notif_unlogged_title"), body, new Date(fireAtMs), { extra: { route: "calendar", eventId: event.id } })
-          .then((ok) => { if (ok) unloggedFireRef.current.set(event.id, fireAtMs); });
+          .then((ok) => { if (!ok && unloggedFireRef.current.get(event.id) === fireAtMs) unloggedFireRef.current.delete(event.id); });
       } else if (now - fireAtMs < 24 * 3_600_000) {
         // Pasó hace poco con la app cerrada: dispara una vez al abrir.
         const key = `_ml_unlogged_${event.id}`;

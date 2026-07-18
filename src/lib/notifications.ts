@@ -79,6 +79,37 @@ function saveIdMap(map: Map<string, number>) {
 const _idMap = loadIdMap();
 let _channelReady = false;
 
+// Limpieza única por arranque: cancela TODAS las notificaciones nativas
+// pendientes y vacía el mapa antes de reprogramar. Sirve para barrer duplicados
+// huérfanos acumulados por una condición de carrera previa (varias
+// programaciones concurrentes del mismo aviso generaban ids nuevos y el mapa
+// solo guardaba el último, así que las demás nunca se cancelaban y saltaban
+// todas juntas). Como todos los efectos reprograman sus avisos al montar, tras
+// la limpieza se reconstruye exactamente lo necesario. Es una promesa
+// compartida para que las llamadas concurrentes esperen a la MISMA limpieza y
+// ninguna programe hasta que termine (si no, la limpieza podría borrar lo
+// recién programado).
+let _cleanupPromise: Promise<void> | null = null;
+function cleanupStalePendingOnce(): Promise<void> {
+  if (!_cleanupPromise) {
+    _cleanupPromise = (async () => {
+      try {
+        const pending = await LocalNotifications.getPending();
+        if (pending.notifications.length > 0) {
+          await LocalNotifications.cancel({
+            notifications: pending.notifications.map((n) => ({ id: n.id })),
+          });
+        }
+      } catch (e) {
+        console.warn('[Notif] cleanup stale:', e);
+      }
+      _idMap.clear();
+      saveIdMap(_idMap);
+    })();
+  }
+  return _cleanupPromise;
+}
+
 function isNativeAndroid(): boolean {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 }
@@ -240,6 +271,9 @@ export async function scheduleEventNotification(
 
   const granted = await requestNativePermission();
   if (!granted) return false;
+
+  // Barre huérfanos de arranques previos una sola vez antes de (re)programar.
+  await cleanupStalePendingOnce();
 
   await cancelEventNotification(eventId);
 
