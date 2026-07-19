@@ -101,11 +101,13 @@ export function useNotificationEffects({
         return;
       }
 
-      // Nunca se pueden hacer dos eventos en paralelo: si ahora mismo ya se
-      // está haciendo OTRA actividad, no tiene sentido avisar de que este
-      // evento va a empezar. Se cancela y se reevalúa en cuanto quede libre
-      // (si su hora aún no ha pasado, se reprogramará entonces).
-      if (isTimerRunning && activeScheduledEvent?.id !== event.id) {
+      // Si el timer está en marcha, la actividad YA se está registrando: no
+      // tiene sentido recordar que un evento "va a empezar" — ni el que se está
+      // cronometrando ni ningún otro (solo se puede hacer una actividad a la
+      // vez). El evento es solo la referencia; lo que manda es el timer. Se
+      // cancela su recordatorio y se reevalúa al detener el timer, si su hora
+      // aún no ha pasado.
+      if (isTimerRunning) {
         void cancelEventNotification(event.id);
         scheduledEventFireTimes.current.delete(event.id);
         return;
@@ -149,7 +151,7 @@ export function useNotificationEffects({
         scheduledEventFireTimes.current.delete(id);
       }
     });
-  }, [calendarEvents, isTimerRunning, activeScheduledEvent, t]);
+  }, [calendarEvents, isTimerRunning, t]);
 
   // ── Timer overrun → notificación nativa ────────────────────────────────────
   useEffect(() => {
@@ -307,7 +309,17 @@ export function useNotificationEffects({
   // ── Notificaciones semanales de estudio ────────────────────────────────────
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    if (isTimerRunning) return;
+    // Timer en marcha: se está registrando una actividad. Además de no programar
+    // avisos nuevos, se cancelan los ya programados (fijo/flexible por contacto)
+    // para no molestar mientras se ficha; se reprograman al detener el timer.
+    if (isTimerRunning) {
+      estudiosContacts.forEach((contact) => {
+        void cancelEventNotification(`study-fixed-${contact.id}`);
+        void cancelEventNotification(`study-flex-${contact.id}`);
+        studyFixedFireRef.current.delete(`study-fixed-${contact.id}`);
+      });
+      return;
+    }
 
     const now = Date.now();
     const today = new Date();
@@ -401,6 +413,14 @@ export function useNotificationEffects({
   // para que salte aunque la app esté cerrada. Se cancela si el contacto pasa a
   // inactivo o gana una cita futura.
   useEffect(() => {
+    // Timer en marcha = se está registrando una actividad: no se molesta con
+    // recordatorios de contactos olvidados. Se cancelan los pendientes y se
+    // reprograman al detener el timer.
+    if (isTimerRunning) {
+      forgottenFireRef.current.forEach((_, id) => void cancelEventNotification(id));
+      forgottenFireRef.current.clear();
+      return;
+    }
     const now = Date.now();
     const live = new Set<string>();
     for (const contact of estudiosContacts) {
@@ -430,7 +450,7 @@ export function useNotificationEffects({
         forgottenFireRef.current.delete(id);
       }
     });
-  }, [estudiosContacts, t]);
+  }, [estudiosContacts, isTimerRunning, t]);
 
   // ── Actividad del calendario que pasó sin fichar ───────────────────────────
   // Alarma nativa a "hora del evento + 30 min" para que salte aunque la app esté
