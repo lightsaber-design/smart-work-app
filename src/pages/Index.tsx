@@ -7,7 +7,7 @@ import { useFavoritePlaces } from "@/hooks/useFavoritePlaces";
 import { useSetup, SetupData } from "@/hooks/useSetup";
 import { BottomNav, AppTab } from "@/components/BottomNav";
 import { LanguageProvider, localeForLang, useLang, useT } from "@/lib/LanguageContext";
-import { detectLanguage, Lang } from "@/lib/i18n";
+import { detectLanguage, isLanguageReady, Lang } from "@/lib/i18n";
 import { ChevronLeft, BookOpen, MapPin, Plus, Search } from "lucide-react";
 import { hasActiveStudyWork, nearestPendingSession, useEstudios } from "@/hooks/useEstudios";
 import {
@@ -307,6 +307,9 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   useNotificationEffects({
     calendarEvents,
     isTimerRunning: tracker.isRunning,
+    // Solo se programan avisos cuando el idioma definitivo está cargado, para no
+    // programarlos con el texto de reserva (salían duplicados en dos idiomas).
+    langReady: isLanguageReady(lang),
     markNotified,
     t,
     activeScheduledEvent: activeScheduledEvent ?? null,

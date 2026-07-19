@@ -16,6 +16,9 @@ type TranslateFn = (key: string, vars?: Record<string, string | number>) => stri
 interface UseNotificationEffectsParams {
   calendarEvents: CalendarEvent[];
   isTimerRunning: boolean;
+  /** El idioma definitivo ya está cargado: hasta entonces no se programan avisos
+   * (para no hacerlo con el texto de reserva y que salgan en dos idiomas). */
+  langReady: boolean;
   markNotified: (id: string) => void;
   t: TranslateFn;
   activeScheduledEvent: CalendarEvent | null;
@@ -40,6 +43,7 @@ interface UseNotificationEffectsParams {
 export function useNotificationEffects({
   calendarEvents,
   isTimerRunning,
+  langReady,
   markNotified,
   t,
   activeScheduledEvent,
@@ -87,6 +91,7 @@ export function useNotificationEffects({
   // cancelEventNotification para todos ellos (la función es barata porque
   // comprueba el mapa persistido en localStorage antes de llamar al plugin).
   useEffect(() => {
+    if (!langReady) return; // no programar con texto de reserva (ver langReady)
     const now = Date.now();
     const liveReminderIds = new Set<string>();
 
@@ -151,7 +156,7 @@ export function useNotificationEffects({
         scheduledEventFireTimes.current.delete(id);
       }
     });
-  }, [calendarEvents, isTimerRunning, t]);
+  }, [calendarEvents, isTimerRunning, langReady, t]);
 
   // ── Timer overrun → notificación nativa ────────────────────────────────────
   useEffect(() => {
@@ -257,6 +262,7 @@ export function useNotificationEffects({
   // modo que salte aunque la app esté cerrada. Si la sesión ya venció mientras la
   // app estaba cerrada, disparamos una vez al abrir (guarda en localStorage).
   useEffect(() => {
+    if (!langReady) return; // no programar con texto de reserva (ver langReady)
     const now = Date.now();
     const live = new Set<string>();
     // Solo puede haber una actividad a la vez: mientras el timer esté en
@@ -304,11 +310,12 @@ export function useNotificationEffects({
         missedStudyFireRef.current.delete(id);
       }
     });
-  }, [estudiosContacts, isTimerRunning, activeEntry, t]);
+  }, [estudiosContacts, isTimerRunning, activeEntry, langReady, t]);
 
   // ── Notificaciones semanales de estudio ────────────────────────────────────
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
+    if (!langReady) return; // no programar con texto de reserva (ver langReady)
     // Timer en marcha: se está registrando una actividad. Además de no programar
     // avisos nuevos, se cancelan los ya programados (fijo/flexible por contacto)
     // para no molestar mientras se ficha; se reprograman al detener el timer.
@@ -406,13 +413,14 @@ export function useNotificationEffects({
         );
       }
     });
-  }, [estudiosContacts, isTimerRunning, t]);
+  }, [estudiosContacts, isTimerRunning, langReady, t]);
 
   // ── Contactos olvidados (sin cita en >14 días) ─────────────────────────────
   // Una alarma nativa por contacto, programada a "última actividad + 14 días",
   // para que salte aunque la app esté cerrada. Se cancela si el contacto pasa a
   // inactivo o gana una cita futura.
   useEffect(() => {
+    if (!langReady) return; // no programar con texto de reserva (ver langReady)
     // Timer en marcha = se está registrando una actividad: no se molesta con
     // recordatorios de contactos olvidados. Se cancelan los pendientes y se
     // reprograman al detener el timer.
@@ -450,7 +458,7 @@ export function useNotificationEffects({
         forgottenFireRef.current.delete(id);
       }
     });
-  }, [estudiosContacts, isTimerRunning, t]);
+  }, [estudiosContacts, isTimerRunning, langReady, t]);
 
   // ── Actividad del calendario que pasó sin fichar ───────────────────────────
   // Alarma nativa a "hora del evento + 30 min" para que salte aunque la app esté
@@ -458,6 +466,7 @@ export function useNotificationEffects({
   // programan eventos dentro de una ventana próxima para acotar el número de
   // alarmas pendientes de Android.
   useEffect(() => {
+    if (!langReady) return; // no programar con texto de reserva (ver langReady)
     if (!notifUnlogged) {
       unloggedFireRef.current.forEach((_, id) => void cancelEventNotification(`unlogged-${id}`));
       unloggedFireRef.current.clear();
@@ -505,7 +514,7 @@ export function useNotificationEffects({
         unloggedFireRef.current.delete(id);
       }
     });
-  }, [calendarEvents, activeScheduledEvent, isTimerRunning, notifUnlogged, t]);
+  }, [calendarEvents, activeScheduledEvent, isTimerRunning, notifUnlogged, langReady, t]);
 
   // ── Meta mensual ────────────────────────────────────────────────────────────
   // Recordatorio "vas por detrás": alarma nativa 5 días antes de fin de mes, para
@@ -513,6 +522,7 @@ export function useNotificationEffects({
   // se mantiene inmediata a propósito: es el instante exacto de cruzarla al fichar
   // horas, algo que solo se detecta dentro de la app.
   useEffect(() => {
+    if (!langReady) return; // no programar con texto de reserva (ver langReady)
     const monthKey = currentMonthKey();
     const reminderId = `goal-reminder-${monthKey}`;
     const goalHours = precursorHours ?? 0;
@@ -576,7 +586,7 @@ export function useNotificationEffects({
         { extra: { route: "stats" } },
       );
     }
-  }, [calMonthMs, notifMonthlyGoal, precursorHours, t]);
+  }, [calMonthMs, notifMonthlyGoal, precursorHours, langReady, t]);
 
   // ── Recordatorio de informe mensual ────────────────────────────────────────
   // El informe se envía por el mes en curso, así que si ya está enviado (existe
@@ -585,6 +595,7 @@ export function useNotificationEffects({
   // recordamos con la app abierta en cada apertura durante la ventana de 5 días
   // alrededor del cambio de mes.
   useEffect(() => {
+    if (!langReady) return; // no programar con texto de reserva (ver langReady)
     if (!notifReport) {
       void cancelEventNotification("report-prepare");
       void cancelEventNotification("report-deliver");
@@ -654,6 +665,6 @@ export function useNotificationEffects({
     } else {
       reportOpenFiredRef.current = null;
     }
-  }, [notifReport, reportCarryover, t]);
+  }, [notifReport, reportCarryover, langReady, t]);
 
 }

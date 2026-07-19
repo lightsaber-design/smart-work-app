@@ -618,6 +618,14 @@ export function subscribeLanguageLoad(cb: () => void): () => void {
   return () => { const i = _listeners.indexOf(cb); if (i >= 0) _listeners.splice(i, 1); };
 }
 
+// ¿Está el idioma listo para producir texto DEFINITIVO (no un fallback)?
+// El español es la base y está siempre disponible; los demás requieren que su
+// chunk se haya cargado. Se usa para no programar notificaciones nativas con el
+// texto de reserva antes de tiempo (salían "en inglés y en español" a la vez).
+export function isLanguageReady(lang: Lang): boolean {
+  return lang === 'es' || Boolean(_cache[lang]);
+}
+
 export type TranslationKey = keyof typeof es;
 
 export function translate(lang: Lang, key: string, vars?: Record<string, string | number>): string {

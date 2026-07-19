@@ -2,7 +2,6 @@ import { Capacitor } from '@capacitor/core';
 import { LocalNotifications, type Schedule } from '@capacitor/local-notifications';
 
 const CHANNEL_ID = 'ministrylog-main';
-const NOTIF_ID_KEY = '_ml_notif_ids';
 const INTENT_KEY = '_ml_notif_intent';
 
 // ── Enrutado de notificaciones ────────────────────────────────────────────────
@@ -33,62 +32,30 @@ export const STUDY_ACTION_SKIP = 'STUDY_SKIP';
 /** Evento de ventana que se emite al pulsar una notificación. */
 export const NOTIF_INTENT_EVENT = 'ml-notif-intent';
 
-// Generador persistente para evitar reutilizar ids de notificaciones.
-function loadNextId(): number {
-  try {
-    return Number(localStorage.getItem('_ml_notif_seq') ?? '100') || 100;
-  } catch {
-    return 100;
+// ── Ids nativos deterministas ─────────────────────────────────────────────────
+// El id numérico de cada notificación nativa se deriva SIEMPRE de su clave
+// lógica (event.id, "unlogged-…", "report-deliver", etc.) con un hash estable.
+// Así la misma notificación reutiliza el mismo id: reprogramarla la REEMPLAZA (no
+// se acumulan duplicados aunque el efecto se re-ejecute o cambie el idioma) y
+// cancelarla es fiable sin depender de un mapa que pudiera desincronizarse. Este
+// es el arreglo de raíz de los avisos duplicados y de los que no se cancelaban.
+function stableNotificationId(key: string): number {
+  let h = 5381;
+  for (let i = 0; i < key.length; i++) {
+    h = ((h << 5) + h + key.charCodeAt(i)) | 0; // djb2 en 32 bits
   }
+  return (h & 0x7fffffff) || 1; // positivo (int de Android) y distinto de 0
 }
 
-function saveNextId(n: number) {
-  try {
-    localStorage.setItem('_ml_notif_seq', String(n));
-  } catch {
-    // Si localStorage no esta disponible, se mantiene la secuencia en memoria.
-  }
-}
-
-let _nextId = loadNextId();
-function nextId(): number {
-  const id = _nextId++;
-  saveNextId(_nextId);
-  return id;
-}
-
-// Relaciona cada evento con su notificacion para poder cancelarla despues.
-function loadIdMap(): Map<string, number> {
-  try {
-    const raw = localStorage.getItem(NOTIF_ID_KEY);
-    if (raw) return new Map(JSON.parse(raw) as [string, number][]);
-  } catch {
-    // Si el mapa persistido esta corrupto, se empieza con un mapa limpio.
-  }
-  return new Map();
-}
-
-function saveIdMap(map: Map<string, number>) {
-  try {
-    localStorage.setItem(NOTIF_ID_KEY, JSON.stringify([...map]));
-  } catch {
-    // El plugin nativo sigue funcionando aunque no podamos guardar el mapa.
-  }
-}
-
-const _idMap = loadIdMap();
 let _channelReady = false;
 
 // Limpieza única por arranque: cancela TODAS las notificaciones nativas
-// pendientes y vacía el mapa antes de reprogramar. Sirve para barrer duplicados
-// huérfanos acumulados por una condición de carrera previa (varias
-// programaciones concurrentes del mismo aviso generaban ids nuevos y el mapa
-// solo guardaba el último, así que las demás nunca se cancelaban y saltaban
-// todas juntas). Como todos los efectos reprograman sus avisos al montar, tras
-// la limpieza se reconstruye exactamente lo necesario. Es una promesa
-// compartida para que las llamadas concurrentes esperen a la MISMA limpieza y
-// ninguna programe hasta que termine (si no, la limpieza podría borrar lo
-// recién programado).
+// pendientes antes de reprogramar. Barre huérfanos de versiones anteriores que
+// usaban ids incrementales (ya no localizables por clave). Como todos los efectos
+// reprograman sus avisos —ahora con id determinista— tras la limpieza se
+// reconstruye exactamente lo necesario. Promesa compartida: las llamadas
+// concurrentes esperan a la MISMA limpieza y ninguna programa hasta que termina,
+// así la limpieza nunca borra algo recién programado.
 let _cleanupPromise: Promise<void> | null = null;
 function cleanupStalePendingOnce(): Promise<void> {
   if (!_cleanupPromise) {
@@ -103,8 +70,6 @@ function cleanupStalePendingOnce(): Promise<void> {
       } catch (e) {
         console.warn('[Notif] cleanup stale:', e);
       }
-      _idMap.clear();
-      saveIdMap(_idMap);
     })();
   }
   return _cleanupPromise;
@@ -275,11 +240,9 @@ export async function scheduleEventNotification(
   // Barre huérfanos de arranques previos una sola vez antes de (re)programar.
   await cleanupStalePendingOnce();
 
-  await cancelEventNotification(eventId);
-
-  const id = nextId();
-  _idMap.set(eventId, id);
-  saveIdMap(_idMap);
+  // Id determinista a partir de la clave lógica: si ya existe una notificación
+  // con este id (misma clave), programarla la REEMPLAZA en vez de acumular otra.
+  const id = stableNotificationId(eventId);
 
   const schedule: Schedule = { at: fireAt };
   if (await canUseExactAlarms()) {
@@ -302,8 +265,6 @@ export async function scheduleEventNotification(
     });
     return true;
   } catch (e) {
-    _idMap.delete(eventId);
-    saveIdMap(_idMap);
     console.warn('[Notif] schedule:', e);
     return false;
   }
@@ -311,15 +272,13 @@ export async function scheduleEventNotification(
 
 export async function cancelEventNotification(eventId: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
-  const id = _idMap.get(eventId);
-  if (id === undefined) return;
+  // Mismo id determinista que al programar: cancela de forma fiable sin mapa.
+  const id = stableNotificationId(eventId);
   try {
     await LocalNotifications.cancel({ notifications: [{ id }] });
   } catch {
     // Cancelar una notificacion inexistente no requiere accion adicional.
   }
-  _idMap.delete(eventId);
-  saveIdMap(_idMap);
 }
 
 export function showBrowserNotification(
@@ -331,7 +290,9 @@ export function showBrowserNotification(
       if (!granted) return;
       void LocalNotifications.schedule({
         notifications: [{
-          id: nextId(),
+          // Aviso inmediato de un solo uso: id determinista por título para no
+          // colisionar con las notificaciones programadas.
+          id: stableNotificationId(`imm-${title}`),
           title,
           body: (options?.body as string) ?? '',
           channelId: CHANNEL_ID,
