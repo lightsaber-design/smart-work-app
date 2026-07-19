@@ -11,13 +11,36 @@ vi.mock("@/lib/jsonFileStorage", () => ({
   writeJsonValue: storageMocks.writeJsonValue,
 }));
 
-import { useTimeTracker } from "./useTimeTracker";
+import { useTimeTracker, type TimeTrackerEventOps } from "./useTimeTracker";
+import type { CalendarEvent } from "@/hooks/useCalendarEvents";
 
-describe("useTimeTracker", () => {
+function makeOps(overrides: Partial<TimeTrackerEventOps> = {}): TimeTrackerEventOps {
+  return {
+    addCompletedEventNow: vi.fn(() => "event-1"),
+    updateEvent: vi.fn(),
+    deleteEvent: vi.fn(),
+    ...overrides,
+  };
+}
+
+function completedEvent(id: string, start: Date, endTime: string, category = "Predi"): CalendarEvent {
+  return {
+    id,
+    date: start,
+    endTime,
+    category,
+    reminderMinutesBefore: 0,
+    notified: true,
+    recurrence: "none",
+    completed: true,
+  };
+}
+
+describe("useTimeTracker (calendar as single source of truth)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 4, 10, 10, 0));
-    storageMocks.readJsonValue.mockResolvedValue([]);
+    storageMocks.readJsonValue.mockResolvedValue(null);
     storageMocks.writeJsonValue.mockResolvedValue(undefined);
     storageMocks.readJsonValue.mockClear();
     storageMocks.writeJsonValue.mockClear();
@@ -27,105 +50,85 @@ describe("useTimeTracker", () => {
     vi.useRealTimers();
   });
 
-  it("loads only valid stored entries and restores a running timer", async () => {
-    storageMocks.readJsonValue.mockResolvedValue([
-      { id: "active", startTime: new Date(2026, 4, 10, 9, 0).toISOString(), endTime: null, category: "Predi" },
-      { id: "bad-date", startTime: "not-a-date", endTime: null, category: "Predi" },
-    ]);
-
-    const { result } = renderHook(() => useTimeTracker());
-
+  it("derives completed entries from completed calendar events", async () => {
+    const events = [completedEvent("event-1", new Date(2026, 4, 10, 9, 0), "10:00", "Predi")];
+    const { result } = renderHook(() => useTimeTracker(events, makeOps(), true));
     await act(async () => {
       await Promise.resolve();
     });
     expect(result.current.entries).toHaveLength(1);
-    expect(result.current.isRunning).toBe(true);
-    expect(result.current.elapsed).toBe(3600);
-  });
-
-  it("clocks in and out while updating a linked calendar event", async () => {
-    const { result } = renderHook(() => useTimeTracker());
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(storageMocks.readJsonValue).toHaveBeenCalled();
-
-    act(() => {
-      void result.current.clockIn("Predi", () => "event-1", new Date(2026, 4, 10, 9, 30));
-    });
-
-    expect(result.current.isRunning).toBe(true);
     expect(result.current.entries[0].linkedEventId).toBe("event-1");
-
-    const updateEvent = vi.fn();
-    act(() => {
-      void result.current.clockOut(updateEvent, new Date(2026, 4, 10, 10, 45));
-    });
-
-    expect(result.current.isRunning).toBe(false);
-    expect(result.current.entries[0].endTime).toEqual(new Date(2026, 4, 10, 10, 45));
-    expect(updateEvent).toHaveBeenCalledWith("event-1", "10:45");
-  });
-
-  it("clamps updateStartTime to now instead of allowing a future start (negative duration)", async () => {
-    storageMocks.readJsonValue.mockResolvedValue([
-      { id: "active", startTime: new Date(2026, 4, 10, 9, 0).toISOString(), endTime: null, category: "Predi" },
-    ]);
-    const { result } = renderHook(() => useTimeTracker());
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(result.current.isRunning).toBe(true);
-
-    // System time is 2026-05-10 10:00; picking 11:00 as the start would be in the future.
-    act(() => {
-      result.current.updateStartTime("active", new Date(2026, 4, 10, 11, 0));
-    });
-
-    expect(result.current.entries[0].startTime).toEqual(new Date(2026, 4, 10, 10, 0));
-    expect(result.current.elapsed).toBe(0);
-  });
-
-  it("stops the running state when deleting the active entry", async () => {
-    storageMocks.readJsonValue.mockResolvedValue([
-      { id: "active", startTime: new Date(2026, 4, 10, 9, 45).toISOString(), endTime: null, category: "Predi" },
-    ]);
-    const { result } = renderHook(() => useTimeTracker());
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(result.current.isRunning).toBe(true);
-
-    act(() => {
-      result.current.deleteEntry("active");
-    });
-
-    expect(result.current.entries).toEqual([]);
-    expect(result.current.isRunning).toBe(false);
-    expect(result.current.elapsed).toBe(0);
-  });
-
-  it("detaches (without deleting) entries linked to a deleted calendar event", async () => {
-    storageMocks.readJsonValue.mockResolvedValue([
-      {
-        id: "logged",
-        startTime: new Date(2026, 4, 10, 9, 0).toISOString(),
-        endTime: new Date(2026, 4, 10, 10, 0).toISOString(),
-        category: "Predi",
-        linkedEventId: "event-1",
-      },
-    ]);
-    const { result } = renderHook(() => useTimeTracker());
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    act(() => {
-      result.current.detachEntriesLinkedToEvents(["event-1"]);
-    });
-
-    expect(result.current.entries).toHaveLength(1);
-    expect(result.current.entries[0].linkedEventId).toBeUndefined();
     expect(result.current.entries[0].endTime).toEqual(new Date(2026, 4, 10, 10, 0));
+    expect(result.current.isRunning).toBe(false);
+  });
+
+  it("clocks in by creating a completed event and marks the timer running", async () => {
+    const ops = makeOps({ addCompletedEventNow: vi.fn(() => "event-1") });
+    const { result } = renderHook(() => useTimeTracker([], ops, true));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      result.current.clockIn("Predi", new Date(2026, 4, 10, 9, 30));
+    });
+
+    expect(ops.addCompletedEventNow).toHaveBeenCalledWith(
+      expect.objectContaining({ category: "Predi" })
+    );
+    expect(result.current.isRunning).toBe(true);
+  });
+
+  it("clocks out by writing the end time onto the linked event", async () => {
+    const ops = makeOps({ addCompletedEventNow: vi.fn(() => "event-1") });
+    const { result } = renderHook(() => useTimeTracker([], ops, true));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    act(() => {
+      result.current.clockIn("Predi", new Date(2026, 4, 10, 9, 30));
+    });
+    act(() => {
+      result.current.clockOut(new Date(2026, 4, 10, 10, 45));
+    });
+
+    expect(ops.updateEvent).toHaveBeenCalledWith(
+      "event-1",
+      expect.objectContaining({ endTime: "10:45", completed: true })
+    );
+    expect(result.current.isRunning).toBe(false);
+  });
+
+  it("clamps updateStartTime to now (no future start / negative duration)", async () => {
+    const ops = makeOps();
+    const { result } = renderHook(() => useTimeTracker([], ops, true));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Hora del sistema 10:00; elegir 11:00 sería futuro → se recorta a ahora.
+    act(() => {
+      result.current.updateStartTime("event-1", new Date(2026, 4, 10, 11, 0));
+    });
+
+    expect(ops.updateEvent).toHaveBeenCalledWith(
+      "event-1",
+      expect.objectContaining({ date: new Date(2026, 4, 10, 10, 0) })
+    );
+  });
+
+  it("deleting an entry removes its event (delete = gone, no second store)", async () => {
+    const events = [completedEvent("event-1", new Date(2026, 4, 10, 9, 0), "10:00")];
+    const ops = makeOps();
+    const { result } = renderHook(() => useTimeTracker(events, ops, true));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      result.current.deleteEntry("event-1");
+    });
+
+    expect(ops.deleteEvent).toHaveBeenCalledWith("event-1");
   });
 });

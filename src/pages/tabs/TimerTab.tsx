@@ -304,14 +304,9 @@ export function TimerTab({
           estudiosContacts={estudios.contacts.filter((c) => c.active).map((c) => ({ id: c.id, name: c.name }))}
           existingEntries={tracker.entries}
           onSavePast={(start, end, cat, desc, loc) => {
-            // Se crea primero el evento y se enlaza a la TimeEntry (igual que
-            // al fichar en vivo) para que la actividad manual sea editable y
-            // borrable desde el Calendario, en vez de quedar duplicada como
-            // un bloque "huérfano" sin controles.
-            const endTimeStr = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
-            const eventId = calendar.addCompletedEventNow({ date: start, category: cat, location: loc });
-            if (eventId) calendar.updateEvent(eventId, { endTime: endTimeStr });
-            tracker.addManualEntry(start, end, cat, desc, loc, eventId);
+            // Crea un evento completado (fuente única); la actividad aparece en
+            // Calendario y Resumen porque ambos derivan de los eventos.
+            tracker.addManualEntry(start, end, cat, desc, loc);
           }}
           onSaveFuture={(params) => calendar.addEvent(params)}
           onClose={() => setManualSheetOpen(false)}
@@ -328,27 +323,15 @@ export function TimerTab({
             elapsed={tracker.elapsed}
             onPause={tracker.pause}
             onResume={tracker.resume}
-            onClockIn={(cat, customTime) =>
-              tracker.clockIn(
-                cat,
-                ({ date, category, location }) => calendar.addCompletedEventNow({ date, category, location }),
-                customTime,
-              )
-            }
+            onClockIn={(cat, customTime) => tracker.clockIn(cat, customTime)}
             onClockOut={requestClockOut}
             onUpdateCategory={(cat) => {
-              if (!activeEntry) return;
-              tracker.updateCategory(activeEntry.id, cat);
-              if (activeEntry.linkedEventId) {
-                calendar.updateEvent(activeEntry.linkedEventId, { category: cat });
-              }
+              // updateCategory edita el evento (fuente única); la actividad activa
+              // y el Resumen se actualizan solos al derivar de él.
+              if (activeEntry) tracker.updateCategory(activeEntry.id, cat);
             }}
             onUpdateStartTime={(startTime) => {
-              if (!activeEntry) return;
-              tracker.updateStartTime(activeEntry.id, startTime);
-              if (activeEntry.linkedEventId) {
-                calendar.updateEvent(activeEntry.linkedEventId, { date: startTime });
-              }
+              if (activeEntry) tracker.updateStartTime(activeEntry.id, startTime);
             }}
             calendarEvents={calendar.events}
             activeCategory={activeEntry?.category}

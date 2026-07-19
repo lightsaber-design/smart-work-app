@@ -1,8 +1,7 @@
 import { lazy, Suspense, useMemo, useState, useEffect, useRef, startTransition } from "react";
 import { MinistryMark } from "@/components/MinistryMark";
-import { useTimeTracker, TimeEntry } from "@/hooks/useTimeTracker";
+import { useTimeTracker } from "@/hooks/useTimeTracker";
 import { useCalendarEvents, EventCategory, AddEventParams } from "@/hooks/useCalendarEvents";
-import { generateId } from "@/lib/uuid";
 import { useFavoritePlaces } from "@/hooks/useFavoritePlaces";
 import { useSetup, SetupData } from "@/hooks/useSetup";
 import { BottomNav, AppTab } from "@/components/BottomNav";
@@ -109,8 +108,19 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const timerContentRef = useRef<HTMLDivElement>(null);
 
   // ── Data hooks ────────────────────────────────────────────────────────────────
-  const tracker = useTimeTracker();
+  // El calendario es la ÚNICA fuente de verdad de las horas; el timer deriva sus
+  // actividades de sus eventos, así que se crea primero y se le pasan los eventos
+  // y las operaciones para crear/cerrar/editar el evento de cada actividad.
   const calendar = useCalendarEvents();
+  const timeTrackerOps = useMemo(
+    () => ({
+      addCompletedEventNow: calendar.addCompletedEventNow,
+      updateEvent: calendar.updateEvent,
+      deleteEvent: calendar.deleteEvent,
+    }),
+    [calendar.addCompletedEventNow, calendar.updateEvent, calendar.deleteEvent]
+  );
+  const tracker = useTimeTracker(calendar.events, timeTrackerOps, calendar.loaded);
   const favorites = useFavoritePlaces();
   const estudios = useEstudios();
   const activeStudyCount = estudios.contacts.filter((c) => c.active).length;
@@ -125,57 +135,25 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     void removeJsonValue("time-entries").finally(() => window.location.reload());
   };
 
-  const activeEntry = tracker.entries.find((e) => e.endTime === null);
+  const activeEntry = tracker.activeEntry;
   const defaultCenter = setup.city ?? undefined;
   const activeScheduledEvent = findActiveScheduledEvent(activeEntry, calendarEvents);
 
   // ── Timer handlers ────────────────────────────────────────────────────────────
   const completeClockOut = (customTime?: Date) => {
-    tracker.clockOut((eventId, endTime) => calendar.updateEvent(eventId, { endTime, completed: true }), customTime);
+    tracker.clockOut(customTime);
   };
 
-  // Al editar las horas de un evento del calendario (p.ej. reducir su
-  // duración), sincroniza también la TimeEntry enlazada: las estadísticas
-  // calculan el total a partir de las TimeEntries, no de los eventos.
+  // Editar un evento del calendario ES editar la actividad: el Resumen/Home
+  // derivan sus horas de los eventos, así que no hay un segundo almacén que
+  // sincronizar (ahí nacían los descuadres). El calendario es la fuente única.
   const handleUpdateCalendarEvent = (id: string, updates: Parameters<typeof calendar.updateEvent>[1]) => {
     calendar.updateEvent(id, updates);
-    // Se busca el entry enlazado esté o no ya cerrado: si sigue abierto
-    // (p.ej. quedó "colgado" por un desajuste de sincronización previo) y
-    // aquí se le pone una hora de fin, hay que cerrarlo también — si no, el
-    // Calendario cuenta esas horas (las lee de los eventos) pero el Resumen
-    // nunca las ve (solo cuenta TimeEntries con endTime), y los totales del
-    // mismo mes dejan de cuadrar entre las dos pantallas.
-    const linkedEntry = tracker.entries.find((e) => e.linkedEventId === id);
-    if (!linkedEntry) return;
-    // La categoría también vive en la TimeEntry: si solo se cambiara en el
-    // evento, el desglose "por actividad" del Resumen (que lee TimeEntries)
-    // seguiría mostrando la categoría vieja. Se sincroniza aquí mismo.
-    if (typeof updates.category === "string" && updates.category !== linkedEntry.category) {
-      tracker.updateCategory(linkedEntry.id, updates.category);
-    }
-    if (updates.date === undefined && updates.endTime === undefined) return;
-    const newStart = updates.date ?? linkedEntry.startTime;
-    if (typeof updates.endTime === "string" && updates.endTime) {
-      // Si la hora de fin "parece" anterior a la de inicio, es que la
-      // actividad cruza la medianoche (p.ej. empezó a las 22:00 y terminó a
-      // las 02:00): se pasa al día siguiente en vez de recortar a +1h.
-      const newEnd = resolveEndDate(newStart, updates.endTime) ?? new Date(newStart.getTime() + 60 * 60_000);
-      tracker.updateEntryTimes(linkedEntry.id, newStart, newEnd);
-    } else if (updates.date && linkedEntry.endTime) {
-      const duration = linkedEntry.endTime.getTime() - linkedEntry.startTime.getTime();
-      tracker.updateEntryTimes(linkedEntry.id, newStart, new Date(newStart.getTime() + duration));
-    } else if (updates.date) {
-      // Entry aún abierto y sin nueva hora de fin: solo se mueve el inicio.
-      tracker.updateStartTime(linkedEntry.id, newStart);
-    }
   };
 
   // Añadir actividad desde el Calendario. Una actividad PASADA (de un solo día)
-  // debe crear tanto el evento como su TimeEntry enlazada: el Calendario lee de
-  // los eventos, pero el Resumen/Home cuenta TimeEntries. Si solo se creara el
-  // evento, la actividad aparecería en el Calendario pero NO sumaría en el
-  // Resumen (era la causa del descuadre "el Calendario dice 15h y Home 9h").
-  // Las actividades futuras o recurrentes siguen siendo solo eventos.
+  // se crea como evento completado con su hora de fin; el Resumen la cuenta sola
+  // porque deriva de los eventos. Las futuras o recurrentes son eventos normales.
   const handleAddCalendarEvent = (params: AddEventParams) => {
     const end = resolveEndDate(params.date, params.endTime);
     const isPastCompleted =
@@ -192,74 +170,14 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       category: params.category,
       location: params.location,
     });
-    if (eventId && params.endTime) calendar.updateEvent(eventId, { endTime: params.endTime });
-    tracker.addManualEntry(params.date, end, params.category, params.notes ?? "", params.location, eventId);
+    if (eventId) {
+      calendar.updateEvent(eventId, {
+        ...(params.endTime ? { endTime: params.endTime } : {}),
+        ...(params.notes ? { notes: params.notes } : {}),
+      });
+    }
   };
 
-  // ── Reconciliación de arranque ────────────────────────────────────────────────
-  // Hace que las TimeEntries reflejen exactamente los eventos de calendario
-  // completados, que es lo que el usuario ve y edita en el Calendario. Por cada
-  // evento COMPLETADO con duración:
-  //   · si no tiene TimeEntry enlazada → la crea (repara actividades que solo
-  //     existían como evento, p.ej. añadidas desde el Calendario o importadas).
-  //   · si su entry quedó ABIERTA (sin hora de fin) o desincronizada en tiempo
-  //     o categoría (una edición previa tocó el evento pero no el entry) → la
-  //     corrige para que coincida con el evento.
-  // Así el total del Resumen (suma de entries) cuadra con el del Calendario
-  // (suma de eventos): antes, cuando el evento tenía más horas que su entry, el
-  // Calendario mostraba max(eventos, entries) y el Resumen solo entries → salía
-  // ~1h de diferencia. Se ejecuta una vez por sesión, con ambos almacenes ya
-  // cargados, para no duplicar ni pelear con el fichaje en vivo (a un entry en
-  // marcha, cuyo evento aún no tiene hora de fin, no se le toca).
-  const reconciledRef = useRef(false);
-  useEffect(() => {
-    if (reconciledRef.current) return;
-    if (!tracker.loaded || !calendar.loaded) return;
-    reconciledRef.current = true;
-    const entryByEvent = new Map<string, TimeEntry>();
-    for (const e of tracker.entries) {
-      if (e.linkedEventId) entryByEvent.set(e.linkedEventId, e);
-    }
-    const missing: TimeEntry[] = [];
-    const patches: { id: string; startTime?: Date; endTime?: Date; category?: string }[] = [];
-    for (const ev of calendarEvents) {
-      if (!ev.completed) continue;
-      const end = resolveEndDate(ev.date, ev.endTime);
-      if (!end || end.getTime() <= ev.date.getTime()) continue;
-      const linked = entryByEvent.get(ev.id);
-      if (!linked) {
-        missing.push({
-          id: generateId(),
-          startTime: ev.date,
-          endTime: end,
-          description: ev.notes ?? "",
-          category: ev.category,
-          startLocation: ev.location ?? null,
-          endLocation: null,
-          linkedEventId: ev.id,
-          pausedAt: null,
-        });
-        continue;
-      }
-      // Se corrige el entry enlazado si está abierto, si su inicio/fin difieren
-      // del evento en más de un minuto (el fichaje en vivo guarda segundos; el
-      // evento se trunca al minuto, así que <1 min se deja como está para no
-      // perder precisión), o si la categoría no coincide.
-      const startOff = Math.abs(linked.startTime.getTime() - ev.date.getTime()) > 60_000;
-      const endOff = linked.endTime === null || Math.abs(linked.endTime.getTime() - end.getTime()) > 60_000;
-      const catOff = linked.category !== ev.category;
-      if (startOff || endOff || catOff) {
-        patches.push({
-          id: linked.id,
-          startTime: ev.date,
-          endTime: end,
-          category: ev.category,
-        });
-      }
-    }
-    if (missing.length > 0) tracker.importEntries(missing);
-    if (patches.length > 0) tracker.patchEntries(patches);
-  }, [tracker.loaded, calendar.loaded, tracker, calendarEvents]);
 
   const requestClockOut = (customTime?: Date) => {
     if (!activeEntry) { completeClockOut(customTime); return; }
@@ -274,7 +192,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const keepShortActivity = () => { completeClockOut(shortStopPrompt?.customTime); setShortStopPrompt(null); };
   const discardShortActivity = () => {
     if (!activeEntry) { setShortStopPrompt(null); return; }
-    if (activeEntry.linkedEventId) calendar.deleteEvent(activeEntry.linkedEventId);
+    // deleteEntry borra el evento (la entrada deriva de él) y cierra la sesión.
     tracker.deleteEntry(activeEntry.id);
     setShortStopPrompt(null);
   };
@@ -286,17 +204,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
   const confirmDeleteEvent = (scope: "single" | "all" = "all") => {
     if (!deleteEventPromptId) return;
-    const target = calendarEvents.find((e) => e.id === deleteEventPromptId);
-    const idsToUnlink =
-      target && scope === "all" && target.recurrence !== "none"
-        ? (() => {
-            const parentId = target.parentId || target.id;
-            return calendarEvents.filter((e) => e.id === parentId || e.parentId === parentId).map((e) => e.id);
-          })()
-        : [deleteEventPromptId];
-    // Las horas ya fichadas de un evento que se borra no deben perderse ni
-    // quedar huérfanas apuntando a un evento inexistente.
-    tracker.detachEntriesLinkedToEvents(idsToUnlink);
+    // Borrar el evento elimina también sus horas (la actividad deriva de él): ya
+    // no hay un segundo almacén de entradas que desvincular.
     calendar.deleteEvent(deleteEventPromptId, scope);
     setDeleteEventPromptId(null);
   };
@@ -357,12 +266,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
         const time = Number.isFinite(ms) ? new Date(ms) : undefined;
         if (action === 'CLOCK_IN') {
           if (!localRunning) {
-            void tracker.clockIn(
-              category || 'Predi',
-              ({ date, category: cat, location }) =>
-                calendar.addCompletedEventNow({ date, category: cat, location }),
-              time,
-            );
+            tracker.clockIn(category || 'Predi', time);
             localRunning = true;
             startedThisBatch = true;
           }

@@ -1,6 +1,7 @@
 export type StorageKey =
   | "setup"
   | "time-entries"
+  | "active-session"
   | "calendar-events"
   | "estudios"
   | "favorite-places"
@@ -133,6 +134,7 @@ function readLegacyBrowserData(): AppData {
   const legacyMap: Record<string, StorageKey> = {
     setup: "setup",
     "time-entries": "time-entries",
+    "active-session": "active-session",
     "calendar-events": "calendar-events",
     estudios: "estudios",
     "favorite-places": "favorite-places",
@@ -152,6 +154,7 @@ function clearLegacyBrowserData() {
   [
     "setup",
     "time-entries",
+    "active-session",
     "calendar-events",
     "estudios",
     "favorite-places",
@@ -308,7 +311,7 @@ export function exportAllData(): void {
 }
 
 const IMPORTABLE_KEYS: StorageKey[] = [
-  'setup', 'time-entries', 'calendar-events', 'estudios',
+  'setup', 'time-entries', 'active-session', 'calendar-events', 'estudios',
   'favorite-places', 'specialCampaign', 'monthly-report-carryover',
   'darkMode', 'excludedCategories',
 ];
