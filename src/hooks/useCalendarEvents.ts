@@ -234,6 +234,13 @@ export function useCalendarEvents() {
           const completedEvent = {
             ...scheduledEvent,
             date: params.date,
+            // La actividad ACABA de empezar (o es una entrada manual): la hora de
+            // fin PLANIFICADA del evento programado no aplica. Se limpia y la fija
+            // el momento de parar (o el llamador, en una entrada manual). Si no,
+            // como la actividad deriva del evento, heredaba un fin anterior a la
+            // hora de inicio y se calculaba una duración enorme (p.ej. ~20h,
+            // "todo el día", al cruzar la medianoche).
+            endTime: undefined,
             category: params.category,
             notified: true,
             location: params.location ?? scheduledEvent.location,

@@ -191,7 +191,10 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
 
   const requestClockOut = (customTime?: Date) => {
     if (!activeEntry) { completeClockOut(customTime); return; }
-    const end = customTime ?? new Date();
+    // El fin efectivo es el de la pausa si está pausado (igual que en clockOut):
+    // midiendo contra "ahora" una actividad corta que lleva rato en pausa parecía
+    // larga y no saltaba el aviso de "actividad muy corta".
+    const end = customTime ?? activeEntry.pausedAt ?? new Date();
     if (end.getTime() - activeEntry.startTime.getTime() < SHORT_ACTIVITY_MS) {
       setShortStopPrompt({ customTime });
       return;

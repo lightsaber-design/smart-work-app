@@ -249,14 +249,22 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
         if (!s) return s;
         // Si se para en pausa, el fin del trabajo fue el momento de pausar (así la
         // duración no incluye el hueco pausado).
-        const end = customTime ?? s.pausedAt ?? new Date();
+        const rawEnd = customTime ?? s.pausedAt ?? new Date();
+        // El evento guarda el fin como "HH:MM" (truncado al minuto) mientras que
+        // el inicio lleva segundos. En una actividad de menos de un minuto ese fin
+        // truncado quedaría ANTES del inicio y se leería como del día siguiente:
+        // salía una duración de ~24h ("me guardó todo el día"). Se garantiza un
+        // mínimo de un minuto para que el fin caiga siempre después del inicio.
+        const ev = events.find((e) => e.id === s.linkedEventId);
+        const minEndMs = ev ? ev.date.getTime() + 60_000 : 0;
+        const end = rawEnd.getTime() < minEndMs ? new Date(minEndMs) : rawEnd;
         opsRef.current.updateEvent(s.linkedEventId, { endTime: hhmm(end), completed: true });
         persistSession(null);
         return null;
       });
       setElapsed(0);
     },
-    [persistSession]
+    [events, persistSession]
   );
 
   const pause = useCallback(() => {
