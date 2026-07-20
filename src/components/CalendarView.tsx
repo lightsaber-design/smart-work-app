@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useMemo, useState, useEffect, useRef } from "react";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { CalendarEvent, EventCategory, AddEventParams, RecurrenceType } from "@/hooks/useCalendarEvents";
-import { TimeEntry } from "@/hooks/useTimeTracker";
 import { EstudioContact, EstudioSession, ScheduledSessionData, SessionFile, hasActiveStudyWork } from "@/hooks/useEstudios";
 import { generateId } from "@/lib/uuid";
 import {
@@ -88,12 +87,6 @@ interface CalendarViewProps {
   activityStartHour?: number;
   activityEndHour?: number;
   categoryConfigs: CategoryConfig[];
-  /** Total del mes desde TimeEntries (fuente de verdad). Sobreescribe el cálculo interno desde CalendarEvents. */
-  timeEntryMonthTotalMs?: number;
-  /** Todas las entradas del timer para calcular totales por día. */
-  timeEntries?: TimeEntry[];
-  /** Borra una TimeEntry "huérfana" (sin evento de calendario enlazado). */
-  onDeleteEntry?: (id: string) => void;
 }
 
 const HOUR_HEIGHT = 64;
@@ -281,8 +274,6 @@ function EventMonthGrid({
   specialCampaignGoals,
   onSetSpecialCampaign,
   categoryConfigs,
-  timeEntryMonthTotalMs,
-  timeEntries = [],
 }: {
   monthBase: Date;
   monthLabel: string;
@@ -307,8 +298,6 @@ function EventMonthGrid({
   specialCampaignGoals?: Record<string, CampaignGoal>;
   onSetSpecialCampaign?: (key: string, goal: CampaignGoal | null) => void;
   categoryConfigs: CategoryConfig[];
-  timeEntryMonthTotalMs?: number;
-  timeEntries?: TimeEntry[];
 }) {
   const t = useT();
   const lang = useLang();
@@ -334,11 +323,8 @@ function EventMonthGrid({
   const monthEvents = events.filter(
     (event) => event.completed && event.date.getMonth() === month && event.date.getFullYear() === year
   );
-  const { ms: calMonthTotalMs } = dayTotalFromEvents(monthEvents);
-  const entryMonthMs = (timeEntries ?? [])
-    .filter((e) => e.endTime && e.startTime.getMonth() === month && e.startTime.getFullYear() === year)
-    .reduce((acc, e) => acc + (e.endTime!.getTime() - e.startTime.getTime()), 0);
-  const monthTotalMs = Math.max(calMonthTotalMs, entryMonthMs);
+  // Total del mes: se calcula de los eventos completados (fuente única).
+  const { ms: monthTotalMs } = dayTotalFromEvents(monthEvents);
   const campaignGoal = specialCampaignGoals?.[currentMonthKey] ?? null;
   const monthGoal = precursorHours != null ? precursorHours : campaignGoal;
   const monthGoalPct = monthGoal ? Math.min(100, Math.round((monthTotalMs / (monthGoal * 3_600_000)) * 100)) : 0;
@@ -436,11 +422,7 @@ function EventMonthGrid({
               const isToday = day.toDateString() === today.toDateString();
               const dayStr = day.toDateString();
               const dayEvents = events.filter((e) => e.date.toDateString() === dayStr);
-              const calDayTotal = dayTotalFromEvents(dayEvents);
-              const entryDayMs = (timeEntries ?? [])
-                .filter((e) => e.endTime && e.startTime.toDateString() === dayStr)
-                .reduce((acc, e) => acc + (e.endTime!.getTime() - e.startTime.getTime()), 0);
-              const dayTotal = { ...calDayTotal, ms: Math.max(calDayTotal.ms, entryDayMs) };
+              const dayTotal = dayTotalFromEvents(dayEvents);
               const hasNotes = dayEvents.some((e) => e.notes);
               const hasCompleted = dayEvents.some((e) => e.completed);
               const dayStudySessions = (estudiosContacts ?? []).flatMap((c) =>
@@ -562,9 +544,6 @@ export function CalendarView({
   activityStartHour = DEFAULT_ACTIVITY_START_HOUR,
   activityEndHour = DEFAULT_ACTIVITY_END_HOUR,
   categoryConfigs,
-  timeEntryMonthTotalMs,
-  timeEntries = [],
-  onDeleteEntry,
 }: CalendarViewProps) {
   const t = useT();
   const lang = useLang();
@@ -625,7 +604,6 @@ export function CalendarView({
   const [studySessionPendingFiles, setStudySessionPendingFiles] = useState<{ file: File; id: string }[]>([]);
   const [savingStudySession, setSavingStudySession] = useState(false);
   const [deleteEventPromptId, setDeleteEventPromptId] = useState<string | null>(null);
-  const [deleteEntryPromptId, setDeleteEntryPromptId] = useState<string | null>(null);
 
   // ── add form chips state ─────────────────────────────────────────────────────
   const [addNotes, setAddNotes] = useState("");
@@ -699,20 +677,8 @@ export function CalendarView({
       .sort((a, b) => a.time.localeCompare(b.time)),
     [estudiosContacts, selectedDateKey]
   );
-  const timeEntryDayOrphans = useMemo(
-    () => (timeEntries ?? []).filter((e) => {
-      if (!e.endTime) return false;
-      if (e.startTime.toDateString() !== selectedDateKey) return false;
-      return true;
-    }),
-    [timeEntries, selectedDateKey]
-  );
-  const hasSelectedItems = selectedEvents.length > 0 || selectedStudySessions.length > 0 || timeEntryDayOrphans.length > 0;
-  const { ms: calDayTotalMs } = dayTotalFromEvents(selectedEvents);
-  const timeEntryDayMs = (timeEntries ?? [])
-    .filter((e) => e.endTime && e.startTime.toDateString() === selectedDateKey)
-    .reduce((acc, e) => acc + (e.endTime!.getTime() - e.startTime.getTime()), 0);
-  const dayTotalMs = Math.max(calDayTotalMs, timeEntryDayMs);
+  const hasSelectedItems = selectedEvents.length > 0 || selectedStudySessions.length > 0;
+  const { ms: dayTotalMs } = dayTotalFromEvents(selectedEvents);
   const dayTotalHrs = Math.floor(dayTotalMs / 3600000);
   const dayTotalMins = Math.floor((dayTotalMs % 3600000) / 60000);
   const isSelectedToday = selectedDate.toDateString() === new Date().toDateString();
@@ -1325,64 +1291,6 @@ export function CalendarView({
                   );
                 })}
 
-                {/* Timer entries without a matching CalendarEvent */}
-                {timeEntryDayOrphans
-                  .filter((entry) =>
-                    !(entry.linkedEventId && selectedEvents.some((e) => e.id === entry.linkedEventId))
-                  )
-                  .map((entry) => {
-                    const startMins = minutesFromTimelineStart(entry.startTime, activityStartHour);
-                    if (startMins >= timelineDurationMinutes) return null;
-                    const clampedStart = Math.max(0, startMins);
-                    const durationMins = Math.max(30, (entry.endTime!.getTime() - entry.startTime.getTime()) / 60000);
-                    const top = timelineTopFromMinutes(clampedStart);
-                    const height = Math.max(44, (durationMins / 60) * HOUR_HEIGHT);
-                    const meta = getCategoryMeta(categoryConfigs, entry.category);
-                    const startStr = formatTime(entry.startTime, locale);
-                    const endStr = formatTime(entry.endTime!, locale);
-                    return (
-                      <div
-                        key={entry.id}
-                        className="absolute left-2 right-2 rounded-xl overflow-hidden"
-                        style={{
-                          top,
-                          height,
-                          background: `linear-gradient(135deg, ${meta.gradient[0]}, ${meta.gradient[1]})`,
-                          borderLeftWidth: 3,
-                          borderLeftColor: meta.gradient[0],
-                          opacity: 0.88,
-                        }}
-                      >
-                        <div className="px-2.5 py-2 h-full flex flex-col justify-between">
-                          <div>
-                            <div className="flex items-center gap-1">
-                              <CategoryIcon icon={meta.icon} className="text-sm leading-none" />
-                              <p className="text-[11px] font-bold text-foreground leading-tight truncate">
-                                {getCategoryLabel(entry.category, t)}
-                              </p>
-                            </div>
-                            {height > 54 && (
-                              <p className="text-[9px] text-foreground/60 mt-0.5 leading-none">
-                                {startStr} – {endStr}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                            {onDeleteEntry && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setDeleteEntryPromptId(entry.id); }}
-                                className="ml-auto p-0.5 text-foreground/40"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-
                 {/* Study sessions */}
                 {selectedStudySessions.map((s) => {
                   const [hh, mm] = s.time.split(":").map(Number);
@@ -1461,8 +1369,6 @@ export function CalendarView({
             specialCampaignGoals={specialCampaignGoals}
             onSetSpecialCampaign={onSetSpecialCampaign}
             categoryConfigs={categoryConfigs}
-            timeEntryMonthTotalMs={timeEntryMonthTotalMs}
-            timeEntries={timeEntries}
           />
         </div>
       )}
@@ -2096,27 +2002,6 @@ export function CalendarView({
                 </AlertDialogAction>
               </>
             )}
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={!!deleteEntryPromptId} onOpenChange={(open) => { if (!open) setDeleteEntryPromptId(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("cal_delete_confirm_title")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("cal_delete_confirm_body")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (deleteEntryPromptId) onDeleteEntry?.(deleteEntryPromptId);
-                setDeleteEntryPromptId(null);
-              }}
-            >
-              {t("home_delete_activity")}
-            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

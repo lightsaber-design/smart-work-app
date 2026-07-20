@@ -281,44 +281,6 @@ export async function cancelEventNotification(eventId: string): Promise<void> {
   }
 }
 
-export function showBrowserNotification(
-  title: string,
-  options?: NotificationOptions
-): boolean {
-  if (Capacitor.isNativePlatform()) {
-    void requestNativePermission().then((granted) => {
-      if (!granted) return;
-      void LocalNotifications.schedule({
-        notifications: [{
-          // Aviso inmediato de un solo uso: id determinista por título para no
-          // colisionar con las notificaciones programadas.
-          id: stableNotificationId(`imm-${title}`),
-          title,
-          body: (options?.body as string) ?? '',
-          channelId: CHANNEL_ID,
-          smallIcon: 'ic_launcher_foreground',
-          iconColor: '#34B1AF',
-        }],
-      }).catch((e) => console.warn('[Notif] schedule immediate:', e));
-    });
-    return true;
-  }
-
-  if (
-    typeof window === 'undefined' ||
-    !('Notification' in window) ||
-    Notification.permission !== 'granted'
-  ) return false;
-
-  try {
-    new Notification(title, options);
-    return true;
-  } catch (e) {
-    console.warn('[Notif] browser:', e);
-    return false;
-  }
-}
-
 export function canRequestNotificationPermission(): boolean {
   if (Capacitor.isNativePlatform()) return true;
   return typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default';

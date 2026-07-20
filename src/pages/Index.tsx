@@ -22,7 +22,7 @@ import { useSpecialCampaign } from "@/hooks/useSpecialCampaign";
 import { useMonthlyReportCarryover } from "@/hooks/useMonthlyReportCarryover";
 import { getCategoryMeta, getActiveCategoryConfigs } from "@/lib/categories";
 import { useJsonStorageStatus } from "@/hooks/useJsonStorage";
-import { removeJsonValue } from "@/lib/jsonFileStorage";
+import { removeJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 import { findActiveScheduledEvent } from "@/lib/timerOverrun";
 import { resolveEndDate } from "@/lib/eventTime";
 import { consumeWidgetAction, setWidgetCategories } from "@/lib/timerNotification";
@@ -131,8 +131,18 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const { events: calendarEvents, markNotified, getEventsForDate } = calendar;
   const { justBacked } = useAutoBackup({ setup });
 
-  const handleClearAll = () => {
-    void removeJsonValue("time-entries").finally(() => window.location.reload());
+  // "Borrar todos los registros": las horas viven ahora en los eventos del
+  // calendario (fuente única), así que se borran los eventos COMPLETADOS (los
+  // registros), la sesión activa y el almacén antiguo. Se conservan los eventos
+  // futuros/programados (no son "registros" de horas).
+  const handleClearAll = async () => {
+    await removeJsonValue("active-session").catch(() => {});
+    await removeJsonValue("time-entries").catch(() => {});
+    const futureOnly = calendarEvents
+      .filter((e) => !e.completed)
+      .map((e) => ({ ...e, date: e.date.toISOString() }));
+    await writeJsonValue("calendar-events", futureOnly).catch(() => {});
+    window.location.reload();
   };
 
   const activeEntry = tracker.activeEntry;
@@ -679,9 +689,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 activityStartHour={setup.activityStartHour}
                 activityEndHour={setup.activityEndHour}
                 categoryConfigs={setup.categorySettings}
-                timeEntryMonthTotalMs={tracker.monthTotal}
-                timeEntries={tracker.entries}
-                onDeleteEntry={tracker.deleteEntry}
               />
             </Suspense>
           </>

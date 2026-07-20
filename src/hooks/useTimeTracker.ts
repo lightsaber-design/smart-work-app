@@ -290,14 +290,6 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
     setElapsed(Math.max(0, Math.floor((Date.now() - clamped.getTime()) / 1000)));
   }, []);
 
-  const updateEntryTimes = useCallback((id: string, startTime: Date, endTime: Date) => {
-    opsRef.current.updateEvent(id, { date: startTime, endTime: hhmm(endTime) });
-  }, []);
-
-  const updateDescription = useCallback((id: string, description: string) => {
-    opsRef.current.updateEvent(id, { notes: description });
-  }, []);
-
   const updateCategory = useCallback((id: string, category: WorkCategory) => {
     opsRef.current.updateEvent(id, { category });
   }, []);
@@ -394,8 +386,6 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
     pause,
     resume,
     updateStartTime,
-    updateEntryTimes,
-    updateDescription,
     updateCategory,
     addManualEntry,
     deleteEntry,
