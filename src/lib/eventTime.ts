@@ -10,6 +10,21 @@
  * un valor arbitrario de "+1h" en vez de la hora real que cruza al día
  * siguiente.
  */
+/**
+ * Hora de fin segura para guardar en un evento, que almacena el fin como
+ * "HH:MM" (truncado al minuto) mientras que el inicio lleva segundos.
+ *
+ * En una actividad de menos de un minuto (fichar y parar casi seguido, o el
+ * widget reproduciendo CLOCK_IN + CLOCK_OUT juntos) ese fin truncado quedaría
+ * ANTES del inicio, y `resolveEndDate` lo interpretaría como del día siguiente:
+ * salía una duración de ~24h ("me guardó todo el día"). Garantizando un mínimo
+ * de un minuto, el fin truncado siempre cae después del inicio.
+ */
+export function clampActivityEnd(start: Date, rawEnd: Date): Date {
+  const minEndMs = start.getTime() + 60_000;
+  return rawEnd.getTime() < minEndMs ? new Date(minEndMs) : rawEnd;
+}
+
 export function resolveEndDate(baseDate: Date, endTimeStr: string | undefined): Date | null {
   if (!endTimeStr) return null;
   const [hours, minutes] = endTimeStr.split(":").map(Number);

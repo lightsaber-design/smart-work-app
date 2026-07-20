@@ -74,7 +74,9 @@ describe("study scheduling", () => {
     });
 
     expect(result.current.contacts).toHaveLength(1);
-    expect(result.current.contacts[0].sessions.filter((session) => session.pending)).toHaveLength(4);
+    // Solo se mantiene UNA sesión pendiente por delante (ver targetPendingCount):
+    // al completarla se genera la siguiente. Los duplicados se colapsan en una.
+    expect(result.current.contacts[0].sessions.filter((session) => session.pending)).toHaveLength(1);
     expect(result.current.contacts[0].sessions.filter((session) => session.date === pendingDate && session.pending)).toHaveLength(1);
   });
 
@@ -100,7 +102,8 @@ describe("study scheduling", () => {
     });
 
     expect(result.current.contacts[0].sessions.find((session) => session.id === "first")?.pending).toBe(false);
-    expect(result.current.contacts[0].sessions.filter((session) => session.pending)).toHaveLength(4);
+    // Al completar una sesión se repone exactamente la siguiente (una pendiente).
+    expect(result.current.contacts[0].sessions.filter((session) => session.pending)).toHaveLength(1);
   });
 
   it("cleans up attached files and the voice note when a session is deleted for good", async () => {

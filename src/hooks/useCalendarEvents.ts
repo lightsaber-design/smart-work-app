@@ -173,7 +173,6 @@ export function useCalendarEvents() {
       })
       .catch((error) => console.error("Error loading events:", error))
       .finally(() => setLoaded(true));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const persistEvents = useCallback((updated: CalendarEvent[]) => {

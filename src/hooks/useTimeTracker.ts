@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { readJsonValue, writeJsonValue } from "@/lib/jsonFileStorage";
 import { isRecord } from "@/lib/utils";
-import { resolveEndDate } from "@/lib/eventTime";
+import { clampActivityEnd, resolveEndDate } from "@/lib/eventTime";
 import type { CalendarEvent } from "@/hooks/useCalendarEvents";
 
 export interface GeoLocation {
@@ -30,6 +30,17 @@ export interface TimeEntry {
 interface ActiveSession {
   linkedEventId: string;
   pausedAt: Date | null;
+  /**
+   * Instante en que se fichó entrada. El inicio "oficial" es la fecha del
+   * evento, pero se guarda también aquí porque al parar hay que conocerlo SÍ o
+   * SÍ: cuando el widget reproduce CLOCK_IN y CLOCK_OUT seguidos, el evento se
+   * acaba de crear en el mismo tick y aún no aparece en la lista de eventos de
+   * este render, así que buscarlo ahí devolvería nada y se perdería el ajuste
+   * de la hora de fin (era la causa de la actividad fantasma de ~24h).
+   */
+  startedAt: Date | null;
+  /** Respaldo de la categoría para el mismo caso (el evento manda si está). */
+  category: WorkCategory;
 }
 
 // Operaciones sobre el calendario (única fuente de verdad de las horas). El
@@ -54,7 +65,14 @@ function parseSession(value: unknown): ActiveSession | null {
     const d = new Date(String(value.pausedAt));
     if (!Number.isNaN(d.getTime())) pausedAt = d;
   }
-  return { linkedEventId: value.linkedEventId, pausedAt };
+  let startedAt: Date | null = null;
+  if (value.startedAt !== null && value.startedAt !== undefined && value.startedAt !== "") {
+    const d = new Date(String(value.startedAt));
+    if (!Number.isNaN(d.getTime())) startedAt = d;
+  }
+  const category =
+    typeof value.category === "string" && value.category.trim() ? value.category : "Predi";
+  return { linkedEventId: value.linkedEventId, pausedAt, startedAt, category };
 }
 
 // Parseo de las TimeEntries antiguas: solo se usa UNA vez para migrar los datos
@@ -113,7 +131,14 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
   const persistSession = useCallback((s: ActiveSession | null) => {
     void writeJsonValue(
       "active-session",
-      s ? { linkedEventId: s.linkedEventId, pausedAt: s.pausedAt ? s.pausedAt.toISOString() : null } : null
+      s
+        ? {
+            linkedEventId: s.linkedEventId,
+            pausedAt: s.pausedAt ? s.pausedAt.toISOString() : null,
+            startedAt: s.startedAt ? s.startedAt.toISOString() : null,
+            category: s.category,
+          }
+        : null
     ).catch((e) => console.error("Error saving active session:", e));
   }, []);
 
@@ -145,17 +170,24 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
     [session, events]
   );
 
+  // El evento manda (refleja ediciones), pero si todavía no está en esta lista
+  // —el widget reproduce CLOCK_IN + CLOCK_OUT en el mismo tick y el evento se
+  // acaba de crear— se usa lo que guarda la propia sesión. Si dependiera solo
+  // del evento, el timer se vería "parado" con una sesión viva y ni siquiera se
+  // podría detener.
   const activeEntry = useMemo<TimeEntry | undefined>(() => {
-    if (!session || !activeEvent) return undefined;
+    if (!session) return undefined;
+    const startTime = activeEvent?.date ?? session.startedAt;
+    if (!startTime) return undefined;
     return {
-      id: activeEvent.id,
-      startTime: activeEvent.date,
+      id: session.linkedEventId,
+      startTime,
       endTime: null,
-      description: activeEvent.notes ?? "",
-      category: activeEvent.category,
-      startLocation: activeEvent.location ?? null,
+      description: activeEvent?.notes ?? "",
+      category: activeEvent?.category ?? session.category,
+      startLocation: activeEvent?.location ?? null,
       endLocation: null,
-      linkedEventId: activeEvent.id,
+      linkedEventId: session.linkedEventId,
       pausedAt: session.pausedAt,
     };
   }, [session, activeEvent]);
@@ -164,7 +196,9 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
     () => (activeEntry ? [activeEntry, ...completedEntries] : completedEntries),
     [activeEntry, completedEntries]
   );
-  const isRunning = activeEntry !== undefined;
+  // Depende solo de la sesión: así una sesión viva siempre se puede parar,
+  // aunque su evento no se localice en este render.
+  const isRunning = session !== null;
   const isPaused = session?.pausedAt != null;
 
   // ── Migración única + carga de la sesión ─────────────────────────────────────
@@ -198,13 +232,25 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
               });
             }
           } else if (!sess && e.linkedEventId && eventIds.has(e.linkedEventId)) {
-            sess = { linkedEventId: e.linkedEventId, pausedAt: e.pausedAt ?? null };
+            sess = {
+              linkedEventId: e.linkedEventId,
+              pausedAt: e.pausedAt ?? null,
+              startedAt: e.startTime,
+              category: e.category,
+            };
           }
         }
         await writeJsonValue("time-entries", []).catch(() => {});
       }
 
       if (sess) {
+        // Una sesión guardada por una versión anterior puede no traer `startedAt`
+        // ni categoría: se rellenan desde su evento para que el timer siga siendo
+        // autosuficiente tras actualizar la app.
+        if (!sess.startedAt) {
+          const ev = events.find((e) => e.id === sess!.linkedEventId);
+          if (ev) sess = { ...sess, startedAt: ev.date, category: ev.category };
+        }
         setSession(sess);
         persistSession(sess);
       }
@@ -235,7 +281,7 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
     (category: WorkCategory = "Predi", customTime?: Date) => {
       const start = customTime ?? new Date();
       const id = opsRef.current.addCompletedEventNow({ date: start, category });
-      const s: ActiveSession = { linkedEventId: id, pausedAt: null };
+      const s: ActiveSession = { linkedEventId: id, pausedAt: null, startedAt: start, category };
       setSession(s);
       persistSession(s);
       setElapsed(Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000)));
@@ -250,14 +296,14 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
         // Si se para en pausa, el fin del trabajo fue el momento de pausar (así la
         // duración no incluye el hueco pausado).
         const rawEnd = customTime ?? s.pausedAt ?? new Date();
-        // El evento guarda el fin como "HH:MM" (truncado al minuto) mientras que
-        // el inicio lleva segundos. En una actividad de menos de un minuto ese fin
-        // truncado quedaría ANTES del inicio y se leería como del día siguiente:
-        // salía una duración de ~24h ("me guardó todo el día"). Se garantiza un
-        // mínimo de un minuto para que el fin caiga siempre después del inicio.
+        // El inicio se toma del evento (fuente de verdad, refleja ediciones) y,
+        // si aún no está en esta lista —el widget reproduce CLOCK_IN y CLOCK_OUT
+        // en el mismo tick y el evento se acaba de crear—, del `startedAt` de la
+        // sesión. Sin ese respaldo el ajuste no se aplicaba por la vía del widget
+        // y reaparecía la actividad fantasma de ~24h (ver clampActivityEnd).
         const ev = events.find((e) => e.id === s.linkedEventId);
-        const minEndMs = ev ? ev.date.getTime() + 60_000 : 0;
-        const end = rawEnd.getTime() < minEndMs ? new Date(minEndMs) : rawEnd;
+        const start = ev ? ev.date : s.startedAt;
+        const end = start ? clampActivityEnd(start, rawEnd) : rawEnd;
         opsRef.current.updateEvent(s.linkedEventId, { endTime: hhmm(end), completed: true });
         persistSession(null);
         return null;
