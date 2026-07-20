@@ -131,4 +131,46 @@ describe("useTimeTracker (calendar as single source of truth)", () => {
 
     expect(ops.deleteEvent).toHaveBeenCalledWith("event-1");
   });
+
+  it("discardActive deletes a freshly-created event (accidental short widget cycle)", async () => {
+    // addCompletedEventNow devuelve un id que NO existía antes → evento nuevo.
+    const ops = makeOps({ addCompletedEventNow: vi.fn(() => "new-event") });
+    const { result } = renderHook(() => useTimeTracker([], ops, true));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    act(() => {
+      result.current.clockIn("Predi", new Date(2026, 4, 10, 9, 59, 50));
+    });
+    act(() => {
+      result.current.discardActive();
+    });
+
+    expect(ops.deleteEvent).toHaveBeenCalledWith("new-event");
+    expect(ops.updateEvent).not.toHaveBeenCalled();
+    expect(result.current.isRunning).toBe(false);
+  });
+
+  it("discardActive reverts a scheduled event to pending instead of deleting it", async () => {
+    // El fichaje se engancha a un evento programado ya existente (mismo id).
+    const scheduled = completedEvent("sched-1", new Date(2026, 4, 10, 9, 59, 50), "10:30");
+    const ops = makeOps({ addCompletedEventNow: vi.fn(() => "sched-1") });
+    const { result } = renderHook(() => useTimeTracker([scheduled], ops, true));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    act(() => {
+      result.current.clockIn("Predi", new Date(2026, 4, 10, 9, 59, 55));
+    });
+    act(() => {
+      result.current.discardActive();
+    });
+
+    expect(ops.deleteEvent).not.toHaveBeenCalled();
+    expect(ops.updateEvent).toHaveBeenCalledWith(
+      "sched-1",
+      expect.objectContaining({ completed: false })
+    );
+    expect(result.current.isRunning).toBe(false);
+  });
 });

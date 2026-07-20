@@ -53,6 +53,9 @@ type TranslateFn = (key: string, vars?: Record<string, string | number>) => stri
 const VALID_TABS = new Set<Tab>(["home", "summary", "timer", "calendar", "profile", "estudios", "map"]);
 
 const SHORT_ACTIVITY_MS = 5 * 60_000;
+// Un ciclo completo arranque+parada reproducido desde el widget que dura menos
+// de esto se descarta como toque accidental (no hay diálogo que preguntar).
+const WIDGET_MIN_KEEP_MS = 30_000;
 
 function getGreeting(t: TranslateFn): string {
   const h = new Date().getHours();
@@ -273,6 +276,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
       // este mismo lote antes de decidir si un CLOCK_OUT tiene con qué parar.
       let localRunning = tracker.isRunning;
       let startedThisBatch = false;
+      let batchStartMs = NaN;
       for (const raw of actions) {
         const [action, msStr, category] = raw.split('|');
         const ms = msStr ? Number(msStr) : NaN;
@@ -282,18 +286,25 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             tracker.clockIn(category || 'Predi', time);
             localRunning = true;
             startedThisBatch = true;
+            batchStartMs = ms;
           }
         } else if (action === 'CLOCK_OUT') {
           if (localRunning) {
-            // Si el arranque también vino de este mismo lote, ya sabemos la
-            // duración exacta por los timestamps del widget: se cierra
-            // directo en vez de pasar por el prompt de "actividad corta"
-            // (pensado para paradas en vivo, no para reproducir un ciclo ya
-            // ocurrido por completo mientras la app estaba cerrada).
-            if (startedThisBatch) completeClockOut(time);
-            else requestClockOut(time);
+            if (startedThisBatch) {
+              // El ciclo completo (arranque + parada) ocurrió con la app cerrada:
+              // se conoce la duración exacta por los timestamps del widget. Un
+              // ciclo de menos de 30 s es casi siempre un toque accidental en el
+              // widget, así que se descarta sin guardar (aquí no hay diálogo de
+              // "actividad corta" que preguntar; ese es para paradas en vivo).
+              const durMs = Number.isFinite(ms) && Number.isFinite(batchStartMs) ? ms - batchStartMs : Infinity;
+              if (durMs < WIDGET_MIN_KEEP_MS) tracker.discardActive();
+              else completeClockOut(time);
+            } else {
+              requestClockOut(time);
+            }
             localRunning = false;
             startedThisBatch = false;
+            batchStartMs = NaN;
           }
         } else if (action === 'NAV' && msStr && VALID_TABS.has(msStr as Tab)) {
           // Atajos del icono de Android: abrir una pestaña concreta. Se valida

@@ -41,6 +41,12 @@ interface ActiveSession {
   startedAt: Date | null;
   /** Respaldo de la categoría para el mismo caso (el evento manda si está). */
   category: WorkCategory;
+  /**
+   * Si este fichaje CREÓ un evento nuevo (true) o se enganchó a uno programado
+   * ya existente (false). Al descartar una actividad, el evento nuevo se borra,
+   * pero el programado solo se revierte a pendiente para no perder la cita.
+   */
+  createdNew: boolean;
 }
 
 // Operaciones sobre el calendario (única fuente de verdad de las horas). El
@@ -72,7 +78,10 @@ function parseSession(value: unknown): ActiveSession | null {
   }
   const category =
     typeof value.category === "string" && value.category.trim() ? value.category : "Predi";
-  return { linkedEventId: value.linkedEventId, pausedAt, startedAt, category };
+  // Una sesión restaurada sin este dato se trata como "no creada por nosotros"
+  // (false): al descartar se revierte en vez de borrar, lo más conservador.
+  const createdNew = value.createdNew === true;
+  return { linkedEventId: value.linkedEventId, pausedAt, startedAt, category, createdNew };
 }
 
 // Parseo de las TimeEntries antiguas: solo se usa UNA vez para migrar los datos
@@ -127,6 +136,10 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
   // recreen en cada render.
   const opsRef = useRef(ops);
   opsRef.current = ops;
+  // Lista de eventos siempre al día, para consultas síncronas dentro de los
+  // callbacks del timer sin capturar una versión vieja por closure.
+  const eventsRef = useRef(events);
+  eventsRef.current = events;
 
   const persistSession = useCallback((s: ActiveSession | null) => {
     void writeJsonValue(
@@ -137,6 +150,7 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
             pausedAt: s.pausedAt ? s.pausedAt.toISOString() : null,
             startedAt: s.startedAt ? s.startedAt.toISOString() : null,
             category: s.category,
+            createdNew: s.createdNew,
           }
         : null
     ).catch((e) => console.error("Error saving active session:", e));
@@ -280,8 +294,12 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
   const clockIn = useCallback(
     (category: WorkCategory = "Predi", customTime?: Date) => {
       const start = customTime ?? new Date();
+      const idsBefore = new Set(eventsRef.current.map((e) => e.id));
       const id = opsRef.current.addCompletedEventNow({ date: start, category });
-      const s: ActiveSession = { linkedEventId: id, pausedAt: null, startedAt: start, category };
+      // Si el id devuelto ya existía, se enganchó a un evento programado; si no,
+      // se creó uno nuevo. Distingue cómo descartar la actividad luego.
+      const createdNew = !idsBefore.has(id);
+      const s: ActiveSession = { linkedEventId: id, pausedAt: null, startedAt: start, category, createdNew };
       setSession(s);
       persistSession(s);
       setElapsed(Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000)));
@@ -312,6 +330,24 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
     },
     [events, persistSession]
   );
+
+  // Descarta la actividad en curso sin guardarla (p.ej. un play+stop accidental
+  // de menos de 30 s desde el widget, donde no hay diálogo que preguntar). Si el
+  // fichaje creó un evento nuevo, se borra; si se enganchó a uno programado, se
+  // revierte a pendiente para no perder la cita.
+  const discardActive = useCallback(() => {
+    setSession((s) => {
+      if (!s) return s;
+      if (s.createdNew) {
+        opsRef.current.deleteEvent(s.linkedEventId);
+      } else {
+        opsRef.current.updateEvent(s.linkedEventId, { completed: false, endTime: undefined });
+      }
+      persistSession(null);
+      return null;
+    });
+    setElapsed(0);
+  }, [persistSession]);
 
   const pause = useCallback(() => {
     setSession((s) => {
@@ -437,6 +473,7 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
     activeEntry,
     clockIn,
     clockOut,
+    discardActive,
     pause,
     resume,
     updateStartTime,
