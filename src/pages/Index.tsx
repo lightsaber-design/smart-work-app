@@ -197,7 +197,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     // El fin efectivo es el de la pausa si está pausado (igual que en clockOut):
     // midiendo contra "ahora" una actividad corta que lleva rato en pausa parecía
     // larga y no saltaba el aviso de "actividad muy corta".
-    const end = customTime ?? activeEntry.pausedAt ?? new Date();
+    const end = activeEntry.pausedAt ?? customTime ?? new Date();
     if (end.getTime() - activeEntry.startTime.getTime() < SHORT_ACTIVITY_MS) {
       setShortStopPrompt({ customTime });
       return;
@@ -268,6 +268,14 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const widgetActionRef = useRef<() => void>(() => {});
   widgetActionRef.current = () => {
     if (document.visibilityState !== 'visible') return;
+    // No consumir la cola hasta que la sesión guardada esté restaurada.
+    // `consumeWidgetAction()` la BORRA en nativo al leerla, así que si se lee
+    // en el arranque en frío —cuando `tracker.isRunning` todavía es false
+    // porque la sesión se lee de disco de forma asíncrona— un CLOCK_OUT
+    // encolado se descartaba por el guard `if (localRunning)` y desaparecía
+    // para siempre: el timer seguía corriendo horas o días y al pararlo por fin
+    // se guardaba una actividad enorme.
+    if (!tracker.loaded) return;
     void consumeWidgetAction().then((actions) => {
       // El widget puede haber encolado varias acciones (p.ej. arranca y para
       // sin abrir nunca la app entre medio): se reproducen todas en orden.
@@ -319,10 +327,14 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   useEffect(() => {
     const check = () => widgetActionRef.current();
     document.addEventListener('visibilitychange', check);
-    // Comprobar también al montar (app abierta directamente por el widget)
-    check();
     return () => document.removeEventListener('visibilitychange', check);
   }, []);
+  // Comprobación inicial (app abierta directamente desde el widget): en cuanto
+  // la sesión guardada esté cargada, no antes —ver el guard de arriba.
+  useEffect(() => {
+    if (!tracker.loaded) return;
+    widgetActionRef.current();
+  }, [tracker.loaded]);
 
   // ── Summary sheet: event lists ────────────────────────────────────────────────
   const todayEvents = useMemo(

@@ -312,8 +312,12 @@ export function useTimeTracker(events: CalendarEvent[], ops: TimeTrackerEventOps
       setSession((s) => {
         if (!s) return s;
         // Si se para en pausa, el fin del trabajo fue el momento de pausar (así la
-        // duración no incluye el hueco pausado).
-        const rawEnd = customTime ?? s.pausedAt ?? new Date();
+        // duración no incluye el hueco pausado). La pausa manda incluso sobre un
+        // `customTime`: ese parámetro solo lo trae el botón ⏹ del widget, que sigue
+        // visible durante la pausa y envía la hora del toque. Tomándolo como fin se
+        // facturaba el hueco entero (pausar a las 9:10 y parar desde el widget a las
+        // 17:10 guardaba 8 h en vez de 10 min).
+        const rawEnd = s.pausedAt ?? customTime ?? new Date();
         // El inicio se toma del evento (fuente de verdad, refleja ediciones) y,
         // si aún no está en esta lista —el widget reproduce CLOCK_IN y CLOCK_OUT
         // en el mismo tick y el evento se acaba de crear—, del `startedAt` de la

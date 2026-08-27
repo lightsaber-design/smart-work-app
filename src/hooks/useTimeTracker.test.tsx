@@ -173,4 +173,32 @@ describe("useTimeTracker (calendar as single source of truth)", () => {
     );
     expect(result.current.isRunning).toBe(false);
   });
+  it("stopping from the widget while paused does not bill the paused gap", async () => {
+    const ops = makeOps({ addCompletedEventNow: vi.fn(() => "event-1") });
+    const { result } = renderHook(() => useTimeTracker([], ops, true));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    vi.setSystemTime(new Date(2026, 4, 10, 9, 0));
+    act(() => {
+      result.current.clockIn("Predi", new Date(2026, 4, 10, 9, 0));
+    });
+    // Pausa a las 09:10: solo se han trabajado 10 minutos.
+    vi.setSystemTime(new Date(2026, 4, 10, 9, 10));
+    act(() => {
+      result.current.pause();
+    });
+    // 8 h después el usuario pulsa el ⏹ del widget, que sigue visible en pausa
+    // y manda su propia hora. El fin debe seguir siendo el de la pausa.
+    vi.setSystemTime(new Date(2026, 4, 10, 17, 10));
+    act(() => {
+      result.current.clockOut(new Date(2026, 4, 10, 17, 10));
+    });
+
+    expect(ops.updateEvent).toHaveBeenCalledWith(
+      "event-1",
+      expect.objectContaining({ endTime: "09:10", completed: true })
+    );
+  });
 });
