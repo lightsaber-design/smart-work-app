@@ -3,7 +3,11 @@ import {
   applyMonthlyReportCalculation,
   calculateMonthlyReport,
   emptyMonthlyReportCarryover,
+  emptyMonthlyReportSent,
+  parseMonthlyReportSent,
+  setMonthlyReportSent,
 } from "./monthlyReport";
+import { reportReminderMonthKey } from "./notificationRules";
 
 describe("monthly report carryover", () => {
   it("reports closed hours and keeps extra minutes", () => {
@@ -42,5 +46,27 @@ describe("monthly report carryover", () => {
     expect(february.carriedInMinutes).toBe(45);
     expect(february.reportedHours).toBe(33); // (32h + 45min) redondeado
     expect(february.carriedOutMinutes).toBe(0); // el modo "round" no genera arrastre nuevo
+  });
+});
+
+describe("monthly report sent flag", () => {
+  it("marks and unmarks a month without touching the hours calculation", () => {
+    const marked = setMonthlyReportSent(emptyMonthlyReportSent, "2026-08", true, "2026-08-31T10:00:00.000Z");
+    expect(marked["2026-08"]).toBe("2026-08-31T10:00:00.000Z");
+    expect(setMonthlyReportSent(marked, "2026-08", false)).toEqual({});
+  });
+
+  it("drops junk keys when parsing stored flags", () => {
+    expect(parseMonthlyReportSent({ "2026-08": "x", nope: "y", "2026-13-01": "z", "2026-09": 5 })).toEqual({
+      "2026-08": "x",
+    });
+  });
+
+  it("marks the month that ENDS when the reminder window straddles the month change", () => {
+    // El 1 de septiembre el informe pendiente sigue siendo el de agosto: si la
+    // casilla marcara el mes en curso, el aviso de agosto nunca se callaria.
+    expect(reportReminderMonthKey(new Date(2026, 8, 1, 10, 0))).toBe("2026-08");
+    expect(reportReminderMonthKey(new Date(2026, 7, 31, 10, 0))).toBe("2026-08");
+    expect(reportReminderMonthKey(new Date(2026, 7, 15, 10, 0))).toBeNull();
   });
 });

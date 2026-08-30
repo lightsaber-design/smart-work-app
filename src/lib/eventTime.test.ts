@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampActivityEnd, resolveEndDate } from "./eventTime";
+import { clampActivityEnd, resolveEndDate, impliedActivityMs, isSuspiciouslyLongActivity } from "./eventTime";
 
 /** Duración real que acabaría guardada: el evento trunca el fin a "HH:MM". */
 function storedDurationHours(start: Date, rawEnd: Date): number {
@@ -51,5 +51,22 @@ describe("resolveEndDate", () => {
   it("returns null for a malformed end time", () => {
     const start = new Date(2026, 6, 7, 9, 0);
     expect(resolveEndDate(start, "not-a-time")).toBeNull();
+  });
+});
+
+describe("guard de actividad sospechosamente larga", () => {
+  const start = (h: number, m = 0) => new Date(2026, 7, 20, h, m);
+
+  it("flags an inverted start/end that would silently become ~24h", () => {
+    // Editar el inicio a las 15:00 dejando el fin en 14:00 se interpreta como
+    // que cruza la medianoche: 23 h. Es el caso que inflaba el mes.
+    expect(impliedActivityMs(start(15), "14:00") / 3_600_000).toBe(23);
+    expect(isSuspiciouslyLongActivity(start(15), "14:00")).toBe(true);
+  });
+
+  it("leaves normal activities and real midnight crossings alone", () => {
+    expect(isSuspiciouslyLongActivity(start(9), "12:30")).toBe(false);
+    expect(isSuspiciouslyLongActivity(start(22), "02:00")).toBe(false); // 4 h reales
+    expect(isSuspiciouslyLongActivity(start(9), undefined)).toBe(false);
   });
 });

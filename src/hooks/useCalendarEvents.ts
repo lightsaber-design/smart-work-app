@@ -4,7 +4,7 @@ import { readJsonValue } from "@/lib/jsonFileStorage";
 import { useDebouncedJsonWriter } from "@/hooks/useDebouncedJsonWriter";
 import { clampReminderMinutes } from "@/lib/eventReminders";
 import { findScheduledEventAtTimerStart, findScheduledEventForTimerStart } from "@/lib/timerOverrun";
-import { resolveEndDate } from "@/lib/eventTime";
+import { eventsOverlap, isCoveredByLoggedActivity } from "@/lib/eventOverlap";
 import { isRecord } from "@/lib/utils";
 
 export type EventCategory = string;
@@ -122,19 +122,6 @@ function generateRecurringEvents(params: AddEventParams, count: number): Calenda
   return events;
 }
 
-function getEventEndDate(event: CalendarEvent): Date {
-  return resolveEndDate(event.date, event.endTime) ?? new Date(event.date.getTime() + 60 * 60_000);
-}
-
-function isSameCalendarDay(a: Date, b: Date) {
-  return a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
-}
-
-function eventsShareSchedule(a: CalendarEvent, b: CalendarEvent): boolean {
-  if (!isSameCalendarDay(a.date, b.date)) return false;
-  return a.date.getTime() < getEventEndDate(b).getTime() && getEventEndDate(a).getTime() > b.date.getTime();
-}
-
 function removeCompletedScheduleDuplicates(events: CalendarEvent[], completedEvent: CalendarEvent): CalendarEvent[] {
   if (!completedEvent.completed) return events;
   // Solo elimina eventos PENDIENTES (no completados) que solapen con el evento
@@ -143,7 +130,7 @@ function removeCompletedScheduleDuplicates(events: CalendarEvent[], completedEve
   return events.filter((event) =>
     event.id === completedEvent.id ||
     event.completed ||
-    !eventsShareSchedule(event, completedEvent)
+    !eventsOverlap(event, completedEvent)
   );
 }
 
@@ -163,7 +150,16 @@ export function useCalendarEvents() {
         const parsed = value.map(parseStoredEvent).filter((event): event is CalendarEvent => event !== null);
         // Limpia eventos completados con más de 6 meses de antigüedad
         const cutoff = Date.now() - 6 * 30 * 24 * 60 * 60 * 1000;
-        const cleaned = parsed.filter((e) => !(e.completed && e.date.getTime() < cutoff));
+        const aged = parsed.filter((e) => !(e.completed && e.date.getTime() < cutoff));
+        // Y descarta los eventos PROGRAMADOS que ya quedaron cubiertos por una
+        // actividad real fichada en su misma franja: el evento programado es
+        // solo la referencia de lo que se pensaba hacer, así que una vez hecho
+        // sobra. Sin esta pasada se quedaban dibujados como un segundo cuadro
+        // encima de la actividad real en el calendario (y seguían avisando).
+        // La limpieza al escribir ya lo hace, pero no alcanza a los eventos que
+        // se solaparon después (p.ej. una actividad que se alargó, o un evento
+        // programado creado a posteriori sobre una franja ya fichada).
+        const cleaned = aged.filter((e) => !isCoveredByLoggedActivity(e, aged));
         if (cleaned.length < parsed.length) {
           // Persiste el cleanup silenciosamente
           writeCalendarEventsRef.current(cleaned.map((e) => ({ ...e, date: e.date.toISOString() })));

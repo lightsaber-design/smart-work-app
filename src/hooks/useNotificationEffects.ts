@@ -7,7 +7,8 @@ import { isStalePendingSession, isSessionDone } from "@/hooks/useEstudios";
 import { scheduleEventNotification, cancelEventNotification, registerStudyActionType, STUDY_ACTION_TYPE } from "@/lib/notifications";
 import { getEventEndDate } from "@/lib/timerOverrun";
 import { timerLongRunFireAt, currentMonthKey, nextReportPrepareAt, nextReportDeliverAt, reportReminderMonthKey, missedStudyFireAt, unloggedFireAt, goalReminderFireAt, forgottenFireAt, hasUpcomingSession, lastStudyActivityDate, nextWeekdayAt } from "@/lib/notificationRules";
-import type { MonthlyReportCarryoverState } from "@/lib/monthlyReport";
+import type { MonthlyReportCarryoverState, MonthlyReportSentState } from "@/lib/monthlyReport";
+import { isCoveredByLoggedActivity } from "@/lib/eventOverlap";
 import { getCategoryLabel } from "@/lib/categories";
 import { startTimerNotification, stopTimerNotification, pauseTimerNotification } from "@/lib/timerNotification";
 
@@ -35,6 +36,7 @@ interface UseNotificationEffectsParams {
   notifReport: boolean;
   // Estado del informe mensual: para saber si ya se envió el de este mes.
   reportCarryover: MonthlyReportCarryoverState;
+  reportSent: MonthlyReportSentState;
   // Travel time for overrun threshold
   travelTimeEnabled: boolean;
   travelTimeMinutes: number;
@@ -58,6 +60,7 @@ export function useNotificationEffects({
   notifUnlogged,
   notifReport,
   reportCarryover,
+  reportSent,
   travelTimeEnabled,
   travelTimeMinutes,
 }: UseNotificationEffectsParams) {
@@ -115,6 +118,18 @@ export function useNotificationEffects({
       if (isTimerRunning) {
         void cancelEventNotification(event.id);
         scheduledEventFireTimes.current.delete(event.id);
+        return;
+      }
+
+      // Lo mismo si en esa franja YA quedó fichada una actividad real (aunque
+      // sea de otra categoría): el evento programado era solo la referencia de
+      // lo que se pensaba hacer y ya ocurrió algo en paralelo, así que recordarlo
+      // solo es ruido.
+      if (isCoveredByLoggedActivity(event, calendarEvents)) {
+        void cancelEventNotification(event.id);
+        scheduledEventFireTimes.current.delete(event.id);
+        void cancelEventNotification(`unlogged-${event.id}`);
+        unloggedFireRef.current.delete(event.id);
         return;
       }
 
@@ -488,6 +503,9 @@ export function useNotificationEffects({
     for (const event of calendarEvents) {
       if (event.completed) continue;
       if (activeScheduledEvent?.id === event.id) continue;
+      // Su franja ya está cubierta por una actividad real fichada: no tiene
+      // sentido preguntar si se registró (ver isCoveredByLoggedActivity).
+      if (isCoveredByLoggedActivity(event, calendarEvents)) continue;
       const fireAtMs = unloggedFireAt(event.date).getTime();
       if (fireAtMs - now > UNLOGGED_WINDOW_MS) continue; // demasiado lejos; ya se programará
       const time = `${String(event.date.getHours()).padStart(2, "0")}:${String(event.date.getMinutes()).padStart(2, "0")}`;
@@ -606,8 +624,15 @@ export function useNotificationEffects({
     }
 
     const now = new Date();
-    const monthKey = currentMonthKey(now);
-    const alreadyReported = Boolean(reportCarryover.reports[monthKey]);
+    // El informe que toca no es siempre el del mes en curso: dentro de la
+    // ventana de cambio de mes (los últimos días y los primeros del siguiente)
+    // el informe pendiente es el del mes que termina. Antes esto se preguntaba
+    // con `currentMonthKey`, así que el día 1 el informe de agosto ya enviado se
+    // consultaba como "2026-09" —sin registro— y volvía a avisar de algo ya
+    // hecho. Fuera de la ventana se sigue usando el mes en curso.
+    const pendingMonthKey = reportReminderMonthKey(now) ?? currentMonthKey(now);
+    const alreadyReported =
+      Boolean(reportCarryover.reports[pendingMonthKey]) || Boolean(reportSent[pendingMonthKey]);
 
     if (alreadyReported) {
       void cancelEventNotification("report-prepare");
@@ -651,9 +676,17 @@ export function useNotificationEffects({
     // cada apertura (no solo una vez al día) y deja de hacerlo en cuanto
     // reportCarryover registra el informe de ese mes.
     const windowMonthKey = reportReminderMonthKey(now);
-    if (windowMonthKey && !reportCarryover.reports[windowMonthKey]) {
-      if (reportOpenFiredRef.current !== windowMonthKey) {
+    if (windowMonthKey && !reportCarryover.reports[windowMonthKey] && !reportSent[windowMonthKey]) {
+      // Como mucho UNO al día. El ref solo vive lo que dure la sesión, así que
+      // por sí solo disparaba un aviso en cada arranque en frío: abriendo la app
+      // varias veces al día salían varios avisos del mismo informe. La marca se
+      // persiste por día para que sea un recordatorio, no una insistencia.
+      const dayKey = `_ml_report_open_${windowMonthKey}_${now.toDateString()}`;
+      let firedToday = false;
+      try { firedToday = Boolean(localStorage.getItem(dayKey)); } catch { firedToday = true; }
+      if (!firedToday && reportOpenFiredRef.current !== windowMonthKey) {
         reportOpenFiredRef.current = windowMonthKey;
+        try { localStorage.setItem(dayKey, "1"); } catch { /* nada */ }
         void scheduleEventNotification(
           "report-deliver-now",
           t("notif_report_deliver_title"),
@@ -664,7 +697,8 @@ export function useNotificationEffects({
       }
     } else {
       reportOpenFiredRef.current = null;
+      void cancelEventNotification("report-deliver-now");
     }
-  }, [notifReport, reportCarryover, langReady, t]);
+  }, [notifReport, reportCarryover, reportSent, langReady, t]);
 
 }

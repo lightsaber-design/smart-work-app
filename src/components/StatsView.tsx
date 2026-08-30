@@ -5,10 +5,11 @@ import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { useCategoryFilter } from "@/hooks/useCategoryFilter";
 import { CategoryConfig, getActiveCategoryConfigs, getCategoryLabel, getCategoryMeta, SUPPORT_CAP_HOURS } from "@/lib/categories";
 import { applyMonthlySupportCap } from "@/lib/ldcCap";
-import { calculateMonthlyReport, type MonthlyReportCalculation, type MonthlyReportCarryoverState } from "@/lib/monthlyReport";
+import { calculateMonthlyReport, type MonthlyReportCalculation, type MonthlyReportCarryoverState, type MonthlyReportSentState } from "@/lib/monthlyReport";
+import { reportReminderMonthKey } from "@/lib/notificationRules";
 import { msToLabel } from "@/lib/time";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
-import { Pencil, Check, Send, BookOpen, Plus } from "lucide-react";
+import { Pencil, Check, Send, BookOpen, Plus, CheckSquare, Square } from "lucide-react";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import { formatMonthYear, formatShortMonth } from "@/lib/dateFormat";
 
@@ -23,6 +24,8 @@ interface StatsViewProps {
   onOpenStudies?: () => void;
   carryover: MonthlyReportCarryoverState;
   onSaveMonthlyReport: (calculation: MonthlyReportCalculation) => void;
+  reportSent: MonthlyReportSentState;
+  onMarkReportSent: (monthKey: string, sent: boolean) => void;
   reportRounding?: "carryover" | "round";
 }
 
@@ -37,6 +40,8 @@ export function StatsView({
   onOpenStudies,
   carryover,
   onSaveMonthlyReport,
+  reportSent,
+  onMarkReportSent,
   reportRounding = "carryover",
 }: StatsViewProps) {
   const t = useT();
@@ -386,17 +391,44 @@ export function StatsView({
               `⏱️ ${t("stats_hours")}: ${monthlyReport.reportedHours}h`,
               `📖 ${t("stats_studies")}: ${estudiosCount}`,
             ].join("\n");
+            // El informe pendiente a caballo del cambio de mes es el del mes
+            // que TERMINA, no el del mes en curso: la casilla marca esa misma
+            // clave que consultan los avisos, para que marcarla los calle.
+            const pendingKey = reportReminderMonthKey(now) ?? monthlyReport.monthKey;
+            const pendingLabel = formatMonthYear(
+              pendingKey === monthlyReport.monthKey ? now : new Date(now.getFullYear(), now.getMonth() - 1, 1),
+              locale
+            );
+            const isSent = Boolean(reportSent[pendingKey]);
             return (
-              <button
-                onClick={() => {
-                  onSaveMonthlyReport(monthlyReport);
-                  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
-                }}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold text-sm transition-colors shadow-sm"
-              >
-                <Send className="w-4 h-4" />
-                {t("stats_send_report")}
-              </button>
+              <div className="space-y-2">
+                <button
+                  onClick={() => {
+                    onSaveMonthlyReport(monthlyReport);
+                    onMarkReportSent(pendingKey, true);
+                    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold text-sm transition-colors shadow-sm"
+                >
+                  <Send className="w-4 h-4" />
+                  {t("stats_send_report")}
+                </button>
+                {/* Casilla manual: para cuando el informe se entrega fuera de la
+                    app (en persona, otro chat...). Marcarla silencia los avisos
+                    de ese mes sin tocar el calculo de horas. */}
+                <button
+                  onClick={() => onMarkReportSent(pendingKey, !isSent)}
+                  aria-pressed={isSent}
+                  className="w-full flex items-center gap-2 py-2.5 px-3 rounded-2xl border border-border bg-card text-sm text-foreground active:opacity-75 transition-opacity"
+                >
+                  {isSent
+                    ? <CheckSquare className="w-4 h-4 text-green-600 flex-shrink-0" />
+                    : <Square className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+                  <span className={isSent ? "text-muted-foreground" : ""}>
+                    {t("stats_report_sent_check", { month: pendingLabel })}
+                  </span>
+                </button>
+              </div>
             );
           })()}
         </>

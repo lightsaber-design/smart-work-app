@@ -130,7 +130,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
   const campaign = useSpecialCampaign();
   // Estado del informe mensual: fuente única compartida por StatsView (envío)
   // y las notificaciones (para no recordar un informe ya enviado).
-  const { carryover: reportCarryover, saveMonthlyReport } = useMonthlyReportCarryover();
+  const { carryover: reportCarryover, saveMonthlyReport, reportSent, markReportSent } = useMonthlyReportCarryover();
   const { events: calendarEvents, markNotified, getEventsForDate } = calendar;
   const { justBacked } = useAutoBackup({ setup });
 
@@ -249,6 +249,7 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
     notifUnlogged: setup.notifUnlogged,
     notifReport: setup.notifReport,
     reportCarryover,
+    reportSent,
     travelTimeEnabled: setup.travelTimeEnabled,
     travelTimeMinutes: setup.travelTimeMinutes,
   });
@@ -595,6 +596,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                   categoryConfigs={setup.categorySettings}
                   carryover={reportCarryover}
                   onSaveMonthlyReport={saveMonthlyReport}
+                  reportSent={reportSent}
+                  onMarkReportSent={markReportSent}
                   reportRounding={setup.monthlyReportRounding}
                 />
               </Suspense>
@@ -623,6 +626,8 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
                 onOpenStudies={() => navigate("estudios")}
                 carryover={reportCarryover}
                 onSaveMonthlyReport={saveMonthlyReport}
+                reportSent={reportSent}
+                onMarkReportSent={markReportSent}
                 reportRounding={setup.monthlyReportRounding}
               />
             </Suspense>

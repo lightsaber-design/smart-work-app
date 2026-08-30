@@ -34,3 +34,22 @@ export function resolveEndDate(baseDate: Date, endTimeStr: string | undefined): 
   if (end.getTime() <= baseDate.getTime()) end.setDate(end.getDate() + 1);
   return end;
 }
+
+/**
+ * Una actividad de más de estas horas casi nunca es real: sale de invertir sin
+ * querer inicio y fin al editar (poner el inicio DESPUÉS del fin), que
+ * `resolveEndDate` interpreta —correctamente para el caso legítimo de 22:00 ->
+ * 02:00— como que cruza la medianoche, y entonces guarda ~24 h de golpe.
+ */
+export const SUSPICIOUS_ACTIVITY_MS = 12 * 60 * 60_000;
+
+/** Duración que implicaría guardar este inicio con esta hora de fin "HH:MM". */
+export function impliedActivityMs(date: Date, endTime: string | undefined): number {
+  const end = resolveEndDate(date, endTime);
+  return end ? Math.max(0, end.getTime() - date.getTime()) : 0;
+}
+
+/** ¿Guardar esto crearía una actividad sospechosamente larga? */
+export function isSuspiciouslyLongActivity(date: Date, endTime: string | undefined): boolean {
+  return impliedActivityMs(date, endTime) > SUSPICIOUS_ACTIVITY_MS;
+}

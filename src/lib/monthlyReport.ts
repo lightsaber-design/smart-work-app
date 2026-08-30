@@ -117,3 +117,34 @@ export function applyMonthlyReportCalculation(
     },
   };
 }
+
+// ── "Informe ya enviado" ─────────────────────────────────────────────────────
+// Registro aparte del arrastre, a propósito: marcar un informe como enviado NO
+// debe tocar el cálculo de horas ni la cadena de arrastre. Hace falta separarlo
+// porque el informe se envía a caballo entre dos meses (el último día o los
+// primeros del siguiente), así que la casilla tiene que poder marcar el mes
+// ANTERIOR sin recalcular nada con las horas del mes en curso.
+export type MonthlyReportSentState = Record<string, string>;
+
+export const emptyMonthlyReportSent: MonthlyReportSentState = {};
+
+export function parseMonthlyReportSent(value: unknown): MonthlyReportSentState {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return emptyMonthlyReportSent;
+  return Object.entries(value).reduce<MonthlyReportSentState>((acc, [key, raw]) => {
+    if (/^\d{4}-\d{2}$/.test(key) && typeof raw === "string" && raw) acc[key] = raw;
+    return acc;
+  }, {});
+}
+
+export function setMonthlyReportSent(
+  state: MonthlyReportSentState,
+  monthKey: string,
+  sent: boolean,
+  sentAt = new Date().toISOString()
+): MonthlyReportSentState {
+  if (!sent) {
+    const { [monthKey]: _removed, ...rest } = state;
+    return rest;
+  }
+  return { ...state, [monthKey]: sentAt };
+}

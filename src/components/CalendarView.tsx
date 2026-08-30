@@ -32,7 +32,8 @@ import {
 import { FavoritePlace } from "@/hooks/useFavoritePlaces";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
 import { getTravelReminderMinutes, type TravelReminderSettings } from "@/lib/eventReminders";
-import { resolveEndDate } from "@/lib/eventTime";
+import { resolveEndDate, impliedActivityMs, isSuspiciouslyLongActivity } from "@/lib/eventTime";
+import { msToLabel } from "@/lib/time";
 import { formatFileSize, saveFile } from "@/lib/sessionFiles";
 import { CampaignGoal, monthKey } from "@/hooks/useSpecialCampaign";
 import { DEFAULT_ACTIVITY_END_HOUR, DEFAULT_ACTIVITY_START_HOUR } from "@/lib/activityHours";
@@ -560,6 +561,8 @@ export function CalendarView({
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [monthOffset, setMonthOffset] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Confirmación de actividad sospechosamente larga (ver isSuspiciouslyLongActivity).
+  const [pendingLongActivity, setPendingLongActivity] = useState<{ ms: number; commit: () => void } | null>(null);
   const [pendingAddConflict, setPendingAddConflict] = useState<{
     params: AddEventParams;
     conflicts: CalendarEvent[];
@@ -660,7 +663,7 @@ export function CalendarView({
     }
   }, [availableCategories, category, editCategory]);
 
-  useScrollLock(dialogOpen || !!editEvent || !!pendingAddConflict || !!selectedStudySession);
+  useScrollLock(dialogOpen || !!editEvent || !!pendingAddConflict || !!pendingLongActivity || !!selectedStudySession);
 
   const selectedDateKey = selectedDate.toDateString();
   const selectedEvents = useMemo(
@@ -790,6 +793,19 @@ export function CalendarView({
     }
   };
 
+  /**
+   * Ejecuta `commit`, pero si guardar implicara una actividad absurdamente larga
+   * (típicamente por invertir inicio y fin sin querer, que se interpreta como
+   * que cruza la medianoche) pregunta antes en vez de contabilizarla en silencio.
+   */
+  const guardLongActivity = (date: Date, endTime: string | undefined, commit: () => void) => {
+    if (endTime && isSuspiciouslyLongActivity(date, endTime)) {
+      setPendingLongActivity({ ms: impliedActivityMs(date, endTime), commit });
+      return;
+    }
+    commit();
+  };
+
   const handleSaveEdit = () => {
     if (!editEvent) return;
     const safeEditTime = clampTimeToActivityRange(editTime, activityStartHour, activityEndHour);
@@ -817,16 +833,18 @@ export function CalendarView({
     const editLoc = editSelectedFavoriteId
       ? favoritePlaces.find((p) => p.id === editSelectedFavoriteId)?.location
       : editLocationData;
-    onUpdateEvent(editEvent.id, {
-      date: newDate,
-      endTime: safeEditEndTime || undefined,
-      category: editCategory,
-      reminderMinutesBefore,
-      notified: isPastEvent ? true : undefined,
-      notes: editNotes.trim() || undefined,
-      location: editLoc,
+    guardLongActivity(newDate, safeEditEndTime || undefined, () => {
+      onUpdateEvent(editEvent.id, {
+        date: newDate,
+        endTime: safeEditEndTime || undefined,
+        category: editCategory,
+        reminderMinutesBefore,
+        notified: isPastEvent ? true : undefined,
+        notes: editNotes.trim() || undefined,
+        location: editLoc,
+      });
+      setEditEvent(null);
     });
-    setEditEvent(null);
   };
 
   const resetAddForm = () => {
@@ -917,7 +935,9 @@ export function CalendarView({
     resetAddForm();
   };
 
-  const handleAdd = async () => {
+  // `skipLongCheck` lo pone la confirmación de "actividad muy larga" al
+  // reintentar: sin él volvería a abrir el mismo diálogo en bucle.
+  const handleAdd = async (skipLongCheck = false) => {
     if (savingAdd) return;
     const safeTime = clampTimeToActivityRange(time, activityStartHour, activityEndHour);
     // Igual que en la edición: si la hora de fin cruza la medianoche, no se
@@ -947,6 +967,14 @@ export function CalendarView({
       ? getTravelReminderMinutes(date, events, travelReminder)
       : manualReminder;
     const params: AddEventParams = { date, endTime: safeEndTime || undefined, category, reminderMinutesBefore, location: eventLocation, recurrence, notes: addNotes.trim() || undefined };
+
+    if (!skipLongCheck && params.endTime && isSuspiciouslyLongActivity(params.date, params.endTime)) {
+      setPendingLongActivity({
+        ms: impliedActivityMs(params.date, params.endTime),
+        commit: () => { void handleAdd(true); },
+      });
+      return;
+    }
 
     const studyContact = category === "Estudio"
       ? activeContacts.find((c) => c.id === selectedEstudioContactId) ?? (activeContacts.length === 1 ? activeContacts[0] : null)
@@ -1624,12 +1652,40 @@ export function CalendarView({
             )}
           </div>
           <div className="flex-shrink-0 px-5 pt-3 pb-8 border-t border-border bg-card">
-            <Button onClick={handleAdd} disabled={savingAdd} className="w-full">
+            <Button onClick={() => { void handleAdd(); }} disabled={savingAdd} className="w-full">
               {savingAdd ? t("common_saving") : t("cal_save_event")}
             </Button>
           </div>
         </div>
       </div>
+
+      {/* Aviso de actividad sospechosamente larga: casi siempre es un inicio y un
+          fin invertidos sin querer, que se interpretan como que cruzan la
+          medianoche y contabilizan ~24 h. Se pregunta en vez de guardar a ciegas. */}
+      <AlertDialog open={!!pendingLongActivity} onOpenChange={(open) => { if (!open) setPendingLongActivity(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("cal_long_activity_title")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {/* Solo con el aviso vivo: durante la animación de cierre el estado
+                  ya es null y el texto parpadeaba a "0m". */}
+              {pendingLongActivity && t("cal_long_activity_body", { duration: msToLabel(pendingLongActivity.ms) })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2">
+            <AlertDialogCancel onClick={() => setPendingLongActivity(null)}>{t("common_cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const commit = pendingLongActivity?.commit;
+                setPendingLongActivity(null);
+                commit?.();
+              }}
+            >
+              {t("cal_long_activity_confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!pendingAddConflict} onOpenChange={(open) => { if (!open) setPendingAddConflict(null); }}>
         <AlertDialogContent>

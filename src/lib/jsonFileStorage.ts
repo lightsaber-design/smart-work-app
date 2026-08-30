@@ -7,6 +7,7 @@ export type StorageKey =
   | "favorite-places"
   | "specialCampaign"
   | "monthly-report-carryover"
+  | "monthly-report-sent"
   | "darkMode"
   | "excludedCategories";
 
@@ -312,7 +313,7 @@ export function exportAllData(): void {
 
 const IMPORTABLE_KEYS: StorageKey[] = [
   'setup', 'time-entries', 'active-session', 'calendar-events', 'estudios',
-  'favorite-places', 'specialCampaign', 'monthly-report-carryover',
+  'favorite-places', 'specialCampaign', 'monthly-report-carryover', 'monthly-report-sent',
   'darkMode', 'excludedCategories',
 ];
 
