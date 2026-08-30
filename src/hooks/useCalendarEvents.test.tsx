@@ -154,4 +154,36 @@ describe("useCalendarEvents", () => {
     expect(result.current.events[1].date).toEqual(new Date(2026, 1, 28, 9, 0)); // Feb 28, no Mar 3
     expect(result.current.events[2].date).toEqual(new Date(2026, 2, 31, 9, 0)); // vuelve al día 31 cuando existe
   });
+
+  it("clocking in does not wipe a reminder that has not started yet", async () => {
+    // Son las 12:00 y se ficha ahora. Todavia no se sabe cuanto durara la
+    // actividad, asi que se asume una hora; esa hora asumida NO puede borrar el
+    // recordatorio de las 12:30, que sigue siendo algo que piensas hacer.
+    // (12:00 cae fuera de su ventana de enganche, que empieza a las 12:15, asi
+    // que el fichaje crea un evento nuevo en vez de absorberlo.)
+    storageMocks.readJsonValue.mockResolvedValue([
+      {
+        id: "upcoming",
+        date: new Date(2026, 4, 10, 12, 30).toISOString(),
+        endTime: "13:30",
+        category: "Carrito",
+        reminderMinutesBefore: 15,
+        notified: false,
+        recurrence: "none",
+        completed: false,
+      },
+    ]);
+    const { result } = renderHook(() => useCalendarEvents());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    let linkedId = "";
+    act(() => {
+      linkedId = result.current.addCompletedEventNow({ date: new Date(2026, 4, 10, 12, 0), category: "Predi" });
+    });
+
+    expect(linkedId).not.toBe("upcoming");
+    expect(result.current.events.map((e) => e.id)).toContain("upcoming");
+  });
 });

@@ -23,6 +23,19 @@ export function eventsOverlap(a: CalendarEvent, b: CalendarEvent): boolean {
 }
 
 /**
+ * Un evento programado solo se puede descartar automaticamente si su hora de
+ * inicio YA llego. Al futuro no se toca: sigue siendo el recordatorio de algo
+ * que todavia piensas hacer, aunque ahora mismo estes fichando otra cosa.
+ *
+ * Sin esta regla, fichar a las 10:00 borraba en silencio el recordatorio de las
+ * 10:30 que aun no habia llegado: al no saberse todavia cuanto va a durar la
+ * actividad se asume una hora, y esa hora asumida se comia lo que venia detras.
+ */
+export function hasStarted(event: CalendarEvent, now = new Date()): boolean {
+  return event.date.getTime() <= now.getTime();
+}
+
+/**
  * Una actividad REAL ya registrada (completada y con hora de fin fichada) que
  * cubre la franja de este evento programado.
  *
@@ -37,9 +50,11 @@ export function eventsOverlap(a: CalendarEvent, b: CalendarEvent): boolean {
  */
 export function findLoggedActivityCovering(
   event: CalendarEvent,
-  events: CalendarEvent[]
+  events: CalendarEvent[],
+  now = new Date()
 ): CalendarEvent | null {
   if (event.completed) return null;
+  if (!hasStarted(event, now)) return null;
   return (
     events.find(
       (other) => other.id !== event.id && other.completed && !!other.endTime && eventsOverlap(event, other)
@@ -47,6 +62,10 @@ export function findLoggedActivityCovering(
   );
 }
 
-export function isCoveredByLoggedActivity(event: CalendarEvent, events: CalendarEvent[]): boolean {
-  return findLoggedActivityCovering(event, events) !== null;
+export function isCoveredByLoggedActivity(
+  event: CalendarEvent,
+  events: CalendarEvent[],
+  now = new Date()
+): boolean {
+  return findLoggedActivityCovering(event, events, now) !== null;
 }

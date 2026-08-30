@@ -917,9 +917,13 @@ export function CalendarView({
 
   const overwriteAddConflict = async () => {
     if (!pendingAddConflict) return;
-    const target = pendingAddConflict.conflicts[0];
+    const [target, ...alsoOverlapping] = pendingAddConflict.conflicts;
     const { params } = pendingAddConflict;
     const isPastOverwrite = params.date.getTime() < Date.now();
+    // "Reemplazar" sustituye la franja entera, no solo la primera coincidencia:
+    // antes las demas se quedaban solapando con la nueva y sus horas seguian
+    // sumando, que es justo el doble conteo que se queria evitar al reemplazar.
+    alsoOverlapping.forEach((event) => onDeleteEvent(event.id, "single"));
     onUpdateEvent(target.id, {
       date: params.date,
       endTime: params.endTime,

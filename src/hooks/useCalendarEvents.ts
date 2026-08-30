@@ -4,7 +4,7 @@ import { readJsonValue } from "@/lib/jsonFileStorage";
 import { useDebouncedJsonWriter } from "@/hooks/useDebouncedJsonWriter";
 import { clampReminderMinutes } from "@/lib/eventReminders";
 import { findScheduledEventAtTimerStart, findScheduledEventForTimerStart } from "@/lib/timerOverrun";
-import { eventsOverlap, isCoveredByLoggedActivity } from "@/lib/eventOverlap";
+import { eventsOverlap, hasStarted, isCoveredByLoggedActivity } from "@/lib/eventOverlap";
 import { isRecord } from "@/lib/utils";
 
 export type EventCategory = string;
@@ -125,11 +125,17 @@ function generateRecurringEvents(params: AddEventParams, count: number): Calenda
 function removeCompletedScheduleDuplicates(events: CalendarEvent[], completedEvent: CalendarEvent): CalendarEvent[] {
   if (!completedEvent.completed) return events;
   // Solo elimina eventos PENDIENTES (no completados) que solapen con el evento
-  // completado. Los eventos ya completados (con datos reales de duración) se
-  // conservan siempre para no perder horas registradas.
+  // completado. Se conservan siempre:
+  //  · los ya completados (llevan duración real: ahí puede haber horas tuyas),
+  //  · y los que todavía NO han empezado (ver hasStarted). Al fichar aún no se
+  //    sabe cuánto va a durar la actividad, así que se asume una hora; sin este
+  //    freno, fichar a las 10:00 borraba en silencio el recordatorio de las
+  //    10:30 que seguías pensando hacer. Cuando su hora llegue y quede cubierto
+  //    de verdad, lo descarta la parada del timer o la limpieza de carga.
   return events.filter((event) =>
     event.id === completedEvent.id ||
     event.completed ||
+    !hasStarted(event) ||
     !eventsOverlap(event, completedEvent)
   );
 }

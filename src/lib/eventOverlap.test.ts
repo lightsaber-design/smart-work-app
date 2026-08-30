@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventsOverlap, isCoveredByLoggedActivity, estimatedEventEnd } from "./eventOverlap";
+import { eventsOverlap, hasStarted, isCoveredByLoggedActivity, estimatedEventEnd } from "./eventOverlap";
 import type { CalendarEvent } from "@/hooks/useCalendarEvents";
 
 function ev(id: string, start: Date, endTime?: string, completed = false): CalendarEvent {
@@ -47,5 +47,31 @@ describe("eventOverlap", () => {
     const done = ev("done", d(10), "11:00", true);
     const other = ev("other", d(10, 10), "10:50", true);
     expect(isCoveredByLoggedActivity(done, [done, other])).toBe(false);
+  });
+
+  it("never discards a reference event that has not started yet", () => {
+    // Fichar a las 10:00 no puede borrar el recordatorio de las 10:30: todavia
+    // no ha llegado su hora y sigue siendo algo que piensas hacer.
+    const now = d(10, 5);
+    const upcoming = ev("upcoming", d(10, 30), "11:30");
+    const logged = ev("logged", d(10), "11:00", true);
+    expect(hasStarted(upcoming, now)).toBe(false);
+    expect(isCoveredByLoggedActivity(upcoming, [upcoming, logged], now)).toBe(false);
+  });
+
+  it("discards it once its time has passed and real work covered the slot", () => {
+    const later = d(12);
+    const past = ev("past", d(10, 30), "11:30");
+    const logged = ev("logged", d(10), "11:00", true);
+    expect(hasStarted(past, later)).toBe(true);
+    expect(isCoveredByLoggedActivity(past, [past, logged], later)).toBe(true);
+  });
+
+  it("leaves a past reference alone when nothing was logged over it", () => {
+    // Se queda en el pasado SIN marcar, para que puedas marcarlo tu.
+    const later = d(12);
+    const past = ev("past", d(10, 30), "11:30");
+    expect(isCoveredByLoggedActivity(past, [past], later)).toBe(false);
+    expect(past.completed).toBe(false);
   });
 });
