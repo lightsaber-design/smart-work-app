@@ -1,26 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <!-- Transparent background — the navy comes from ic_launcher_background.xml -->
-
-  <!-- MinistryMark scaled and centered, all white for contrast on navy -->
-  <g transform="translate(212, 112) scale(3)">
+  <g transform="translate(129.26, 120.65) scale(3.8274)">
     <circle cx="100" cy="30" r="7" fill="none" stroke="#ffffff" stroke-width="5"/>
     <path d="M100 44 C 62 44, 48 76, 48 96 C 48 130, 92 170, 100 184 C 108 170, 152 130, 152 96 C 152 76, 138 44, 100 44 Z" fill="#ffffff"/>
-    <circle cx="100" cy="92" r="32" fill="#181D26"/>
-    <circle cx="100" cy="92" r="29" fill="none" stroke="#ffffff" stroke-width="0.8" opacity="0.3"/>
-    <text x="100" y="70" font-family="Georgia,serif" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">XII</text>
-    <text x="126" y="95" font-family="Georgia,serif" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">III</text>
-    <text x="100" y="121" font-family="Georgia,serif" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">VI</text>
-    <text x="74" y="95" font-family="Georgia,serif" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">IX</text>
-    <line x1="103" y1="61" x2="103" y2="64" stroke="#ffffff" stroke-width="0.8" opacity="0.5"/>
-    <line x1="113" y1="63" x2="111" y2="66" stroke="#ffffff" stroke-width="0.8" opacity="0.5"/>
-    <line x1="124" y1="70" x2="121" y2="72" stroke="#ffffff" stroke-width="0.8" opacity="0.5"/>
-    <line x1="129" y1="80" x2="126" y2="81" stroke="#ffffff" stroke-width="0.8" opacity="0.5"/>
-    <line x1="129" y1="103" x2="126" y2="102" stroke="#ffffff" stroke-width="0.8" opacity="0.5"/>
-    <line x1="124" y1="113" x2="121" y2="111" stroke="#ffffff" stroke-width="0.8" opacity="0.5"/>
-    <line x1="76" y1="113" x2="79" y2="111" stroke="#ffffff" stroke-width="0.8" opacity="0.5"/>
-    <line x1="71" y1="103" x2="74" y2="102" stroke="#ffffff" stroke-width="0.8" opacity="0.5"/>
-    <line x1="100" y1="92" x2="88" y2="84" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"/>
-    <line x1="100" y1="92" x2="112" y2="84" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"/>
-    <circle cx="100" cy="92" r="2.5" fill="#34B1AF"/>
+    <circle cx="100" cy="92" r="42" fill="#181D26"/>
+    <circle cx="100" cy="92" r="39" fill="none" stroke="#ffffff" stroke-width="1.05" opacity="0.25"/>
+    <text x="100" y="62.8" font-family="Georgia, serif" font-size="11.8" font-weight="700" fill="#ffffff" text-anchor="middle">XII</text>
+    <text x="133" y="96" font-family="Georgia, serif" font-size="11.8" font-weight="700" fill="#ffffff" text-anchor="middle">III</text>
+    <text x="100" y="130" font-family="Georgia, serif" font-size="11.8" font-weight="700" fill="#ffffff" text-anchor="middle">VI</text>
+    <text x="67" y="96" font-family="Georgia, serif" font-size="11.8" font-weight="700" fill="#ffffff" text-anchor="middle">IX</text>
+    <line x1="117" y1="62.56" x2="119" y2="59.09" stroke="#ffffff" stroke-width="1.05" opacity="0.5"/>
+    <line x1="129.44" y1="75" x2="132.91" y2="73" stroke="#ffffff" stroke-width="1.05" opacity="0.5"/>
+    <line x1="129.44" y1="109" x2="132.91" y2="111" stroke="#ffffff" stroke-width="1.05" opacity="0.5"/>
+    <line x1="117" y1="121.44" x2="119" y2="124.91" stroke="#ffffff" stroke-width="1.05" opacity="0.5"/>
+    <line x1="83" y1="121.44" x2="81" y2="124.91" stroke="#ffffff" stroke-width="1.05" opacity="0.5"/>
+    <line x1="70.56" y1="109" x2="67.09" y2="111" stroke="#ffffff" stroke-width="1.05" opacity="0.5"/>
+    <line x1="70.56" y1="75" x2="67.09" y2="73" stroke="#ffffff" stroke-width="1.05" opacity="0.5"/>
+    <line x1="83" y1="62.56" x2="81" y2="59.09" stroke="#ffffff" stroke-width="1.05" opacity="0.5"/>
+    <line x1="100" y1="92" x2="84.2" y2="81.5" stroke="#ffffff" stroke-width="3.15" stroke-linecap="round"/>
+    <line x1="100" y1="92" x2="115.8" y2="81.5" stroke="#ffffff" stroke-width="3.15" stroke-linecap="round"/>
+    <circle cx="100" cy="92" r="3.28" fill="#34B1AF"/>
   </g>
 </svg>
