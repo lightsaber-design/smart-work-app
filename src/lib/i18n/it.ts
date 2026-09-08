@@ -346,7 +346,7 @@ const it: TranslationMap = {    // Navigation
     places_detail_info: 'Informazioni',
     places_detail_no_info: 'Nessun dettaglio aggiuntivo',
     places_type_toilet: 'Bagno pubblico',
-    places_no_location: 'Configura la tua città nelle Impostazioni per vedere i luoghi vicini.',
+    places_no_location: 'Tocca il pulsante GPS qui sopra oppure configura la tua città nelle Impostazioni per vedere i luoghi vicini.',
     places_loading: 'Ricerca luoghi vicini...',
     places_error: 'Impossibile caricare i luoghi. Controlla la connessione.',
     places_retry: 'Riprova',

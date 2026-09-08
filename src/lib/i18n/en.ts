@@ -347,7 +347,7 @@ const en: TranslationMap = {    // Navigation
     places_detail_info: 'Information',
     places_detail_no_info: 'No extra details',
     places_type_toilet: 'Public toilet',
-    places_no_location: 'Set your city in Settings to see nearby places.',
+    places_no_location: 'Tap the GPS button above or set your city in Settings to see nearby places.',
     places_loading: 'Searching nearby places...',
     places_error: 'Could not load places. Check your connection.',
     places_retry: 'Retry',

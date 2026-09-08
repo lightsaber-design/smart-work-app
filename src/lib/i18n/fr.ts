@@ -346,7 +346,7 @@ const fr: TranslationMap = {    // Navigation
     places_detail_info: 'Informations',
     places_detail_no_info: 'Pas de détails supplémentaires',
     places_type_toilet: 'Toilettes publiques',
-    places_no_location: 'Configurez votre ville dans les Réglages pour voir les lieux à proximité.',
+    places_no_location: 'Appuyez sur le bouton GPS ci-dessus ou configurez votre ville dans les Réglages pour voir les lieux à proximité.',
     places_loading: 'Recherche de lieux proches...',
     places_error: 'Impossible de charger les lieux. Vérifiez votre connexion.',
     places_retry: 'Réessayer',

@@ -588,7 +588,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             statsSlot={
               <Suspense fallback={<TabLoading />}>
                 <StatsView
-                  entries={tracker.monthEntries}
                   allEntries={tracker.entries}
                   precursorHours={setup.precursorHours}
                   specialCampaignGoals={campaign.goals}
@@ -616,7 +615,6 @@ function AppContent({ setup, saveSetup }: AppContentProps) {
             </header>
             <Suspense fallback={<TabLoading />}>
               <StatsView
-                entries={tracker.monthEntries}
                 allEntries={tracker.entries}
                 precursorHours={setup.precursorHours}
                 specialCampaignGoals={campaign.goals}

@@ -346,7 +346,7 @@ const de: TranslationMap = {    // Navigation
     places_detail_info: 'Informationen',
     places_detail_no_info: 'Keine weiteren Angaben',
     places_type_toilet: 'Öffentliche Toilette',
-    places_no_location: 'Konfiguriere deine Stadt in den Einstellungen, um nahe Orte zu sehen.',
+    places_no_location: 'Tippe oben auf die GPS-Taste oder lege deine Stadt in den Einstellungen fest, um nahe Orte zu sehen.',
     places_loading: 'Suche nahe Orte...',
     places_error: 'Orte konnten nicht geladen werden. Überprüfe deine Verbindung.',
     places_retry: 'Erneut versuchen',

@@ -346,7 +346,7 @@ const pt: TranslationMap = {    // Navigation
     places_detail_info: 'Informação',
     places_detail_no_info: 'Sem detalhes adicionais',
     places_type_toilet: 'WC público',
-    places_no_location: 'Configure a sua cidade nas Definições para ver lugares próximos.',
+    places_no_location: 'Toque no botão de GPS acima ou configure a sua cidade nas Definições para ver lugares próximos.',
     places_loading: 'A procurar lugares próximos...',
     places_error: 'Não foi possível carregar os lugares. Verifique a ligação.',
     places_retry: 'Tentar novamente',

@@ -173,14 +173,6 @@ export function PublicPlacesView({ center: cityCenter, cityName, onAddFavorite }
     return list;
   }, [places, activeAmenities, openNow]);
 
-  if (!effectiveCenter) {
-    return (
-      <div className="rounded-xl bg-card border border-border p-6 text-center">
-        <p className="text-sm text-muted-foreground">{t("places_no_location")}</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-3">
 
@@ -246,103 +238,111 @@ export function PublicPlacesView({ center: cityCenter, cityName, onAddFavorite }
         </div>
       </div>
 
-      {/* Filter chips — se ajustan en varias filas (sin barra de scroll) */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setOpenNow((v) => !v)}
-          aria-pressed={openNow}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
-            openNow
-              ? "bg-green-500 text-white border-green-500 shadow-sm"
-              : "bg-card text-muted-foreground border-border hover:border-green-500/40"
-          }`}
-        >
-          <Clock className="w-3.5 h-3.5" />
-          <span>{t("places_open_now")}</span>
-        </button>
-        {filters.map((f) => {
-          const isActive = f.key === "all"
-            ? activeAmenities.size === 0
-            : activeAmenities.has(f.key as PlaceAmenity);
-          return (
+      {!effectiveCenter ? (
+        <div className="rounded-xl bg-card border border-border p-6 text-center">
+          <p className="text-sm text-muted-foreground">{t("places_no_location")}</p>
+        </div>
+      ) : (
+        <>
+          {/* Filter chips — se ajustan en varias filas (sin barra de scroll) */}
+          <div className="flex flex-wrap gap-2">
             <button
-              key={f.key}
               type="button"
-              onClick={() => toggleAmenity(f.key)}
-              aria-pressed={isActive}
+              onClick={() => setOpenNow((v) => !v)}
+              aria-pressed={openNow}
               className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
-                isActive
-                  ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                  : "bg-card text-muted-foreground border-border hover:border-primary/40"
+                openNow
+                  ? "bg-green-500 text-white border-green-500 shadow-sm"
+                  : "bg-card text-muted-foreground border-border hover:border-green-500/40"
               }`}
             >
-              <span>{f.icon}</span>
-              <span>{f.label}</span>
+              <Clock className="w-3.5 h-3.5" />
+              <span>{t("places_open_now")}</span>
             </button>
-          );
-        })}
-      </div>
-
-      {/* Content */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-10">
-          <Loader2 className="w-7 h-7 text-primary animate-spin" />
-          <p className="text-sm text-muted-foreground">{t("places_loading")}</p>
-        </div>
-      ) : error ? (
-        <div className="rounded-xl bg-card border border-destructive/30 p-5 text-center space-y-2">
-          <WifiOff className="w-6 h-6 text-muted-foreground mx-auto" />
-          <p className="text-sm text-muted-foreground">{t("places_error")}</p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary"
-          >
-            <RefreshCw className="w-3.5 h-3.5" /> {t("places_retry")}
-          </button>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-xl bg-muted/30 border border-border p-6 text-center">
-          <p className="text-sm font-semibold text-foreground">{t("places_empty_title")}</p>
-          <p className="text-xs text-muted-foreground mt-1">{t("places_empty_hint")}</p>
-        </div>
-      ) : viewMode === "map" ? (
-        <Suspense fallback={
-          <div className="rounded-2xl border border-border bg-muted/40 flex items-center justify-center" style={{ height: MAP_FILL_HEIGHT, minHeight: 360 }}>
-            <Loader2 className="w-6 h-6 text-primary animate-spin" />
+            {filters.map((f) => {
+              const isActive = f.key === "all"
+                ? activeAmenities.size === 0
+                : activeAmenities.has(f.key as PlaceAmenity);
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => toggleAmenity(f.key)}
+                  aria-pressed={isActive}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
+                    isActive
+                      ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                      : "bg-card text-muted-foreground border-border hover:border-primary/40"
+                  }`}
+                >
+                  <span>{f.icon}</span>
+                  <span>{f.label}</span>
+                </button>
+              );
+            })}
           </div>
-        }>
-          <PlacesMapView
-            center={effectiveCenter}
-            places={filtered}
-            toiletLabel={t("places_type_toilet")}
-            openLabel={t("map_open_google")}
-            centerLabel={locationLabel}
-            favLabel={t("places_add_favorite")}
-            favSavedLabel={t("places_added_favorite")}
-            onAddFavorite={onAddFavorite}
-            heightStyle={MAP_FILL_HEIGHT}
-          />
-        </Suspense>
-      ) : (
-        <div className="space-y-1.5">
-          {filtered.map((place) => {
-            const hints = getPlaceHints(place, t);
-            return (
-              <PlaceCard
-                key={place.id}
-                place={place}
+
+          {/* Content */}
+          {loading ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-10">
+              <Loader2 className="w-7 h-7 text-primary animate-spin" />
+              <p className="text-sm text-muted-foreground">{t("places_loading")}</p>
+            </div>
+          ) : error ? (
+            <div className="rounded-xl bg-card border border-destructive/30 p-5 text-center space-y-2">
+              <WifiOff className="w-6 h-6 text-muted-foreground mx-auto" />
+              <p className="text-sm text-muted-foreground">{t("places_error")}</p>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> {t("places_retry")}
+              </button>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-xl bg-muted/30 border border-border p-6 text-center">
+              <p className="text-sm font-semibold text-foreground">{t("places_empty_title")}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t("places_empty_hint")}</p>
+            </div>
+          ) : viewMode === "map" ? (
+            <Suspense fallback={
+              <div className="rounded-2xl border border-border bg-muted/40 flex items-center justify-center" style={{ height: MAP_FILL_HEIGHT, minHeight: 360 }}>
+                <Loader2 className="w-6 h-6 text-primary animate-spin" />
+              </div>
+            }>
+              <PlacesMapView
+                center={effectiveCenter}
+                places={filtered}
                 toiletLabel={t("places_type_toilet")}
-                hintText={hints.map((h) => h.text).join(" · ")}
-                openLabel={t("places_open")}
-                closedLabel={t("places_closed")}
-                accessibleLabel={t("places_accessible_badge")}
-                onSelect={() => setSelected(place)}
+                openLabel={t("map_open_google")}
+                centerLabel={locationLabel}
+                favLabel={t("places_add_favorite")}
+                favSavedLabel={t("places_added_favorite")}
+                onAddFavorite={onAddFavorite}
+                heightStyle={MAP_FILL_HEIGHT}
               />
-            );
-          })}
-        </div>
+            </Suspense>
+          ) : (
+            <div className="space-y-1.5">
+              {filtered.map((place) => {
+                const hints = getPlaceHints(place, t);
+                return (
+                  <PlaceCard
+                    key={place.id}
+                    place={place}
+                    toiletLabel={t("places_type_toilet")}
+                    hintText={hints.map((h) => h.text).join(" · ")}
+                    openLabel={t("places_open")}
+                    closedLabel={t("places_closed")}
+                    accessibleLabel={t("places_accessible_badge")}
+                    onSelect={() => setSelected(place)}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {/* Detail sheet — info útil al pulsar un resultado */}

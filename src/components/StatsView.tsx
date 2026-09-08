@@ -9,12 +9,11 @@ import { calculateMonthlyReport, type MonthlyReportCalculation, type MonthlyRepo
 import { reportReminderMonthKey } from "@/lib/notificationRules";
 import { msToLabel } from "@/lib/time";
 import { localeForLang, useLang, useT } from "@/lib/LanguageContext";
-import { Pencil, Check, Send, BookOpen, Plus, CheckSquare, Square } from "lucide-react";
+import { Pencil, Check, Send, BookOpen, Plus, CheckSquare, Square, ChevronLeft, ChevronRight } from "lucide-react";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import { formatMonthYear, formatShortMonth } from "@/lib/dateFormat";
 
 interface StatsViewProps {
-  entries: TimeEntry[];
   allEntries: TimeEntry[];
   precursorHours?: number | null;
   specialCampaignGoals?: Record<string, CampaignGoal>;
@@ -30,7 +29,6 @@ interface StatsViewProps {
 }
 
 export function StatsView({
-  entries,
   allEntries,
   precursorHours,
   specialCampaignGoals,
@@ -55,13 +53,24 @@ export function StatsView({
   const todayKey = new Date().toDateString();
   const now = useMemo(() => new Date(todayKey), [todayKey]);
 
+  // Mes que se está consultando en la vista "mensual": 0 = mes actual,
+  // negativo = meses anteriores. Permite ver/enviar el informe de un mes
+  // pasado sin esperar a que vuelva a ser el mes en curso.
+  const [monthOffset, setMonthOffset] = useState(0);
+  const isViewingCurrentMonth = monthOffset === 0;
+  const viewedMonth = useMemo(
+    () => new Date(now.getFullYear(), now.getMonth() + monthOffset, 1),
+    [now, monthOffset]
+  );
+
   // ── MENSUAL ──────────────────────────────────────────────────────────────
   // Fuente de verdad: TimeEntries (el timer siempre ha escrito ahí)
   const { completedMsByCategory, completedCountByCategory } =
     useMemo(
-      () => entries.reduce(
+      () => allEntries.reduce(
         (acc, e) => {
           if (!e.endTime) return acc;
+          if (e.startTime.getMonth() !== viewedMonth.getMonth() || e.startTime.getFullYear() !== viewedMonth.getFullYear()) return acc;
           const ms = Math.max(0, e.endTime.getTime() - e.startTime.getTime());
           acc.completedMsByCategory[e.category] = (acc.completedMsByCategory[e.category] ?? 0) + ms;
           acc.completedCountByCategory[e.category] = (acc.completedCountByCategory[e.category] ?? 0) + 1;
@@ -69,7 +78,7 @@ export function StatsView({
         },
         { completedMsByCategory: {} as Record<string, number>, completedCountByCategory: {} as Record<string, number> }
       ),
-      [entries]
+      [allEntries, viewedMonth]
     );
 
   const maxCompletedMs = Math.max(...Object.values(completedMsByCategory), 1);
@@ -97,7 +106,7 @@ export function StatsView({
     .filter((item) => activeCategoryConfigs.find((category) => category.name === item.cat)?.support)
     .reduce((sum, item) => sum + item.ms, 0);
   const isMonthlySupportCapped = monthlySupportRawMs > monthlySupportCountedMs;
-  const monthlyReport = calculateMonthlyReport(monthlyFilteredMs, now, carryover, reportRounding);
+  const monthlyReport = calculateMonthlyReport(monthlyFilteredMs, viewedMonth, carryover, reportRounding);
 
 
   // ── ANUAL (año sep–ago) ───────────────────────────────────────────────────
@@ -194,9 +203,31 @@ export function StatsView({
       {mode === "mensual" && (
         <>
 
+          {/* Navegación de mes: ver/enviar el informe de meses anteriores */}
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setMonthOffset((v) => v - 1)}
+              className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
+              aria-label={t("calendar_previous_month")}
+            >
+              <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+            </button>
+            <p className="text-sm font-bold text-foreground capitalize truncate">{formatMonthYear(viewedMonth, locale)}</p>
+            <button
+              type="button"
+              onClick={() => setMonthOffset((v) => Math.min(0, v + 1))}
+              disabled={isViewingCurrentMonth}
+              className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+              aria-label={t("calendar_next_month")}
+            >
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
+
           {/* Campaign special toggle (only when not a precursor) */}
           {precursorHours === null && (() => {
-            const currentKey = monthKey(now);
+            const currentKey = monthKey(viewedMonth);
             const campaignGoal = specialCampaignGoals?.[currentKey] ?? null;
             const goalMs = campaignGoal ? campaignGoal * 3_600_000 : 0;
             const pct = campaignGoal ? Math.min(100, Math.round((monthlyFilteredMs / goalMs) * 100)) : 0;
@@ -248,7 +279,7 @@ export function StatsView({
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-muted-foreground mb-0.5">
-                      {formatMonthYear(now, locale)}
+                      {formatMonthYear(viewedMonth, locale)}
                       {hasExclusions && <span className="ml-1 text-primary/70">· {t("stats_filtered")}</span>}
                     </p>
                     <p className="text-3xl font-black text-foreground tabular-nums leading-none">
@@ -385,7 +416,7 @@ export function StatsView({
           {/* Enviar Informe mensual */}
           {(() => {
             const estudiosCount = completedCountByCategory["Estudio"] ?? 0;
-            const monthLabel = formatMonthYear(now, locale);
+            const monthLabel = formatMonthYear(viewedMonth, locale);
             const msg = [
               `📊 ${t("stats_report")} ${monthLabel}`,
               `⏱️ ${t("stats_hours")}: ${monthlyReport.reportedHours}h`,
@@ -394,11 +425,15 @@ export function StatsView({
             // El informe pendiente a caballo del cambio de mes es el del mes
             // que TERMINA, no el del mes en curso: la casilla marca esa misma
             // clave que consultan los avisos, para que marcarla los calle.
-            const pendingKey = reportReminderMonthKey(now) ?? monthlyReport.monthKey;
-            const pendingLabel = formatMonthYear(
-              pendingKey === monthlyReport.monthKey ? now : new Date(now.getFullYear(), now.getMonth() - 1, 1),
-              locale
-            );
+            // Esa ambigüedad solo aplica al mes en curso: si se está viendo un
+            // mes anterior a propósito (navegación), la clave es esa directamente.
+            const pendingKey = isViewingCurrentMonth ? (reportReminderMonthKey(now) ?? monthlyReport.monthKey) : monthlyReport.monthKey;
+            const pendingLabel = isViewingCurrentMonth
+              ? formatMonthYear(
+                  pendingKey === monthlyReport.monthKey ? now : new Date(now.getFullYear(), now.getMonth() - 1, 1),
+                  locale
+                )
+              : monthLabel;
             const isSent = Boolean(reportSent[pendingKey]);
             return (
               <div className="space-y-2">
