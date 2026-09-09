@@ -8,6 +8,16 @@ export { DriveConflictError } from "@/lib/googleDrive";
 const KEY_USER = "gdrive-user";
 const KEY_LAST_SYNC = "gdrive-last-sync";
 
+// GoogleAuth (native) rechaza con un CapacitorException que lleva el status
+// code de Android en `.code` (p.ej. "10" = DEVELOPER_ERROR por SHA-1/paquete
+// mal registrados en la consola de Google). Se incluye en el mensaje para
+// poder diagnosticar sin acceso al dispositivo.
+function googleAuthErrorMessage(e: unknown): string {
+  const base = e instanceof Error ? e.message : "Error al iniciar sesión";
+  const code = e && typeof e === "object" && "code" in e ? (e as { code?: string }).code : undefined;
+  return code ? `${base} (código ${code})` : base;
+}
+
 export interface GDriveUser {
   email: string;
   name: string;
@@ -83,8 +93,7 @@ export function useGoogleDriveSync(): GoogleDriveSync {
       setRemoteFile(file);
       setStatus("ok");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Error al iniciar sesión";
-      setErrorMsg(msg);
+      setErrorMsg(googleAuthErrorMessage(e));
       setStatus("error");
       throw e;
     }
